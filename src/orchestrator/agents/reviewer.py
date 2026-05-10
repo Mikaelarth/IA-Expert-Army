@@ -21,11 +21,10 @@ _PROMPT = (
 
 class CodeReviewer(BaseAgent):
     # Verdict YAML : summary + strengths + plusieurs issues détaillées.
-    # Fix préventif aligné sur ResearchReviewer après l'incident
-    # research_reviewer (mission 359bfa08, max_tokens=2048 saturait → YAML
-    # tronqué → verdict default REJECTED). 4096 donne une marge confortable
-    # pour 6+ issues sans changement de coût significatif.
-    DEFAULT_MAX_TOKENS = 4096
+    # Aligné sur ResearchReviewer (8192) après bump de ce dernier suite à
+    # une 2ᵉ saturation observée (mission 38fd387d, 4096 insuffisant pour
+    # les reviews à 8+ issues détaillées avec suggestions concrètes).
+    DEFAULT_MAX_TOKENS = 8192
 
     def __init__(
         self,

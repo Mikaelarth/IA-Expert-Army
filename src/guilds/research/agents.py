@@ -118,9 +118,12 @@ class DocumentSynthesizer(BaseAgent):
 class ResearchReviewer(BaseAgent):
     # Verdict YAML : summary + strengths + plusieurs issues détaillées
     # (severity, category, location, message, suggestion par issue).
-    # 2048 saturait en prod (mission 359bfa08), YAML tronqué, parser échoué,
-    # verdict default REJECTED. 4096 donne la marge nécessaire pour 6+ issues.
-    DEFAULT_MAX_TOKENS = 4096
+    # Itérations successives :
+    #   2048 → saturait (mission 359bfa08, commit 1c08da5)
+    #   4096 → saturait encore sur missions complexes (38fd387d) avec 8+ issues
+    #          détaillées + suggestions + repair-loop précédente à analyser
+    #   8192 → marge confortable, aligné avec TechWatch et DocSynth
+    DEFAULT_MAX_TOKENS = 8192
 
     def __init__(
         self,

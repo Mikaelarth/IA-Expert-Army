@@ -79,12 +79,14 @@ def test_research_reviewer_uses_operational_model(
 def test_research_reviewer_max_tokens_high_enough_for_detailed_reviews(
     settings: Settings, memory: FileMemory
 ) -> None:
-    """Régression : un YAML reviewer avec 6+ issues détaillées (chacune avec
-    severity + category + location + message + suggestion) saturait à 2048
-    (mission 359bfa08), tronquait le YAML, faisait échouer le parser et
-    retournait verdict default REJECTED. Minimum sûr empirique : 4096."""
+    """Régression : 2 incidents successifs de saturation
+      - 2048 (mission 359bfa08) → bumped to 4096
+      - 4096 (mission 38fd387d, repair loop + 8 issues) → bumped to 8192
+    Minimum sûr empirique : 8192. Le YAML reviewer avec 6-8 issues détaillées
+    (chacune severity + category + location + message + suggestion) + summary
+    + strengths + analyse repair-loop nécessite cette marge."""
     agent = ResearchReviewer(memory=memory, settings=settings)
-    assert agent.max_tokens >= 4096
+    assert agent.max_tokens >= 8192
 
 
 def test_research_lead_max_tokens_high_enough_for_rich_plans(

@@ -24,8 +24,8 @@ def memory(tmp_path: Path) -> FileMemory:
 def test_code_reviewer_max_tokens_aligned_with_research_reviewer(
     settings: Settings, memory: FileMemory
 ) -> None:
-    """Le CodeReviewer doit avoir au moins autant de marge que le ResearchReviewer
-    (les missions complexes peuvent générer beaucoup d'issues).
-    Fix préventif aligné après incident research (mission 359bfa08)."""
+    """Le CodeReviewer doit avoir au moins autant de marge que le ResearchReviewer.
+    Fix préventif aligné après les 2 incidents research (359bfa08 puis 38fd387d).
+    Minimum : 8192."""
     agent = CodeReviewer(memory=memory, settings=settings)
-    assert agent.max_tokens >= 4096
+    assert agent.max_tokens >= 8192
