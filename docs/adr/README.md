@@ -29,3 +29,5 @@ Format minimal :
 - [ADR-002 — Stack technique : Python + Claude Agent SDK + Chroma + Docker](002-tech-stack.md)
 - [ADR-003 — Mode opérationnel : autonome avec garde-fous obligatoires](003-autonomy-with-guardrails.md)
 - [ADR-004 — Stratégie d'apprentissage : RAG + skills synthétisées, pas de fine-tuning](004-learning-strategy.md)
+- [ADR-005 — Détection et prévention de la saturation max_tokens](005-saturation-detection-and-prevention.md)
+- [ADR-006 — Stratégie de mining et critères d'éligibilité des épisodes](006-mining-strategy-and-eligibility.md)
