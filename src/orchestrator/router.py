@@ -28,7 +28,10 @@ from src.orchestrator.workflow import MissionResult, Workflow
 log = get_logger("router")
 
 # Mots-clés (insensibles à la casse) qui orientent vers la Guild Research.
-# Le set est intentionnellement court : on vise la précision, pas le rappel.
+# On vise des termes peu ambigus + des phrases longues caractéristiques d'une
+# tâche méta (synthèse / guide / comparatif) plutôt que d'une tâche d'écriture
+# de code. Le scoring compte chaque keyword UNE FOIS et pondère le titre 2×
+# pour éviter qu'un mot répété ("test", "module") n'écrase la classification.
 _RESEARCH_KEYWORDS = (
     "recherche",
     "researcher",
@@ -52,6 +55,21 @@ _RESEARCH_KEYWORDS = (
     "literature review",
     "panorama",
     "benchmark",  # peut être borderline mais souvent research
+    # Ajouts pour les missions méta sur du logiciel (extracteurs forts)
+    "meilleures pratiques",
+    "best practices",
+    "guide",
+    "stratégies",
+    "strategies",
+    "documente",
+    "documenter",
+    "explique",
+    "comparatif",
+    "tour d'horizon",
+    "pour ou contre",
+    "pros and cons",
+    "trade-off",
+    "tradeoff",
 )
 
 # Mots-clés qui orientent fortement vers Engineering (priorité s'ils apparaissent)
@@ -97,14 +115,35 @@ class HeuristicGuildClassifier:
         self.research_keywords = research_keywords
         self.engineering_keywords = engineering_keywords
 
+    # Poids du titre. Un keyword dans le titre = TITLE_WEIGHT points ; dans le body
+    # uniquement = 1 point. Ratio assez élevé pour qu'un keyword titre clair l'emporte
+    # sur 2 keywords body, sans pour autant rendre le body inutile.
+    TITLE_WEIGHT = 3
+
     def classify(self, title: str, description: str) -> str:
-        text = f"{title}\n{description}".lower()
-        eng_hits = sum(1 for kw in self.engineering_keywords if self._matches(kw, text))
-        res_hits = sum(1 for kw in self.research_keywords if self._matches(kw, text))
-        # Engineering "wins" en cas d'égalité (par ADR-001 : guilde la plus mature).
-        if res_hits > eng_hits:
+        title_lower = title.lower()
+        full_lower = f"{title}\n{description}".lower()
+
+        # Comptage en KEYWORDS UNIQUES (chaque mot-clé contribue au plus 1× au score)
+        # pour éviter qu'un terme commun répété ne domine artificiellement.
+        eng_score = self._score(self.engineering_keywords, title_lower, full_lower)
+        res_score = self._score(self.research_keywords, title_lower, full_lower)
+        if res_score > eng_score:
             return "research"
+        # Engineering "wins" en cas d'égalité (par ADR-001 : guilde la plus mature).
         return "engineering"
+
+    @classmethod
+    def _score(cls, keywords: tuple[str, ...], title_text: str, full_text: str) -> int:
+        score = 0
+        for kw in keywords:
+            in_title = cls._matches(kw, title_text)
+            in_body = cls._matches(kw, full_text)
+            if in_title:
+                score += cls.TITLE_WEIGHT
+            elif in_body:
+                score += 1
+        return score
 
     @staticmethod
     def _matches(keyword: str, text: str) -> bool:

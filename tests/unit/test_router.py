@@ -51,10 +51,17 @@ def test_classifier_categorizes_correctly(title: str, description: str, expected
 
 
 def test_classifier_engineering_priority_on_tie() -> None:
-    """Engineering wins en cas d'égalité (ADR-001 : guilde la plus mature)."""
+    """Engineering wins en cas d'égalité parfaite (ADR-001 : guilde la plus mature).
+
+    Note : on construit un tie en plaçant les keywords UNIQUEMENT dans le body
+    (le titre n'a aucun keyword). Si un keyword est dans le titre, il pèse plus
+    et casse l'égalité.
+    """
     clf = HeuristicGuildClassifier()
-    # 1 keyword research + 1 keyword engineering
-    assert clf.classify("Compare", "Crée une fonction") == "engineering"
+    # Titre neutre, body : 1 keyword research + 1 keyword engineering → tie → eng
+    assert clf.classify("Mission", "compare un module") == "engineering"
+    # Aucun keyword nulle part → eng par défaut
+    assert clf.classify("hello", "world") == "engineering"
 
 
 def test_classifier_word_boundary_avoids_false_positives() -> None:
@@ -62,6 +69,40 @@ def test_classifier_word_boundary_avoids_false_positives() -> None:
     clf = HeuristicGuildClassifier()
     # "rapide" contient "api" en substring mais pas comme mot
     assert clf.classify("Mission rapide", "Compare deux options") == "research"
+
+
+def test_classifier_unique_keywords_prevents_repetition_bias() -> None:
+    """Régression : une mission research mentionnant 'test' 5 fois ne doit pas
+    être classée engineering juste à cause de la répétition du mot."""
+    clf = HeuristicGuildClassifier()
+    title = "Synthétise les meilleures pratiques de test"
+    description = (
+        "Couvre : stratégies de test, organisation des tests, mocks pour test, "
+        "fixtures de test, intégration continue des tests."
+    )
+    assert clf.classify(title, description) == "research"
+
+
+def test_classifier_meta_software_mission_routes_to_research() -> None:
+    """Régression du bug initial : titre 'Structurer un projet Python multi-agents'
+    avec description évoquant des concepts logiciels doit rester Research."""
+    clf = HeuristicGuildClassifier()
+    title = "Structurer un projet Python multi-agents"
+    description = (
+        "Synthétise les meilleures pratiques 2026 pour structurer un projet "
+        "Python d'agents IA. Couvre : organisation des modules, gestion de la "
+        "mémoire, patterns d'orchestration, stratégies de test, observabilité."
+    )
+    assert clf.classify(title, description) == "research"
+
+
+def test_classifier_title_keywords_weighted_double() -> None:
+    """Un mot-clé research dans le titre doit peser plus qu'un mot-clé eng dans le body."""
+    clf = HeuristicGuildClassifier()
+    # Titre research, body engineering — research doit gagner grâce au poids du titre
+    assert clf.classify("Compare two options", "module foo with test cases") == "research"
+    # Titre engineering, body research — engineering doit gagner
+    assert clf.classify("Implement a function", "compare with research alternatives") == "engineering"
 
 
 # ===== Router decide() =====
