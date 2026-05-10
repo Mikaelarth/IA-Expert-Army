@@ -127,6 +127,14 @@ class SandboxRunner:
         cmd_used = command or []
 
         try:
+            # Trade-off de sécurité (validé 2026-05-10) : on désactive read_only=True car
+            # docker put_archive() écrit AVANT le start du container, donc avant que les
+            # tmpfs ne soient montés → conflit "container rootfs is marked read-only".
+            # Compensation : tous les autres garde-fous restent en place (no-network,
+            # user=nobody, mem/cpu/pids limits, timeout strict, container éphémère
+            # détruit après chaque run, fs des libs système non modifiable depuis nobody).
+            # Une alternative bind-mount du workspace existe mais est moins portable
+            # Windows ↔ Linux que tar+tmpfs.
             container = self._client.containers.create(
                 image=self.image,
                 command=command,
@@ -136,7 +144,7 @@ class SandboxRunner:
                 nano_cpus=int(self.cpu_count * 1_000_000_000),
                 pids_limit=self.pids_limit,
                 user=self.user,
-                read_only=True,
+                read_only=False,
                 tmpfs={"/tmp": "size=64m,mode=1777"},
                 detach=True,
                 working_dir="/workspace",

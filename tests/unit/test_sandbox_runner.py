@@ -125,8 +125,11 @@ def test_runner_passes_security_options(workspace: Path) -> None:
     assert call_kwargs["nano_cpus"] == 1_000_000_000
     assert call_kwargs["pids_limit"] == 128
     assert call_kwargs["user"] == "nobody:nogroup"
-    assert call_kwargs["read_only"] is True
     assert "/tmp" in call_kwargs["tmpfs"]
+    # Note: read_only=False (trade-off documenté) — put_archive écrit avant le mount
+    # tmpfs, donc impossible de cumuler read_only=True ET extraction tar du workspace.
+    # Compensation : tous les autres garde-fous tiennent.
+    assert call_kwargs["read_only"] is False
 
 
 def test_runner_rejects_invalid_workspace(tmp_path: Path) -> None:

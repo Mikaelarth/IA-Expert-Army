@@ -29,14 +29,17 @@ services:
       retries: 5
 
   # --- Chroma : vector DB (Phase 2+) ---
-  # Note: Chroma peut aussi tourner in-process via la lib Python.
-  #       Le container devient utile quand plusieurs processus partagent la mémoire vectorielle.
+  # NON démarré par défaut car le projet utilise actuellement Chroma in-process
+  # via PersistentClient. Ce container est utile UNIQUEMENT si plusieurs processus
+  # doivent partager la mémoire vectorielle (Phase 5+ multi-worker).
+  # Active via : docker compose --profile vector-http up -d chroma
   chroma:
+    profiles: ["vector-http"]
     image: chromadb/chroma:0.5.20
     container_name: iaa-chroma
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8001:8000"  # 8001 host pour éviter conflit fréquent sur 8000
     volumes:
       - ./docker-volumes/chroma:/chroma/chroma
     environment:
@@ -46,6 +49,15 @@ services:
 
   # --- Langfuse : observabilité multi-agents (Phase 3+) ---
   # Stack complète activable via : docker compose --profile observability up -d
+  #
+  # NOTE Phase 3 (mai 2026) : la config Langfuse v3 a évolué — plusieurs env vars
+  # supplémentaires sont attendues par le worker/web (CLICKHOUSE_MIGRATION_URL,
+  # variantes S3 spécifiques, etc.) qui ne sont PAS encore mappées ici. Le stack
+  # démarre les 6 containers mais le worker ne réussit pas les migrations
+  # ClickHouse au premier boot. À reprendre dans une session dédiée
+  # observabilité (suivre la doc langfuse.com/self-hosting v3).
+  # Workaround court terme : utiliser nos logs structlog + Langfuse cloud
+  # (langfuse.com hosted) si besoin de traces visuelles.
   langfuse-postgres:
     profiles: ["observability"]
     image: postgres:16-alpine
@@ -120,8 +132,8 @@ services:
       LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: minio_password_change_me
       LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-minio:9000
       LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
-      SALT: change-this-salt-in-production-please-please-please
-      ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
+      SALT: 6d0552ea14b4fceedb485b5e6962009d
+      ENCRYPTION_KEY: 52dfdc70c48e8bb99742bd51015270aed368a01409bc9135032e43c6302a01fd
 
   langfuse-web:
     profiles: ["observability"]
@@ -147,7 +159,7 @@ services:
       LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-minio:9000
       LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
       NEXTAUTH_URL: http://localhost:3000
-      NEXTAUTH_SECRET: change-this-nextauth-secret-in-production-please
-      SALT: change-this-salt-in-production-please-please-please
-      ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
+      NEXTAUTH_SECRET: c184b7b1b45b7e70a2746f86423aed12
+      SALT: 6d0552ea14b4fceedb485b5e6962009d
+      ENCRYPTION_KEY: 52dfdc70c48e8bb99742bd51015270aed368a01409bc9135032e43c6302a01fd
       TELEMETRY_ENABLED: "false"
