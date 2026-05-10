@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 from src.core.config import Settings, get_settings
 from src.core.logging import get_logger
 from src.core.pricing import estimate_cost
+from src.learning.skills_library import Skill, SkillsLibrary
 from src.memory.file_memory import FileMemory, MemoryRecord
 from src.memory.vector_memory import EpisodeMatch, VectorMemory
 
@@ -62,6 +63,8 @@ class BaseAgent:
         vector_memory: VectorMemory | None = None,
         rag_top_k: int = 2,
         rag_max_distance: float = 0.7,
+        skills_library: SkillsLibrary | None = None,
+        skills_top_k: int = 2,
     ) -> None:
         self.name = name
         self.prompt_path = prompt_path
@@ -70,6 +73,8 @@ class BaseAgent:
         self.vector_memory = vector_memory
         self.rag_top_k = rag_top_k
         self.rag_max_distance = rag_max_distance
+        self.skills_library = skills_library
+        self.skills_top_k = skills_top_k
         self.settings = settings or get_settings()
         self.max_tokens = max_tokens
         self._log = get_logger(f"agent.{name}")
@@ -94,8 +99,9 @@ class BaseAgent:
         self,
         agent_input: AgentInput,
         precedents: list[EpisodeMatch] | None = None,
+        skills: list[Skill] | None = None,
     ) -> str:
-        """Assemble le message utilisateur : tâche + contexte + précédents (RAG)."""
+        """Assemble le message utilisateur : tâche + contexte + précédents + skills."""
         parts = [f"# Tâche\n\n{agent_input.task.strip()}"]
         if agent_input.context:
             ctx_lines = []
@@ -124,7 +130,20 @@ class BaseAgent:
                 prec_lines.append(self._truncate(p.document, 800))
                 prec_lines.append("")
             parts.append("\n".join(prec_lines))
+        if skills:
+            from src.learning.skills_library import SkillsLibrary as _SL
+            parts.append(_SL.render_for_prompt(skills))
         return "\n\n".join(parts)
+
+    def _retrieve_skills(self) -> list[Skill]:
+        """Charge les N skills les plus récentes de ce rôle."""
+        if self.skills_library is None or self.skills_top_k <= 0:
+            return []
+        try:
+            return self.skills_library.list_skills(self.name, limit=self.skills_top_k)
+        except Exception as exc:  # noqa: BLE001
+            self._log.warning("skills.load.failed", error=str(exc))
+            return []
 
     @staticmethod
     def _truncate(text: str, max_chars: int) -> str:
@@ -165,7 +184,17 @@ class BaseAgent:
                 count=len(precedents),
                 ids=[p.episode_id for p in precedents],
             )
-        user_message = self.build_user_message(agent_input, precedents=precedents)
+        skills = self._retrieve_skills()
+        if skills:
+            self._log.info(
+                "skills.injected",
+                agent=self.name,
+                count=len(skills),
+                titles=[s.title for s in skills],
+            )
+        user_message = self.build_user_message(
+            agent_input, precedents=precedents, skills=skills
+        )
         started = time.perf_counter()
         started_at = datetime.now(UTC)
 

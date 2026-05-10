@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from src.core.config import Settings, get_settings
 from src.core.logging import get_logger
+from src.learning.skills_library import SkillsLibrary
 from src.memory.file_memory import FileMemory, MemoryRecord
 from src.memory.vector_memory import VectorMemory
 from src.orchestrator.agents import (
@@ -56,14 +57,17 @@ class Workflow:
         memory: FileMemory,
         settings: Settings | None = None,
         vector_memory: VectorMemory | None = None,
+        skills_library: SkillsLibrary | None = None,
     ) -> None:
         self.memory = memory
         self.vector_memory = vector_memory
+        self.skills_library = skills_library
         self.settings = settings or get_settings()
-        self.orchestrator = ChiefOrchestrator(memory, self.settings, vector_memory=vector_memory)
-        self.architect = SoftwareArchitect(memory, self.settings, vector_memory=vector_memory)
-        self.developer = BackendDeveloper(memory, self.settings, vector_memory=vector_memory)
-        self.reviewer = CodeReviewer(memory, self.settings, vector_memory=vector_memory)
+        common = {"vector_memory": vector_memory, "skills_library": skills_library}
+        self.orchestrator = ChiefOrchestrator(memory, self.settings, **common)
+        self.architect = SoftwareArchitect(memory, self.settings, **common)
+        self.developer = BackendDeveloper(memory, self.settings, **common)
+        self.reviewer = CodeReviewer(memory, self.settings, **common)
 
     async def run(self, title: str, description: str) -> MissionResult:
         mission_id = uuid4()
