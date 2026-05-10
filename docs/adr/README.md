@@ -31,3 +31,4 @@ Format minimal :
 - [ADR-004 — Stratégie d'apprentissage : RAG + skills synthétisées, pas de fine-tuning](004-learning-strategy.md)
 - [ADR-005 — Détection et prévention de la saturation max_tokens](005-saturation-detection-and-prevention.md)
 - [ADR-006 — Stratégie de mining et critères d'éligibilité des épisodes](006-mining-strategy-and-eligibility.md)
+- [ADR-007 — Stratégie d'A/B testing automatique des prompts versionnés](007-prompt-ab-testing-strategy.md) (Proposed)
