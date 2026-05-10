@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 from src.core.config import Settings, get_settings
 from src.core.logging import get_logger
 from src.core.pricing import estimate_cost
+from src.core.tracing import observe
 from src.learning.skills_library import Skill, SkillsLibrary
 from src.memory.file_memory import FileMemory, MemoryRecord
 from src.memory.vector_memory import EpisodeMatch, VectorMemory
@@ -205,6 +206,7 @@ class BaseAgent:
         """Override pour interpréter la sortie (yaml, json, code blocks…). Default = passthrough."""
         return None
 
+    @observe(name="agent.run", as_type="generation")
     async def run(self, agent_input: AgentInput) -> AgentOutput:
         precedents = self._retrieve_precedents(agent_input)
         if precedents:
