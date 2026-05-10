@@ -3,6 +3,7 @@
 Usage:
     uv run python scripts/run_mission.py --title "Titre court" --description "Description longue"
     uv run python scripts/run_mission.py --title "..." --description "..." --apply
+    uv run python scripts/run_mission.py --title "..." --description "..." --apply --validate
     uv run python scripts/run_mission.py --interactive
 
 La mission est exécutée en chaîne : Orchestrator → Architect → Developer → Reviewer.
@@ -11,6 +12,10 @@ Les épisodes et le résumé sont écrits dans data/memory/.
 Mode --apply (Phase 1.5) : si le verdict est APPROVED, les fichiers proposés sont écrits
 sur disque dans les dossiers whitelistés (src/, tests/, scripts/, docs/, prompts/, skills/).
 Par défaut --apply n'overwrite pas les fichiers existants — utiliser --force pour cela.
+
+Mode --validate (Phase 8) : avec --apply, lance pytest dans le sandbox Docker sur les
+fichiers écrits et fail si les tests ne passent pas (exit 4). Boucle qualité fermée
+DÈS la mission live, sans étape manuelle de re-validation.
 """
 from __future__ import annotations
 
@@ -39,6 +44,7 @@ from src.memory.file_memory import FileMemory
 from src.memory.vector_memory import VectorMemory
 from src.orchestrator.router import MissionRouter
 from src.tools.apply_files import ApplyAction, apply_files
+from src.tools.sandbox_validate import print_sandbox_result, validate_files_in_sandbox
 
 app = typer.Typer(no_args_is_help=False, add_completion=False)
 console = Console()
@@ -61,7 +67,13 @@ def run(
     interactive: bool = typer.Option(False, "--interactive", "-i", help="Saisie interactive"),
     apply: bool = typer.Option(False, "--apply", help="Écrit les fichiers sur disque si APPROVED (Engineering only)"),
     force: bool = typer.Option(False, "--force", help="Avec --apply : overwrite les fichiers existants"),
-    guild: str = typer.Option(None, "--guild", "-g", help="Force la guilde (engineering | research)"),
+    guild: str = typer.Option(None, "--guild", "-g", help="Force la guilde (engineering | research | creative | business)"),
+    validate: bool = typer.Option(
+        False, "--validate",
+        help="Avec --apply : lance pytest sandbox sur les fichiers écrits (boucle qualité fermée)"
+    ),
+    sandbox_image: str = typer.Option("iaa-sandbox:latest", "--sandbox-image"),
+    sandbox_timeout: int = typer.Option(60, "--sandbox-timeout", help="Timeout pytest sandbox en secondes"),
 ) -> None:
     settings = get_settings()
     setup_logging(level=settings.log_level, fmt=settings.log_format)
@@ -142,6 +154,8 @@ def run(
             console.print(Syntax(f["content"], lang, theme="monokai", line_numbers=True))
 
     # --- Apply mode (Phase 1.5) — Engineering only ---
+    apply_succeeded = False
+    written_files: list[dict[str, str]] = []
     if apply:
         if result.guild != "engineering":
             console.print(
@@ -165,7 +179,7 @@ def run(
             apply_table.add_column("Action", style="white")
             apply_table.add_column("Fichier", style="cyan")
             apply_table.add_column("Détail", style="dim")
-            for r in apply_results:
+            for f, r in zip(files_produced, apply_results, strict=False):
                 style = _ACTION_STYLES.get(r.action, "white")
                 detail = (
                     f"{r.bytes_written} octets"
@@ -177,13 +191,58 @@ def run(
                     r.path,
                     detail,
                 )
+                if r.action == ApplyAction.WRITTEN:
+                    written_files.append(f)
             console.print(apply_table)
+            apply_succeeded = bool(written_files)
     elif result.guild == "engineering" and files_produced:
         console.print(
             "\n[dim]Mode dry-run actif. Ajoute [bold]--apply[/bold] pour écrire les fichiers sur disque.[/dim]"
         )
 
+    # --- Validate mode (Phase 8) — sandbox pytest sur les fichiers écrits ---
+    validation_failed = False
+    if validate:
+        if not apply:
+            console.print(
+                "\n[yellow]--validate ignoré : nécessite --apply pour avoir des fichiers à tester.[/yellow]"
+            )
+        elif not apply_succeeded:
+            console.print(
+                "\n[yellow]--validate ignoré : aucun fichier écrit (apply n'a rien produit ou guild non-engineering).[/yellow]"
+            )
+        else:
+            console.print("\n[bold cyan]Validation sandbox des fichiers appliqués…[/bold cyan]")
+            sandbox_result = validate_files_in_sandbox(
+                written_files,
+                sandbox_image=sandbox_image,
+                sandbox_timeout=sandbox_timeout,
+                console=console,
+            )
+            if sandbox_result is None:
+                console.print(
+                    "[yellow]Sandbox indisponible — apply OK mais qualité non vérifiée.[/yellow]"
+                )
+            else:
+                print_sandbox_result(sandbox_result, console=console)
+                if sandbox_result.exit_code != 0:
+                    validation_failed = True
+                    console.print(
+                        "\n[bold red]Validation sandbox ÉCHOUÉE.[/bold red] "
+                        "Les fichiers ont été appliqués mais ne passent pas pytest. "
+                        "Inspecte le diff avant de committer."
+                    )
+                else:
+                    console.print(
+                        "\n[bold green]Boucle qualité fermée : mission APPROVED + apply OK + sandbox pytest OK.[/bold green]"
+                    )
+
     console.print("\n[dim]Résumé écrit dans :[/dim] " f"{memory_root / 'missions' / (str(result.mission_id) + '.md')}")
+
+    # Exit code combiné : si validate a fail, exit 4 (cf. apply_mission.py).
+    # Sinon, exit selon le succès de la mission elle-même.
+    if validation_failed:
+        raise SystemExit(4)
     raise SystemExit(0 if result.success else 1)
 
 

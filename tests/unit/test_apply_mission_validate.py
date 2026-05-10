@@ -1,37 +1,25 @@
-"""Tests pour les helpers de validation sandbox dans scripts/apply_mission.py.
+"""Tests pour validate_files_in_sandbox (src/tools/sandbox_validate.py).
 
-Le helper _validate_in_sandbox encapsule la création workspace temp + lancement
-sandbox + cleanup. On le teste avec un SandboxRunner mocké pour ne pas
-dépendre de Docker en CI."""
+Le helper encapsule la création workspace temp + lancement sandbox + cleanup.
+On le teste avec un SandboxRunner mocké pour ne pas dépendre de Docker en CI.
+
+NOTE : depuis le refactor (ADR/sprint-X), la logique est dans
+src.tools.sandbox_validate. apply_mission.py n'est qu'un wrapper.
+"""
 from __future__ import annotations
 
-import importlib
-import sys
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
 
-# Le script apply_mission.py vit sous scripts/ et n'est pas un module installé.
-# On l'importe via importlib en injectant son répertoire dans sys.path.
-SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
+import src.tools.sandbox_validate as sv_module
+from src.tools.sandbox_validate import validate_files_in_sandbox
 
 
-@pytest.fixture
-def apply_mission_module(monkeypatch: pytest.MonkeyPatch):
-    """Charge dynamiquement apply_mission.py comme module."""
+@pytest.fixture(autouse=True)
+def _set_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-12345")
-    sys.path.insert(0, str(SCRIPTS_DIR))
-    try:
-        # Force reload pour repartir de zéro
-        if "apply_mission" in sys.modules:
-            del sys.modules["apply_mission"]
-        module = importlib.import_module("apply_mission")
-        yield module
-    finally:
-        if str(SCRIPTS_DIR) in sys.path:
-            sys.path.remove(str(SCRIPTS_DIR))
 
 
 def _file(path: str, content: str = "x = 1\n") -> dict[str, str]:
@@ -39,7 +27,7 @@ def _file(path: str, content: str = "x = 1\n") -> dict[str, str]:
 
 
 def test_validate_in_sandbox_returns_none_when_runner_unavailable(
-    apply_mission_module, monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Si SandboxRunner lève SandboxUnavailable → retour None (pas de crash)."""
     from src.sandbox.runner import SandboxUnavailable
@@ -47,9 +35,9 @@ def test_validate_in_sandbox_returns_none_when_runner_unavailable(
     def _raises(**kwargs):
         raise SandboxUnavailable("docker daemon down")
 
-    monkeypatch.setattr(apply_mission_module, "SandboxRunner", _raises)
+    monkeypatch.setattr(sv_module, "SandboxRunner", _raises)
 
-    result = apply_mission_module._validate_in_sandbox(
+    result = validate_files_in_sandbox(
         files=[_file("src/foo.py")],
         sandbox_image="iaa-sandbox:latest",
         sandbox_timeout=10,
@@ -58,13 +46,13 @@ def test_validate_in_sandbox_returns_none_when_runner_unavailable(
 
 
 def test_validate_in_sandbox_returns_none_when_image_missing(
-    apply_mission_module, monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_runner = MagicMock()
     fake_runner.image_exists.return_value = False
-    monkeypatch.setattr(apply_mission_module, "SandboxRunner", lambda **kw: fake_runner)
+    monkeypatch.setattr(sv_module, "SandboxRunner", lambda **kw: fake_runner)
 
-    result = apply_mission_module._validate_in_sandbox(
+    result = validate_files_in_sandbox(
         files=[_file("src/foo.py")],
         sandbox_image="iaa-sandbox:latest",
         sandbox_timeout=10,
@@ -73,7 +61,7 @@ def test_validate_in_sandbox_returns_none_when_image_missing(
 
 
 def test_validate_in_sandbox_writes_files_and_runs_pytest(
-    apply_mission_module, monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Le helper doit créer les fichiers dans un workspace temp et appeler runner.run()."""
     from src.sandbox.runner import SandboxResult
@@ -90,7 +78,7 @@ def test_validate_in_sandbox_writes_files_and_runs_pytest(
     fake_runner = MagicMock()
     fake_runner.image_exists.return_value = True
     fake_runner.run.return_value = fake_result
-    monkeypatch.setattr(apply_mission_module, "SandboxRunner", lambda **kw: fake_runner)
+    monkeypatch.setattr(sv_module, "SandboxRunner", lambda **kw: fake_runner)
 
     captured_workspace = {}
 
@@ -104,7 +92,7 @@ def test_validate_in_sandbox_writes_files_and_runs_pytest(
 
     fake_runner.run.side_effect = _capture_run
 
-    result = apply_mission_module._validate_in_sandbox(
+    result = validate_files_in_sandbox(
         files=[
             _file("src/foo.py", "def hello(): return 'world'\n"),
             _file("tests/test_foo.py", "from src.foo import hello\n\ndef test_hello(): assert hello() == 'world'\n"),
@@ -121,7 +109,7 @@ def test_validate_in_sandbox_writes_files_and_runs_pytest(
 
 
 def test_validate_in_sandbox_skips_files_without_path(
-    apply_mission_module, monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from src.sandbox.runner import SandboxResult
 
@@ -132,10 +120,10 @@ def test_validate_in_sandbox_skips_files_without_path(
     fake_runner = MagicMock()
     fake_runner.image_exists.return_value = True
     fake_runner.run.return_value = fake_result
-    monkeypatch.setattr(apply_mission_module, "SandboxRunner", lambda **kw: fake_runner)
+    monkeypatch.setattr(sv_module, "SandboxRunner", lambda **kw: fake_runner)
 
     # Mélange : un fichier valide + un sans path (à ignorer)
-    result = apply_mission_module._validate_in_sandbox(
+    result = validate_files_in_sandbox(
         files=[
             _file("src/ok.py"),
             {"path": "", "content": "garbage"},
@@ -150,7 +138,7 @@ def test_validate_in_sandbox_skips_files_without_path(
 
 
 def test_validate_in_sandbox_creates_conftest_for_imports(
-    apply_mission_module, monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Régression : sans conftest.py qui ajoute le workspace au sys.path,
     `from src.x import y` échoue dans le sandbox."""
@@ -172,9 +160,9 @@ def test_validate_in_sandbox_creates_conftest_for_imports(
         return fake_result
 
     fake_runner.run.side_effect = _check_conftest
-    monkeypatch.setattr(apply_mission_module, "SandboxRunner", lambda **kw: fake_runner)
+    monkeypatch.setattr(sv_module, "SandboxRunner", lambda **kw: fake_runner)
 
-    apply_mission_module._validate_in_sandbox(
+    validate_files_in_sandbox(
         files=[_file("src/foo.py")],
         sandbox_image="iaa-sandbox:latest",
         sandbox_timeout=10,
@@ -184,7 +172,7 @@ def test_validate_in_sandbox_creates_conftest_for_imports(
 
 
 def test_validate_in_sandbox_preserves_user_conftest(
-    apply_mission_module, monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Si l'utilisateur fournit son propre conftest.py, on ne l'écrase PAS."""
     from src.sandbox.runner import SandboxResult
@@ -205,9 +193,9 @@ def test_validate_in_sandbox_preserves_user_conftest(
         return fake_result
 
     fake_runner.run.side_effect = _check_conftest
-    monkeypatch.setattr(apply_mission_module, "SandboxRunner", lambda **kw: fake_runner)
+    monkeypatch.setattr(sv_module, "SandboxRunner", lambda **kw: fake_runner)
 
-    apply_mission_module._validate_in_sandbox(
+    validate_files_in_sandbox(
         files=[
             _file("src/foo.py"),
             {"path": "conftest.py", "content": user_conftest, "language": "python"},
@@ -217,3 +205,27 @@ def test_validate_in_sandbox_preserves_user_conftest(
     )
 
     assert captured["text"] == user_conftest
+
+
+# Régression : apply_mission.py expose toujours les helpers en alias pour la
+# compatibilité ascendante (les anciens scripts ou notebooks externes).
+def test_apply_mission_exposes_legacy_aliases() -> None:
+    """Le module apply_mission doit toujours fournir _validate_in_sandbox et
+    _print_sandbox_result pour la rétro-compatibilité, même si la logique vit
+    dans src.tools.sandbox_validate."""
+    import importlib
+    import sys
+
+    SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
+    sys.path.insert(0, str(SCRIPTS_DIR))
+    try:
+        if "apply_mission" in sys.modules:
+            del sys.modules["apply_mission"]
+        module = importlib.import_module("apply_mission")
+        assert hasattr(module, "_validate_in_sandbox")
+        assert hasattr(module, "_print_sandbox_result")
+        assert callable(module._validate_in_sandbox)
+        assert callable(module._print_sandbox_result)
+    finally:
+        if str(SCRIPTS_DIR) in sys.path:
+            sys.path.remove(str(SCRIPTS_DIR))

@@ -24,20 +24,15 @@ if sys.platform == "win32":
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import shutil
-import tempfile
-from typing import Iterable
-
 import typer
 from rich.console import Console
-from rich.panel import Panel
 from rich.table import Table
 
 from src.core.config import get_settings
 from src.memory.file_memory import FileMemory
 from src.orchestrator.agents._parsers import extract_files
-from src.sandbox.runner import SandboxResult, SandboxRunner, SandboxUnavailable
 from src.tools.apply_files import ApplyAction, apply_files
+from src.tools.sandbox_validate import print_sandbox_result, validate_files_in_sandbox
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
 console = Console()
@@ -52,69 +47,13 @@ _ACTION_STYLES = {
 }
 
 
-def _validate_in_sandbox(
-    files: Iterable[dict[str, str]],
-    sandbox_image: str,
-    sandbox_timeout: int,
-) -> SandboxResult | None:
-    """Lance pytest dans le sandbox Docker sur les fichiers fournis.
-
-    Retourne None si le sandbox est indisponible ou l'image absente (le caller
-    décide quoi faire). Sinon retourne le SandboxResult pytest.
-    """
-    try:
-        runner = SandboxRunner(image=sandbox_image, timeout_seconds=sandbox_timeout)
-    except SandboxUnavailable as exc:
-        console.print(f"[yellow]Sandbox indisponible — validation skippée : {exc}[/yellow]")
-        return None
-    if not runner.image_exists():
-        console.print(
-            f"[yellow]Image {sandbox_image} absente — validation skippée. "
-            f"Build via : uv run python scripts/check_sandbox.py --build[/yellow]"
-        )
-        return None
-
-    with tempfile.TemporaryDirectory() as td:
-        workspace = Path(td)
-        for entry in files:
-            rel = entry.get("path", "").strip()
-            if not rel:
-                continue
-            content = entry.get("content", "")
-            dst = workspace / rel
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            dst.write_text(content, encoding="utf-8")
-
-        # Conftest minimal pour permettre `from src.x import y` sans installation package
-        conftest = workspace / "conftest.py"
-        if not conftest.exists():
-            conftest.write_text(
-                "import sys\nfrom pathlib import Path\n"
-                "sys.path.insert(0, str(Path(__file__).parent))\n",
-                encoding="utf-8",
-            )
-        return runner.run(workspace=workspace, command=["pytest", "-v", "--tb=short"])
+# Backward-compat aliases pour les tests qui patchaient les helpers locaux.
+# La logique vit désormais dans src.tools.sandbox_validate.
+_validate_in_sandbox = validate_files_in_sandbox
 
 
-def _print_sandbox_result(result: SandboxResult) -> None:
-    color = "green" if result.exit_code == 0 else "red"
-    console.print(
-        Panel.fit(
-            f"[bold {color}]pytest exit_code={result.exit_code}[/bold {color}] · "
-            f"{result.duration_seconds:.2f}s · timed_out={result.timed_out}",
-            border_style=color,
-            title="Sandbox validation",
-        )
-    )
-    if result.stdout:
-        console.print("\n[bold cyan]STDOUT[/bold cyan]")
-        # Tronque à 80 lignes pour rester lisible
-        lines = result.stdout.split("\n")
-        for line in lines[-80:]:
-            console.print(line)
-    if result.stderr.strip():
-        console.print("\n[bold yellow]STDERR[/bold yellow]")
-        console.print(result.stderr[-2000:])
+def _print_sandbox_result(result) -> None:  # type: ignore[no-untyped-def]
+    print_sandbox_result(result, console=console)
 
 
 @app.command()
@@ -198,10 +137,12 @@ def apply(
         console.print(
             f"\n[cyan]Mode validate-only : {len(files)} fichier(s) testés en sandbox sans écriture[/cyan]"
         )
-        sandbox_result = _validate_in_sandbox(files, sandbox_image, sandbox_timeout)
+        sandbox_result = validate_files_in_sandbox(
+            files, sandbox_image=sandbox_image, sandbox_timeout=sandbox_timeout, console=console
+        )
         if sandbox_result is None:
             raise SystemExit(3)
-        _print_sandbox_result(sandbox_result)
+        print_sandbox_result(sandbox_result, console=console)
         raise SystemExit(0 if sandbox_result.exit_code == 0 else 1)
 
     console.print(f"\n[cyan]{len(files)} fichier(s) à appliquer · force={force}[/cyan]\n")
@@ -242,13 +183,15 @@ def apply(
         if not written_files:
             console.print("[yellow]Aucun fichier écrit, rien à valider.[/yellow]")
             raise SystemExit(0 if written == len(results) else 1)
-        sandbox_result = _validate_in_sandbox(written_files, sandbox_image, sandbox_timeout)
+        sandbox_result = validate_files_in_sandbox(
+            written_files, sandbox_image=sandbox_image, sandbox_timeout=sandbox_timeout, console=console
+        )
         if sandbox_result is None:
             console.print(
                 "[yellow]Validation sandbox skippée. Apply OK, mais qualité non vérifiée.[/yellow]"
             )
             raise SystemExit(0 if written == len(results) else 1)
-        _print_sandbox_result(sandbox_result)
+        print_sandbox_result(sandbox_result, console=console)
         # Exit code combiné : succès uniquement si apply ET validation passent
         if sandbox_result.exit_code != 0:
             console.print(
