@@ -57,6 +57,9 @@ class PatternMiner:
 
     # Agents pour lesquels on extrait des skills (tous les agents productifs des
     # guildes). Le skill_extractor lui-même est exclu (sinon récursion).
+    # NOTE : à mettre à jour à chaque nouvelle guilde — pattern récurrent
+    # observé sur Research puis Creative. Phase 5+ : charger dynamiquement
+    # depuis les workflows pour éviter les oublis.
     AGENT_WHITELIST: tuple[str, ...] = (
         # Comité de direction
         "chief_orchestrator",
@@ -69,6 +72,14 @@ class PatternMiner:
         "tech_watch",
         "document_synthesizer",
         "research_reviewer",
+        # Guild Creative (ajoutée Phase 4 MVP)
+        "content_strategist",
+        "copywriter",
+        "editor",
+        # Guild Business (ajoutée Phase 4 MVP)
+        "project_manager",
+        "business_analyst",
+        "legal_reviewer",
     )
 
     def __init__(

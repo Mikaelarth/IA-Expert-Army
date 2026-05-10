@@ -203,6 +203,15 @@ def test_whitelist_includes_all_research_agents() -> None:
         )
 
 
+def test_whitelist_includes_all_creative_agents() -> None:
+    """Régression : la Creative Guild doit être dans le whitelist (oubli répété
+    sur Research, ne pas refaire sur les futures guildes Business/etc.)."""
+    for agent in ("content_strategist", "copywriter", "editor"):
+        assert agent in PatternMiner.AGENT_WHITELIST, (
+            f"{agent} doit être dans le whitelist pour bénéficier du mining"
+        )
+
+
 def test_pattern_miner_respects_agents_filter(
     memory: FileMemory, skills: SkillsLibrary, settings: Settings
 ) -> None:

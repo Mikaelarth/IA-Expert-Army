@@ -19,6 +19,7 @@ from src.core.budget import BudgetController
 from src.core.config import Settings, get_settings
 from src.core.killswitch import Killswitch
 from src.core.logging import get_logger
+from src.guilds.business.workflow import BusinessMissionResult, BusinessWorkflow
 from src.guilds.creative.workflow import CreativeMissionResult, CreativeWorkflow
 from src.guilds.research.workflow import ResearchMissionResult, ResearchWorkflow
 from src.learning.skills_library import SkillsLibrary
@@ -172,6 +173,47 @@ _CREATIVE_KEYWORDS = (
 )
 
 
+# Mots-clés Guild Business — pilotage projet, viabilité économique, conformité.
+# Volontairement orientés "intention de cadrage/analyse" (pas "exécution").
+_BUSINESS_KEYWORDS = (
+    "roadmap",
+    "planning",
+    "milestones",
+    "milestone",
+    "jalons",
+    "business plan",
+    "business case",
+    "go-to-market",
+    "go to market",
+    "gtm",
+    "viabilité",
+    "viability",
+    "rentabilité",
+    "profitability",
+    "modèle économique",
+    "business model",
+    "monetization",
+    "monétisation",
+    "tarification",
+    "pricing strategy",
+    "kpis",
+    "okrs",
+    "roi",
+    "tco",
+    "p&l",
+    "rgpd",
+    "gdpr",
+    "compliance",
+    "conformité",
+    "ai act",
+    "contrat",
+    "cgu",
+    "cgv",
+    "stakeholders",
+    "parties prenantes",
+)
+
+
 class _GuildClassifier(Protocol):
     def classify(self, title: str, description: str) -> str: ...
 
@@ -184,10 +226,12 @@ class HeuristicGuildClassifier:
         research_keywords: tuple[str, ...] = _RESEARCH_KEYWORDS,
         engineering_keywords: tuple[str, ...] = _ENGINEERING_KEYWORDS,
         creative_keywords: tuple[str, ...] = _CREATIVE_KEYWORDS,
+        business_keywords: tuple[str, ...] = _BUSINESS_KEYWORDS,
     ) -> None:
         self.research_keywords = research_keywords
         self.engineering_keywords = engineering_keywords
         self.creative_keywords = creative_keywords
+        self.business_keywords = business_keywords
 
     # Poids du titre. Un keyword dans le titre = TITLE_WEIGHT points ; dans le body
     # uniquement = 1 point (ou +2 pour un verbe d'action fort).
@@ -206,15 +250,14 @@ class HeuristicGuildClassifier:
             "engineering": self._score(self.engineering_keywords, title_lower, full_lower),
             "research": self._score(self.research_keywords, title_lower, full_lower),
             "creative": self._score(self.creative_keywords, title_lower, full_lower),
+            "business": self._score(self.business_keywords, title_lower, full_lower),
         }
         max_score = max(scores.values())
-        # Tie-break : engineering > research > creative (ordre de maturité).
-        # Si le max inclut engineering, engineering gagne.
-        if scores["engineering"] == max_score:
-            return "engineering"
-        if scores["research"] >= scores["creative"]:
-            return "research"
-        return "creative"
+        # Tie-break selon ordre de maturité (ADR-001) : engineering > research > creative > business
+        for guild in ("engineering", "research", "creative", "business"):
+            if scores[guild] == max_score:
+                return guild
+        return "engineering"  # safety
 
     @classmethod
     def _score(cls, keywords: tuple[str, ...], title_text: str, full_text: str) -> int:
@@ -331,6 +374,22 @@ class MissionRouter:
                 total_duration_seconds=cre_result.total_duration_seconds,
                 summary=cre_result.review_summary,
                 raw_result=cre_result.model_dump(mode="json"),
+            )
+
+        if decision.guild == "business":
+            wf_biz = BusinessWorkflow(**common)
+            biz_result: BusinessMissionResult = await wf_biz.run(title=title, description=description)
+            return UnifiedMissionResult(
+                mission_id=str(biz_result.mission_id),
+                title=biz_result.title,
+                guild="business",
+                success=biz_result.success,
+                final_verdict=biz_result.final_verdict,
+                quality_score=biz_result.quality_score,
+                total_cost_usd=biz_result.total_cost_usd,
+                total_duration_seconds=biz_result.total_duration_seconds,
+                summary=biz_result.review_summary,
+                raw_result=biz_result.model_dump(mode="json"),
             )
 
         # Default = engineering
