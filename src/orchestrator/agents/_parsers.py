@@ -8,18 +8,147 @@ import yaml
 
 _FENCE = re.compile(r"```(?:yaml|yml)?\s*\n(.*?)\n```", re.DOTALL | re.IGNORECASE)
 
+# Détecte un item de liste YAML qui contient un `:` suivi d'espace dans son texte
+# (typique des chaînes générées par LLM). Cas piégé :
+#   - Conditions de validité explicites : "payant pour X / contre-productif Y"
+# YAML strict interprète " :" comme séparateur clé-valeur → ParserError.
+# Le pré-traitement consiste à entourer l'item de guillemets simples si non-quoté.
+_LIST_ITEM_WITH_COLON = re.compile(
+    r"^(?P<indent>\s*-\s+)(?!['\"])(?P<content>[^\n]*?\s:\s[^\n]+)$",
+    re.MULTILINE,
+)
+
+
+def _quote_problematic_list_items(yaml_text: str) -> str:
+    """Pré-traite un YAML texte pour quoter automatiquement les items de liste
+    contenant ' : ' non quotés. Bug récurrent des LLMs.
+
+    Conserve les items déjà quotés ou qui sont des dicts (clé: valeur en début de ligne)."""
+    def _quote(match: re.Match[str]) -> str:
+        indent = match.group("indent")
+        content = match.group("content").rstrip()
+        # On échappe les apostrophes dans le contenu
+        escaped = content.replace("'", "''")
+        return f"{indent}'{escaped}'"
+
+    return _LIST_ITEM_WITH_COLON.sub(_quote, yaml_text)
+
+
+def _safe_yaml_load(text: str) -> dict[str, Any] | None:
+    """Essaie un chargement strict, puis avec pré-traitement de récupération."""
+    try:
+        loaded = yaml.safe_load(text)
+        if isinstance(loaded, dict):
+            return loaded
+        return None
+    except yaml.YAMLError:
+        pass
+
+    # Recovery : pré-traiter et retenter
+    pre_processed = _quote_problematic_list_items(text)
+    if pre_processed != text:
+        try:
+            loaded = yaml.safe_load(pre_processed)
+            if isinstance(loaded, dict):
+                return loaded
+        except yaml.YAMLError:
+            pass
+
+    return None
+
+
+# Fallback regex pour extraire les champs essentiels d'une skill quand YAML
+# refuse de parser même après pré-traitement. Couvre les cas LLM les plus
+# pathologiques (quotes au milieu d'un item, structures imbriquées invalides,
+# etc.). Renvoie un dict partiel — au minimum title doit être présent.
+# Note : on utilise [ \t]+ (pas \s*) pour ne PAS traverser les newlines, sinon
+# greedy match ramasserait des lignes suivantes par erreur.
+_RX_SCALAR_FIELD = re.compile(r"^([a-z_]+):[ \t]+(\S[^\n]*)$", re.MULTILINE)
+_RX_BLOCK_SCALAR = re.compile(
+    r"^([a-z_]+):[ \t]*[|>][-+]?[ \t]*\n((?:[ \t]+[^\n]*\n?)+)",
+    re.MULTILINE,
+)
+_RX_LIST_FIELD = re.compile(
+    r"^([a-z_]+):[ \t]*\n((?:[ \t]*-[ \t]+[^\n]+\n?)+)",
+    re.MULTILINE,
+)
+_RX_LIST_ITEM = re.compile(r"^[ \t]*-[ \t]+(.+?)\s*$", re.MULTILINE)
+
+
+def _dedent_block(block_text: str) -> str:
+    """Dédente un bloc YAML ``|`` ou ``>`` en retirant l'indentation commune."""
+    lines = block_text.rstrip().split("\n")
+    non_empty = [line for line in lines if line.strip()]
+    if not non_empty:
+        return ""
+    min_indent = min(len(line) - len(line.lstrip()) for line in non_empty)
+    return "\n".join(line[min_indent:] for line in lines).strip()
+
+
+def _strip_outer_quotes(text: str) -> str:
+    text = text.strip()
+    if len(text) >= 2 and (
+        (text.startswith('"') and text.endswith('"'))
+        or (text.startswith("'") and text.endswith("'"))
+    ):
+        return text[1:-1]
+    return text
+
+
+def _regex_fallback_extract(text: str) -> dict[str, Any] | None:
+    """Extraction de last-resort par regex des champs scalaires + listes + blocks.
+
+    Ne récupère pas de structures imbriquées complexes. Suffisant pour les YAML
+    "skill" qui ont un schéma plat connu.
+    """
+    result: dict[str, Any] = {}
+
+    for match in _RX_SCALAR_FIELD.finditer(text):
+        key = match.group(1)
+        value = match.group(2).strip()
+        # Skip block scalar markers (`|` ou `>`) — gérés par _RX_BLOCK_SCALAR
+        if value.startswith("|") or value.startswith(">"):
+            continue
+        value = _strip_outer_quotes(value)
+        if key not in result:  # premier match gagne (évite les overrides depuis exemples)
+            result[key] = value
+
+    for match in _RX_BLOCK_SCALAR.finditer(text):
+        key = match.group(1)
+        if key not in result:
+            result[key] = _dedent_block(match.group(2))
+
+    for match in _RX_LIST_FIELD.finditer(text):
+        key = match.group(1)
+        if key in result:
+            continue
+        items = [
+            _strip_outer_quotes(item_match.group(1))
+            for item_match in _RX_LIST_ITEM.finditer(match.group(2))
+        ]
+        if items:
+            result[key] = items
+
+    return result if result.get("title") else None
+
 
 def extract_yaml(text: str) -> dict[str, Any] | None:
-    """Extrait un bloc YAML : code fence ```yaml ... ``` en priorité, sinon tout le texte."""
+    """Extrait un bloc YAML : code fence ```yaml ... ``` en priorité, sinon tout le texte.
+
+    Tolérance progressive face aux YAML LLM mal formés :
+      1. Parse strict yaml.safe_load
+      2. Si échec → pré-traitement (quote auto des items list avec ` : `) + retry
+      3. Si échec → fallback regex qui extrait les champs scalaires/listes/blocks
+         indépendamment (last-resort, perd les structures imbriquées)
+    """
     match = _FENCE.search(text)
     candidate = match.group(1) if match else text
-    try:
-        loaded = yaml.safe_load(candidate)
-    except yaml.YAMLError:
-        return None
-    if isinstance(loaded, dict):
-        return loaded
-    return None
+
+    result = _safe_yaml_load(candidate)
+    if result is not None:
+        return result
+
+    return _regex_fallback_extract(candidate)
 
 
 _TITLE = re.compile(r"^###\s+`([^`]+)`\s*$")

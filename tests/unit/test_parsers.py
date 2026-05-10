@@ -36,6 +36,79 @@ def test_extract_yaml_returns_none_on_invalid() -> None:
     assert extract_yaml(text) is None
 
 
+def test_extract_yaml_recovers_list_items_with_unquoted_colon() -> None:
+    """Régression : un LLM qui produit un item de liste contenant ' : ' non quoté
+    fait échouer le parser strict. Le pré-traitement doit auto-quoter et permettre
+    le parse. Bug observé en mining tech_watch (épisode aebf2a37).
+    """
+    text = """```yaml
+title: Skill réutilisable
+key_patterns:
+  - Confidence calibrée systématiquement (high = docs ; medium = signaux)
+  - Conditions de validité explicites : "payant pour X / contre-productif Y" au lieu de recommandations universelles
+  - Sources croisées par finding
+techniques:
+  - Format YAML strict
+```"""
+    result = extract_yaml(text)
+    assert result is not None, "Le parser tolérant doit récupérer ce YAML"
+    assert result["title"] == "Skill réutilisable"
+    assert len(result["key_patterns"]) == 3
+    # L'item problématique est préservé (en string)
+    assert "Conditions de validité explicites" in result["key_patterns"][1]
+
+
+def test_extract_yaml_strict_parse_still_works() -> None:
+    """Le parser tolérant ne doit PAS modifier les YAML déjà valides."""
+    text = """```yaml
+title: x
+items:
+  - "déjà quoté : avec deux-points"
+  - simple item sans colon
+```"""
+    result = extract_yaml(text)
+    assert result is not None
+    assert result["items"][0] == "déjà quoté : avec deux-points"
+    assert result["items"][1] == "simple item sans colon"
+
+
+def test_extract_yaml_unrecoverable_returns_none() -> None:
+    """Si même le pré-traitement ne suffit pas, on retourne None (pas de crash)."""
+    text = "```yaml\n{{{{ totally broken\n```"
+    assert extract_yaml(text) is None
+
+
+def test_extract_yaml_regex_fallback_for_quotes_in_middle_of_item() -> None:
+    """Cas pathologique : item de liste avec un quote AU MILIEU (pas en début).
+    Le pré-traitement ne le détecte pas. Le fallback regex doit le sauver.
+    Vrai cas observé en mining tech_watch (épisode aebf2a37, item « LLM-judge »).
+    """
+    text = """```yaml
+title: Skill avec items pathologiques
+summary: |
+  Test du fallback regex
+key_patterns:
+  - "LLM-judge solves all" sans section méta-évaluation
+  - autre item simple
+techniques:
+  - Structure YAML stricte : findings_by_subquestion → SQ_id → liste de findings → {finding, confidence}
+```"""
+    result = extract_yaml(text)
+    assert result is not None, "Le fallback regex doit récupérer ce YAML"
+    assert result["title"] == "Skill avec items pathologiques"
+    assert "Test du fallback" in result["summary"]
+    assert len(result["key_patterns"]) == 2
+
+
+def test_extract_yaml_regex_fallback_requires_title() -> None:
+    """Le fallback regex ne retourne quelque chose que si title est trouvé."""
+    text = """```yaml
+agent: tech_watch
+{{{{ broken nested
+```"""
+    assert extract_yaml(text) is None
+
+
 def test_extract_files_picks_up_path_and_code() -> None:
     text = """## Approche
 
