@@ -12,7 +12,9 @@ data/memory.db-*
 data/chroma/
 data/episodes/
 data/backups/
-data/memory/        # FileMemory (Phase 1) : épisodes + missions + working
+data/memory/             # FileMemory (Phase 1) : épisodes + missions + working
+data/budget_state.json   # BudgetController state (Phase 6)
+data/.killswitch         # Killswitch sentinel (Phase 6)
 *.log
 logs/
 
