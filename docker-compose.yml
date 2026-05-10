@@ -82,8 +82,12 @@ services:
       CLICKHOUSE_DB: default
       CLICKHOUSE_USER: clickhouse
       CLICKHOUSE_PASSWORD: clickhouse_password_change_me
+    # Volume Docker NAMED (pas bind mount) : ClickHouse a des règles de
+    # permissions strictes incompatibles avec les mounts Windows bind
+    # (erreur "filesystem error: in rename: Permission denied" sur
+    # /var/lib/clickhouse/store/...).
     volumes:
-      - ./docker-volumes/langfuse-clickhouse:/var/lib/clickhouse
+      - langfuse_clickhouse_data:/var/lib/clickhouse
     ulimits:
       nofile:
         soft: 262144
@@ -120,9 +124,12 @@ services:
       langfuse-minio: { condition: service_started }
     environment:
       DATABASE_URL: postgresql://langfuse:langfuse_password_change_me@langfuse-postgres:5432/langfuse
+      # ClickHouse : URL HTTP pour requêtes runtime + URL native (port 9000) pour migrations
       CLICKHOUSE_URL: http://langfuse-clickhouse:8123
+      CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
       CLICKHOUSE_USER: clickhouse
       CLICKHOUSE_PASSWORD: clickhouse_password_change_me
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
       REDIS_HOST: langfuse-redis
       REDIS_PORT: 6379
       REDIS_AUTH: langfuse_redis_change_me
@@ -132,6 +139,7 @@ services:
       LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: minio_password_change_me
       LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-minio:9000
       LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_USE_AZURE_BLOB: "false"
       SALT: 6d0552ea14b4fceedb485b5e6962009d
       ENCRYPTION_KEY: 52dfdc70c48e8bb99742bd51015270aed368a01409bc9135032e43c6302a01fd
 
@@ -146,9 +154,12 @@ services:
       - "3000:3000"
     environment:
       DATABASE_URL: postgresql://langfuse:langfuse_password_change_me@langfuse-postgres:5432/langfuse
+      # ClickHouse : URL HTTP pour requêtes runtime + URL native (port 9000) pour migrations
       CLICKHOUSE_URL: http://langfuse-clickhouse:8123
+      CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
       CLICKHOUSE_USER: clickhouse
       CLICKHOUSE_PASSWORD: clickhouse_password_change_me
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
       REDIS_HOST: langfuse-redis
       REDIS_PORT: 6379
       REDIS_AUTH: langfuse_redis_change_me
@@ -158,8 +169,14 @@ services:
       LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: minio_password_change_me
       LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-minio:9000
       LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_USE_AZURE_BLOB: "false"
       NEXTAUTH_URL: http://localhost:3000
       NEXTAUTH_SECRET: c184b7b1b45b7e70a2746f86423aed12
       SALT: 6d0552ea14b4fceedb485b5e6962009d
       ENCRYPTION_KEY: 52dfdc70c48e8bb99742bd51015270aed368a01409bc9135032e43c6302a01fd
       TELEMETRY_ENABLED: "false"
+
+# Volume Docker NAMED partagé pour ClickHouse (cf. note dans la définition
+# du service langfuse-clickhouse — bind mount Windows incompatible).
+volumes:
+  langfuse_clickhouse_data:
