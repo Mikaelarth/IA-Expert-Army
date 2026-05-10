@@ -76,6 +76,14 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 python_files = "test_*.py"
 addopts = "-v --tb=short"
+# Filtres warnings — garde les runs de tests propres pour pouvoir détecter
+# les VRAIS warnings (saturation, deprecation interne, etc.) sans bruit.
+filterwarnings = [
+    # chromadb 0.5.x utilise asyncio.iscoroutinefunction (deprecated Python 3.16+)
+    # cf. .venv/Lib/site-packages/chromadb/telemetry/opentelemetry/__init__.py:128
+    # → upstream issue, on attend chromadb >= 0.6 qui devrait migrer.
+    "ignore:.*asyncio.iscoroutinefunction.*:DeprecationWarning:chromadb",
+]
 
 [tool.mypy]
 python_version = "3.12"
