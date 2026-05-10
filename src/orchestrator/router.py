@@ -99,6 +99,35 @@ _ENGINEERING_KEYWORDS = (
     "deploy",
 )
 
+# Verbes d'action FORTS qui expriment une intention claire et doivent peser plus
+# que les mots-noms ambigus (e.g. "code" dans "dans le code applicatif" est un nom
+# qui parle de code existant, alors que "synthétise" est un verbe d'action explicite
+# qui demande de produire une synthèse). Bonus +2 sur body et title quand un de ces
+# mots est trouvé. Découvert mission 7c98893b (observabilité) où "code" et
+# "synthétise" se neutralisaient et la mission research était routée à eng.
+_STRONG_ACTION_VERBS = (
+    # research
+    "compare",
+    "comparer",
+    "synthèse",
+    "synthese",
+    "synthétise",
+    "synthétiser",
+    "synthesize",
+    "analyse",
+    "analyser",
+    "analyze",
+    "étudie",
+    "etudie",
+    "study",
+    "documente",
+    "documenter",
+    # engineering
+    "implémente",
+    "implemente",
+    "implement",
+)
+
 
 class _GuildClassifier(Protocol):
     def classify(self, title: str, description: str) -> str: ...
@@ -116,9 +145,11 @@ class HeuristicGuildClassifier:
         self.engineering_keywords = engineering_keywords
 
     # Poids du titre. Un keyword dans le titre = TITLE_WEIGHT points ; dans le body
-    # uniquement = 1 point. Ratio assez élevé pour qu'un keyword titre clair l'emporte
-    # sur 2 keywords body, sans pour autant rendre le body inutile.
+    # uniquement = 1 point (ou +2 pour un verbe d'action fort).
     TITLE_WEIGHT = 3
+    # Bonus appliqué quand le keyword est dans _STRONG_ACTION_VERBS — exprime une
+    # intention plus claire qu'un nom commun.
+    STRONG_VERB_BONUS = 2
 
     def classify(self, title: str, description: str) -> str:
         title_lower = title.lower()
@@ -139,10 +170,11 @@ class HeuristicGuildClassifier:
         for kw in keywords:
             in_title = cls._matches(kw, title_text)
             in_body = cls._matches(kw, full_text)
+            is_strong = kw in _STRONG_ACTION_VERBS
             if in_title:
-                score += cls.TITLE_WEIGHT
+                score += cls.TITLE_WEIGHT + (cls.STRONG_VERB_BONUS if is_strong else 0)
             elif in_body:
-                score += 1
+                score += 1 + (cls.STRONG_VERB_BONUS if is_strong else 0)
         return score
 
     @staticmethod

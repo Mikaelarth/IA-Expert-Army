@@ -51,17 +51,36 @@ def test_classifier_categorizes_correctly(title: str, description: str, expected
 
 
 def test_classifier_engineering_priority_on_tie() -> None:
-    """Engineering wins en cas d'égalité parfaite (ADR-001 : guilde la plus mature).
+    """Engineering wins en cas d'égalité PARFAITE (ADR-001 : guilde la plus mature).
 
-    Note : on construit un tie en plaçant les keywords UNIQUEMENT dans le body
-    (le titre n'a aucun keyword). Si un keyword est dans le titre, il pèse plus
-    et casse l'égalité.
+    Note : avec les verbes d'action forts (compare, synthétise, implémente…) qui
+    surpondèrent (+2), construire un vrai tie est plus subtil. Cas non-ambigu :
+    aucun keyword nulle part → eng par défaut.
     """
     clf = HeuristicGuildClassifier()
-    # Titre neutre, body : 1 keyword research + 1 keyword engineering → tie → eng
-    assert clf.classify("Mission", "compare un module") == "engineering"
     # Aucun keyword nulle part → eng par défaut
     assert clf.classify("hello", "world") == "engineering"
+    # Tie parfait : 1 mot-clé "weak" research + 1 mot-clé "weak" eng dans le body
+    # ("guide" weak research, "module" weak eng) → 1 vs 1 → eng wins
+    assert clf.classify("Mission neutre", "guide pour le module") == "engineering"
+
+
+def test_classifier_strong_action_verb_beats_noun_keyword() -> None:
+    """Régression mission 7c98893b (observabilité) : 'synthétise' (verbe action forte)
+    doit l'emporter sur 'code' (nom commun) malgré le tie-break engineering."""
+    clf = HeuristicGuildClassifier()
+    title = "Patterns d'observabilité pour équipe d'agents IA en production"
+    desc = (
+        "Synthétise les patterns d'observabilité éprouvés en 2026. "
+        "Mentionne aussi les anti-patterns dans le code applicatif."
+    )
+    assert clf.classify(title, desc) == "research"
+
+
+def test_classifier_engineering_action_verb_wins_over_research_noun() -> None:
+    """Symétrie : 'implémente' verbe action engineering forte > nom 'comparaison' research."""
+    clf = HeuristicGuildClassifier()
+    assert clf.classify("Mission", "implémente une comparaison rapide") == "engineering"
 
 
 def test_classifier_word_boundary_avoids_false_positives() -> None:
