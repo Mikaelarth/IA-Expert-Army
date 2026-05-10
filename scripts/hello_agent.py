@@ -15,6 +15,11 @@ import asyncio
 import sys
 from pathlib import Path
 
+# Force UTF-8 sur stdout/stderr (Windows console = cp1252 par défaut, casse les emojis Rich)
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 # Permet d'exécuter ce script depuis la racine du projet
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
