@@ -46,6 +46,13 @@ class AgentOutput(BaseModel):
     duration_seconds: float = 0.0
     success: bool = True
     error: str | None = None
+    # Marqueur de saturation : True si la réponse a été coupée par max_tokens.
+    # Détecté soit explicitement (stop_reason == "max_tokens"), soit en garde-fou
+    # quand tokens_out atteint quasi le plafond. Une saturation invisible était la
+    # cause des incidents Tech Watch (mission 7b5759b1) et Research Reviewer
+    # (mission 359bfa08) : sortie tronquée → YAML cassé → verdict default REJECTED.
+    saturated: bool = False
+    stop_reason: str | None = None
 
 
 class BaseAgent:
@@ -154,6 +161,26 @@ class BaseAgent:
             return text
         return text[:max_chars].rstrip() + "\n…[tronqué]"
 
+    # Seuil sous lequel on considère qu'une réponse n'est PAS saturée même si
+    # le compteur de tokens approche le plafond (marge pour bruit d'arrondi API).
+    _SATURATION_TOKEN_RATIO = 0.99
+
+    def _detect_saturation(
+        self, tokens_out: int, max_tokens: int, stop_reason: str | None
+    ) -> bool:
+        """Vrai si la réponse a été coupée par max_tokens.
+
+        Deux signaux convergents :
+        - stop_reason == "max_tokens" → l'API le dit explicitement (signal fort)
+        - tokens_out >= max_tokens × 0.99 → garde-fou si l'API a un stop_reason
+          ambigu mais que le compteur est au taquet
+        """
+        if stop_reason == "max_tokens":
+            return True
+        if max_tokens > 0 and tokens_out >= int(max_tokens * self._SATURATION_TOKEN_RATIO):
+            return True
+        return False
+
     def _retrieve_precedents(self, agent_input: AgentInput) -> list[EpisodeMatch]:
         """Cherche dans la mémoire vectorielle les épisodes passés pertinents."""
         if self.vector_memory is None or self.vector_memory.count() == 0:
@@ -211,9 +238,11 @@ class BaseAgent:
             raw = "".join(b.text for b in response.content if getattr(b, "type", None) == "text")
             tokens_in = response.usage.input_tokens
             tokens_out = response.usage.output_tokens
+            stop_reason = getattr(response, "stop_reason", None)
             cost = estimate_cost(self.model, tokens_in, tokens_out)
             duration = time.perf_counter() - started
             parsed = self.parse_output(raw, agent_input)
+            saturated = self._detect_saturation(tokens_out, self.max_tokens, stop_reason)
 
             output = AgentOutput(
                 agent_name=self.name,
@@ -224,6 +253,8 @@ class BaseAgent:
                 cost_usd=cost,
                 duration_seconds=duration,
                 success=True,
+                saturated=saturated,
+                stop_reason=stop_reason,
             )
             self._log.info(
                 "agent.run.ok",
@@ -233,7 +264,24 @@ class BaseAgent:
                 tokens_out=tokens_out,
                 cost_usd=round(cost, 6),
                 duration_s=round(duration, 2),
+                stop_reason=stop_reason,
             )
+            if saturated:
+                # Warning visible : la sortie a été coupée. Le caller (workflow)
+                # n'a aucune façon de récupérer un YAML/markdown tronqué silencieusement,
+                # donc on s'assure que le diagnostic est immédiat dans les logs.
+                self._log.warning(
+                    "agent.output.saturated",
+                    agent=self.name,
+                    mission=str(agent_input.mission_id),
+                    tokens_out=tokens_out,
+                    max_tokens=self.max_tokens,
+                    stop_reason=stop_reason,
+                    advice=(
+                        "La réponse est probablement tronquée. Augmente max_tokens pour ce rôle "
+                        "ou réduis la verbosité du system prompt."
+                    ),
+                )
         except Exception as exc:  # noqa: BLE001
             duration = time.perf_counter() - started
             self._log.error(
@@ -274,6 +322,8 @@ class BaseAgent:
             "duration_seconds": round(output.duration_seconds, 3),
             "success": output.success,
             "error": output.error,
+            "saturated": output.saturated,
+            "stop_reason": output.stop_reason,
         }
         body = (
             f"## Tâche\n\n{agent_input.task}\n\n"

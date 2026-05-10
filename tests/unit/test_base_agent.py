@@ -34,12 +34,17 @@ def prompt_file(tmp_path: Path) -> Path:
     return p
 
 
-def _fake_response(text: str, in_tokens: int = 50, out_tokens: int = 30) -> SimpleNamespace:
+def _fake_response(
+    text: str,
+    in_tokens: int = 50,
+    out_tokens: int = 30,
+    stop_reason: str = "end_turn",
+) -> SimpleNamespace:
     return SimpleNamespace(
         content=[SimpleNamespace(type="text", text=text)],
         usage=SimpleNamespace(input_tokens=in_tokens, output_tokens=out_tokens),
         model="claude-sonnet-4-6",
-        stop_reason="end_turn",
+        stop_reason=stop_reason,
     )
 
 
@@ -129,6 +134,110 @@ def test_base_agent_user_message_includes_context(
     assert "faire X" in msg
     assert "input_y" in msg
     assert "valeur Y" in msg
+
+
+@pytest.mark.asyncio
+async def test_base_agent_marks_saturation_when_stop_reason_is_max_tokens(
+    settings: Settings, memory: FileMemory, prompt_file: Path
+) -> None:
+    """L'API dit explicitement stop_reason='max_tokens' → saturated=True + warning loggé."""
+    fake_client = SimpleNamespace(
+        messages=SimpleNamespace(
+            create=AsyncMock(
+                return_value=_fake_response(
+                    "réponse tronquée", in_tokens=100, out_tokens=2048, stop_reason="max_tokens"
+                )
+            )
+        )
+    )
+    agent = BaseAgent(
+        name="x",
+        prompt_path=prompt_file,
+        model="claude-sonnet-4-6",
+        memory=memory,
+        settings=settings,
+        client=fake_client,  # type: ignore[arg-type]
+        max_tokens=2048,
+    )
+    out = await agent.run(AgentInput(mission_id=uuid4(), task="t"))
+    assert out.success is True
+    assert out.saturated is True
+    assert out.stop_reason == "max_tokens"
+
+    # Le metadata persiste l'info pour analyse post-mortem
+    episodes = memory.list_episodes(out.parsed if False else None)
+    last_path = sorted(memory.list_episodes())[-1]
+    record = memory.read_episode(last_path)
+    assert record.metadata.get("saturated") is True
+
+
+@pytest.mark.asyncio
+async def test_base_agent_marks_saturation_at_token_threshold(
+    settings: Settings, memory: FileMemory, prompt_file: Path
+) -> None:
+    """Garde-fou : tokens_out ≥ 99% de max_tokens → saturated=True même si stop_reason=end_turn."""
+    fake_client = SimpleNamespace(
+        messages=SimpleNamespace(
+            create=AsyncMock(
+                return_value=_fake_response("ok", in_tokens=100, out_tokens=2048, stop_reason="end_turn")
+            )
+        )
+    )
+    agent = BaseAgent(
+        name="x",
+        prompt_path=prompt_file,
+        model="claude-sonnet-4-6",
+        memory=memory,
+        settings=settings,
+        client=fake_client,  # type: ignore[arg-type]
+        max_tokens=2048,
+    )
+    out = await agent.run(AgentInput(mission_id=uuid4(), task="t"))
+    assert out.saturated is True
+
+
+@pytest.mark.asyncio
+async def test_base_agent_no_saturation_on_normal_completion(
+    settings: Settings, memory: FileMemory, prompt_file: Path
+) -> None:
+    fake_client = SimpleNamespace(
+        messages=SimpleNamespace(
+            create=AsyncMock(
+                return_value=_fake_response("ok", in_tokens=100, out_tokens=200, stop_reason="end_turn")
+            )
+        )
+    )
+    agent = BaseAgent(
+        name="x",
+        prompt_path=prompt_file,
+        model="claude-sonnet-4-6",
+        memory=memory,
+        settings=settings,
+        client=fake_client,  # type: ignore[arg-type]
+        max_tokens=2048,
+    )
+    out = await agent.run(AgentInput(mission_id=uuid4(), task="t"))
+    assert out.saturated is False
+    assert out.stop_reason == "end_turn"
+
+
+def test_detect_saturation_explicit_signal() -> None:
+    """Unit test direct du critère de détection."""
+    assert BaseAgent._detect_saturation(BaseAgent, 100, 2048, "max_tokens") is True
+
+
+def test_detect_saturation_token_ratio_above_threshold() -> None:
+    # 99% de 2048 = 2027.52 → arrondi int = 2027 → 2030 >= 2027 → True
+    assert BaseAgent._detect_saturation(BaseAgent, 2030, 2048, "end_turn") is True
+
+
+def test_detect_saturation_below_threshold_returns_false() -> None:
+    assert BaseAgent._detect_saturation(BaseAgent, 1500, 2048, "end_turn") is False
+
+
+def test_detect_saturation_zero_max_tokens_handled() -> None:
+    """Edge case : max_tokens=0 ne doit pas crash (division par zéro évitée)."""
+    assert BaseAgent._detect_saturation(BaseAgent, 0, 0, "end_turn") is False
 
 
 @pytest.mark.asyncio
