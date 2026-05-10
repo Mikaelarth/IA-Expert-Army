@@ -20,6 +20,13 @@ _PROMPT = (
 
 
 class CodeReviewer(BaseAgent):
+    # Verdict YAML : summary + strengths + plusieurs issues détaillées.
+    # Fix préventif aligné sur ResearchReviewer après l'incident
+    # research_reviewer (mission 359bfa08, max_tokens=2048 saturait → YAML
+    # tronqué → verdict default REJECTED). 4096 donne une marge confortable
+    # pour 6+ issues sans changement de coût significatif.
+    DEFAULT_MAX_TOKENS = 4096
+
     def __init__(
         self,
         memory: FileMemory,
@@ -36,7 +43,7 @@ class CodeReviewer(BaseAgent):
             memory=memory,
             settings=s,
             client=client,
-            max_tokens=2048,
+            max_tokens=self.DEFAULT_MAX_TOKENS,
             vector_memory=vector_memory,
             skills_library=skills_library,
         )

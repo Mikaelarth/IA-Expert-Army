@@ -17,6 +17,10 @@ _PROMPTS_DIR = Path(__file__).resolve().parents[3] / "prompts" / "guilds" / "res
 
 
 class ResearchLead(BaseAgent):
+    # Plan de recherche YAML : 4-6 sous-questions × ~200 tokens chacune
+    # + sources + criteria + risks. 2048 trop court pour des plans riches.
+    DEFAULT_MAX_TOKENS = 3072
+
     def __init__(
         self,
         memory: FileMemory,
@@ -33,7 +37,7 @@ class ResearchLead(BaseAgent):
             memory=memory,
             settings=s,
             client=client,
-            max_tokens=2048,
+            max_tokens=self.DEFAULT_MAX_TOKENS,
             vector_memory=vector_memory,
             skills_library=skills_library,
         )
@@ -43,6 +47,14 @@ class ResearchLead(BaseAgent):
 
 
 class TechWatch(BaseAgent):
+    # max_tokens élevé : Tech Watch produit des findings YAML pour 3-6 sous-questions
+    # à raison de 3-7 findings par sous-question. La saturation à 4096 tokens
+    # observée en prod (mission 7b5759b1) coupait à mi-SQ4, laissant SQ5/SQ6 vides
+    # et provoquant un REJECTED par le Reviewer (sourcing manquant en aval).
+    # Haiku gère 8192 tokens sans surcoût significatif (~$0.03 supplémentaires
+    # max au lieu de tronquer le pipeline).
+    DEFAULT_MAX_TOKENS = 8192
+
     def __init__(
         self,
         memory: FileMemory,
@@ -59,7 +71,7 @@ class TechWatch(BaseAgent):
             memory=memory,
             settings=s,
             client=client,
-            max_tokens=4096,
+            max_tokens=self.DEFAULT_MAX_TOKENS,
             vector_memory=vector_memory,
             skills_library=skills_library,
         )
@@ -97,6 +109,12 @@ class DocumentSynthesizer(BaseAgent):
 
 
 class ResearchReviewer(BaseAgent):
+    # Verdict YAML : summary + strengths + plusieurs issues détaillées
+    # (severity, category, location, message, suggestion par issue).
+    # 2048 saturait en prod (mission 359bfa08), YAML tronqué, parser échoué,
+    # verdict default REJECTED. 4096 donne la marge nécessaire pour 6+ issues.
+    DEFAULT_MAX_TOKENS = 4096
+
     def __init__(
         self,
         memory: FileMemory,
@@ -113,7 +131,7 @@ class ResearchReviewer(BaseAgent):
             memory=memory,
             settings=s,
             client=client,
-            max_tokens=2048,
+            max_tokens=self.DEFAULT_MAX_TOKENS,
             vector_memory=vector_memory,
             skills_library=skills_library,
         )
