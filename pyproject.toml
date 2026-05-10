@@ -1,0 +1,84 @@
+[project]
+name = "ia-expert-army"
+version = "0.1.0"
+description = "Une armée d'agents IA experts spécialisés, autonome, à mémoire partagée et apprentissage continu."
+authors = [{ name = "MikaelArth", email = "esarth.org@gmail.com" }]
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+
+# Dépendances Phase 0 — minimum viable pour démarrer
+dependencies = [
+    "anthropic>=0.40.0",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.6.0",
+    "python-dotenv>=1.0.1",
+    "structlog>=24.4.0",
+    "rich>=13.9.0",
+    "httpx>=0.28.0",
+    "typer>=0.15.0",
+]
+
+[project.optional-dependencies]
+# Phase 1+ : Claude Agent SDK + orchestration
+agents = [
+    "claude-agent-sdk>=0.1.0",
+]
+
+# Phase 2+ : Mémoire intelligente
+memory = [
+    "chromadb>=0.5.20",
+    "sqlalchemy>=2.0.36",
+    "aiosqlite>=0.20.0",
+]
+
+# Phase 3+ : Orchestration stateful + infra complète
+orchestration = [
+    "langgraph>=0.2.50",
+    "langchain-anthropic>=0.3.0",
+    "redis[hiredis]>=5.2.0",
+    "docker>=7.1.0",
+    "langfuse>=2.55.0",
+]
+
+# Outils dev
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "ipython>=8.30.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = "-v --tb=short"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.3.0",
+]

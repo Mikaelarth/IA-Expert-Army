@@ -1,0 +1,89 @@
+# Secrets — ne jamais committer
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+secrets/
+
+# Données runtime
+data/memory.db
+data/memory.db-*
+data/chroma/
+data/episodes/
+data/backups/
+*.log
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual envs
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# uv
+.uv/
+# Note: uv.lock IS committed (application, not library) — reproducibility
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Tests & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# mypy / ruff
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+dmypy.json
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Docker volumes locaux
+docker-volumes/
+postgres-data/
+clickhouse-data/
+minio-data/
+redis-data/
+
+# OS
+Thumbs.db
+desktop.ini
