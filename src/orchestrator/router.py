@@ -19,6 +19,7 @@ from src.core.budget import BudgetController
 from src.core.config import Settings, get_settings
 from src.core.killswitch import Killswitch
 from src.core.logging import get_logger
+from src.guilds.creative.workflow import CreativeMissionResult, CreativeWorkflow
 from src.guilds.research.workflow import ResearchMissionResult, ResearchWorkflow
 from src.learning.skills_library import SkillsLibrary
 from src.memory.file_memory import FileMemory
@@ -126,6 +127,48 @@ _STRONG_ACTION_VERBS = (
     "implémente",
     "implemente",
     "implement",
+    # creative
+    "rédige",
+    "rediger",
+    "rédiger",
+    "write",
+    "écris",
+    "ecris",
+    "écrire",
+    "draft",
+    "compose",
+)
+
+
+# Mots-clés Guild Creative — production de contenu (texte, marketing, éditorial)
+_CREATIVE_KEYWORDS = (
+    "rédige",
+    "rediger",
+    "rédiger",
+    "write",
+    "écris",
+    "ecris",
+    "écrire",
+    "draft",
+    "compose",
+    "landing page",
+    "pitch",
+    "copywriting",
+    "tagline",
+    "newsletter",
+    "email marketing",
+    "blog post",
+    "post de blog",
+    "communiqué de presse",
+    "press release",
+    "case study",
+    "cas client",
+    "argumentaire",
+    "page d'accueil",
+    "homepage copy",
+    "headline",
+    "slogan",
+    "marketing",
 )
 
 
@@ -140,9 +183,11 @@ class HeuristicGuildClassifier:
         self,
         research_keywords: tuple[str, ...] = _RESEARCH_KEYWORDS,
         engineering_keywords: tuple[str, ...] = _ENGINEERING_KEYWORDS,
+        creative_keywords: tuple[str, ...] = _CREATIVE_KEYWORDS,
     ) -> None:
         self.research_keywords = research_keywords
         self.engineering_keywords = engineering_keywords
+        self.creative_keywords = creative_keywords
 
     # Poids du titre. Un keyword dans le titre = TITLE_WEIGHT points ; dans le body
     # uniquement = 1 point (ou +2 pour un verbe d'action fort).
@@ -157,12 +202,19 @@ class HeuristicGuildClassifier:
 
         # Comptage en KEYWORDS UNIQUES (chaque mot-clé contribue au plus 1× au score)
         # pour éviter qu'un terme commun répété ne domine artificiellement.
-        eng_score = self._score(self.engineering_keywords, title_lower, full_lower)
-        res_score = self._score(self.research_keywords, title_lower, full_lower)
-        if res_score > eng_score:
+        scores = {
+            "engineering": self._score(self.engineering_keywords, title_lower, full_lower),
+            "research": self._score(self.research_keywords, title_lower, full_lower),
+            "creative": self._score(self.creative_keywords, title_lower, full_lower),
+        }
+        max_score = max(scores.values())
+        # Tie-break : engineering > research > creative (ordre de maturité).
+        # Si le max inclut engineering, engineering gagne.
+        if scores["engineering"] == max_score:
+            return "engineering"
+        if scores["research"] >= scores["creative"]:
             return "research"
-        # Engineering "wins" en cas d'égalité (par ADR-001 : guilde la plus mature).
-        return "engineering"
+        return "creative"
 
     @classmethod
     def _score(cls, keywords: tuple[str, ...], title_text: str, full_text: str) -> int:
@@ -263,6 +315,22 @@ class MissionRouter:
                 total_duration_seconds=result.total_duration_seconds,
                 summary=result.review_summary,
                 raw_result=result.model_dump(mode="json"),
+            )
+
+        if decision.guild == "creative":
+            wf_cre = CreativeWorkflow(**common)
+            cre_result: CreativeMissionResult = await wf_cre.run(title=title, description=description)
+            return UnifiedMissionResult(
+                mission_id=str(cre_result.mission_id),
+                title=cre_result.title,
+                guild="creative",
+                success=cre_result.success,
+                final_verdict=cre_result.final_verdict,
+                quality_score=cre_result.quality_score,
+                total_cost_usd=cre_result.total_cost_usd,
+                total_duration_seconds=cre_result.total_duration_seconds,
+                summary=cre_result.review_summary,
+                raw_result=cre_result.model_dump(mode="json"),
             )
 
         # Default = engineering
