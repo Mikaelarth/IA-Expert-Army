@@ -1,9 +1,9 @@
 """Tests pour src.core.config."""
+
 from __future__ import annotations
 
-import os
-
 import pytest
+from pydantic import ValidationError
 
 from src.core.config import Settings
 
@@ -29,5 +29,5 @@ def test_settings_circuit_breaker_in_range(monkeypatch: pytest.MonkeyPatch) -> N
 def test_settings_rejects_invalid_log_level(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
     monkeypatch.setenv("LOG_LEVEL", "BANANA")
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         Settings(_env_file=None)  # type: ignore[call-arg]

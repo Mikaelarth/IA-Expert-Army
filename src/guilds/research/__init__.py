@@ -9,10 +9,10 @@ from src.guilds.research.agents import (
 from src.guilds.research.workflow import ResearchMissionResult, ResearchWorkflow
 
 __all__ = [
-    "ResearchLead",
-    "TechWatch",
     "DocumentSynthesizer",
+    "ResearchLead",
+    "ResearchMissionResult",
     "ResearchReviewer",
     "ResearchWorkflow",
-    "ResearchMissionResult",
+    "TechWatch",
 ]

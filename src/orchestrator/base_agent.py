@@ -11,6 +11,7 @@ Cycle de vie d'un agent en Phase 1 :
 À partir de la Phase 2, on injectera des few-shot examples depuis Chroma.
 À partir de la Phase 5, on fera de l'A/B testing sur les prompts versionnés.
 """
+
 from __future__ import annotations
 
 import time
@@ -90,9 +91,7 @@ class BaseAgent:
         if client is not None:
             self.client = client
         else:
-            self.client = AsyncAnthropic(
-                api_key=self.settings.anthropic_api_key.get_secret_value()
-            )
+            self.client = AsyncAnthropic(api_key=self.settings.anthropic_api_key.get_secret_value())
 
         self.system_prompt = self._load_system_prompt()
 
@@ -139,8 +138,9 @@ class BaseAgent:
                 prec_lines.append("")
             parts.append("\n".join(prec_lines))
         if skills:
-            from src.learning.skills_library import SkillsLibrary as _SL
-            parts.append(_SL.render_for_prompt(skills))
+            from src.learning.skills_library import SkillsLibrary
+
+            parts.append(SkillsLibrary.render_for_prompt(skills))
         return "\n\n".join(parts)
 
     def _retrieve_skills(self, agent_input: AgentInput | None = None) -> list[Skill]:
@@ -152,7 +152,7 @@ class BaseAgent:
             return self.skills_library.search_skills(
                 self.name, query=query, n_results=self.skills_top_k
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             self._log.warning("skills.load.failed", error=str(exc))
             return []
 
@@ -166,9 +166,7 @@ class BaseAgent:
     # le compteur de tokens approche le plafond (marge pour bruit d'arrondi API).
     _SATURATION_TOKEN_RATIO = 0.99
 
-    def _detect_saturation(
-        self, tokens_out: int, max_tokens: int, stop_reason: str | None
-    ) -> bool:
+    def _detect_saturation(self, tokens_out: int, max_tokens: int, stop_reason: str | None) -> bool:
         """Vrai si la réponse a été coupée par max_tokens.
 
         Deux signaux convergents :
@@ -178,9 +176,7 @@ class BaseAgent:
         """
         if stop_reason == "max_tokens":
             return True
-        if max_tokens > 0 and tokens_out >= int(max_tokens * self._SATURATION_TOKEN_RATIO):
-            return True
-        return False
+        return max_tokens > 0 and tokens_out >= int(max_tokens * self._SATURATION_TOKEN_RATIO)
 
     def _retrieve_precedents(self, agent_input: AgentInput) -> list[EpisodeMatch]:
         """Cherche dans la mémoire vectorielle les épisodes passés pertinents."""
@@ -198,7 +194,7 @@ class BaseAgent:
                 },
                 max_distance=self.rag_max_distance,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             self._log.warning("rag.search.failed", error=str(exc))
             return []
 
@@ -224,9 +220,7 @@ class BaseAgent:
                 count=len(skills),
                 titles=[s.title for s in skills],
             )
-        user_message = self.build_user_message(
-            agent_input, precedents=precedents, skills=skills
-        )
+        user_message = self.build_user_message(agent_input, precedents=precedents, skills=skills)
         started = time.perf_counter()
         started_at = datetime.now(UTC)
 
@@ -284,7 +278,7 @@ class BaseAgent:
                         "ou réduis la verbosité du system prompt."
                     ),
                 )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             duration = time.perf_counter() - started
             self._log.error(
                 "agent.run.failed",
@@ -349,5 +343,5 @@ class BaseAgent:
                     document=indexed_doc,
                     metadata=metadata,
                 )
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 self._log.warning("rag.index.failed", error=str(exc))

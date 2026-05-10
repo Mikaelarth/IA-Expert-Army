@@ -11,11 +11,12 @@ Usage:
     uv run python scripts/health_check.py
     uv run python scripts/health_check.py --quick  # skip les checks Docker (rapide)
 """
+
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -50,7 +51,7 @@ def _skipped(detail: str = "") -> tuple[str, str]:
 def _safe(fn: Callable[[], tuple[str, str]]) -> tuple[str, str]:
     try:
         return fn()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return _fail(f"{type(exc).__name__}: {exc}")
 
 
@@ -71,9 +72,7 @@ def check_settings() -> tuple[str, str]:
     key = s.anthropic_api_key.get_secret_value()
     if not key.startswith("sk-ant-"):
         return _fail("ANTHROPIC_API_KEY absent ou invalide dans .env")
-    return _ok(
-        f"Opus={s.model_strategic} · Sonnet={s.model_operational} · Haiku={s.model_bulk}"
-    )
+    return _ok(f"Opus={s.model_strategic} · Sonnet={s.model_operational} · Haiku={s.model_bulk}")
 
 
 def check_file_memory() -> tuple[str, str]:
@@ -209,7 +208,7 @@ def check_docker() -> tuple[str, str]:
         client.ping()
         version = client.version()
         return _ok(f"Docker {version.get('Version', '?')} joignable")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return _fail(f"Docker daemon down : {exc}")
 
 
@@ -222,7 +221,7 @@ def check_sandbox_image() -> tuple[str, str]:
     try:
         client = docker.from_env()
         client.ping()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return _skipped("Docker down — vérifié plus haut")
     try:
         client.images.get("iaa-sandbox:latest")
@@ -242,7 +241,7 @@ def check_langfuse_http() -> tuple[str, str]:
             return _ok(f"HTTP {resp.status} sur :3000")
     except urllib.error.URLError:
         return _skipped("Langfuse pas démarré (docker compose --profile observability up -d)")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return _warn(f"{type(exc).__name__}: {exc}")
 
 

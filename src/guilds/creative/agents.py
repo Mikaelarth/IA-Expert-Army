@@ -3,6 +3,7 @@
 Phase 4+ : ajouter Marketing Specialist (campagnes/SEO/social) et Visual
 Designer (génération de prompts d'images via API tierce).
 """
+
 from __future__ import annotations
 
 from pathlib import Path

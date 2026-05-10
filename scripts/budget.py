@@ -5,6 +5,7 @@ Usage:
     uv run python scripts/budget.py reset       # remet à 0 pour aujourd'hui
     uv run python scripts/budget.py record 0.50 # ajoute 0.50 USD au cumul du jour
 """
+
 from __future__ import annotations
 
 import sys

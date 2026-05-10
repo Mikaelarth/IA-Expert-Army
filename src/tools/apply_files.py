@@ -7,6 +7,7 @@ Politique de sécurité (Phase 1.5, sera renforcée en Phase 3 avec sandbox Dock
 - Pas d'overwrite par défaut (passer `force=True` pour autoriser)
 - Les noms de fichiers contenant des caractères suspects (espaces, parens) sont rejetés
 """
+
 from __future__ import annotations
 
 import re

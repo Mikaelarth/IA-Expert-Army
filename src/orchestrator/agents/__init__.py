@@ -5,4 +5,4 @@ from src.orchestrator.agents.developer import BackendDeveloper
 from src.orchestrator.agents.orchestrator import ChiefOrchestrator
 from src.orchestrator.agents.reviewer import CodeReviewer
 
-__all__ = ["ChiefOrchestrator", "SoftwareArchitect", "BackendDeveloper", "CodeReviewer"]
+__all__ = ["BackendDeveloper", "ChiefOrchestrator", "CodeReviewer", "SoftwareArchitect"]

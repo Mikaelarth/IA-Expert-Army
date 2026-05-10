@@ -1,4 +1,5 @@
 """Tests d'intégration des garde-fous Phase 6 dans Workflow."""
+
 from __future__ import annotations
 
 import asyncio
@@ -40,7 +41,9 @@ def test_workflow_aborts_when_killswitch_engaged(
     # Sabote tous les agents pour vérifier qu'ils ne sont JAMAIS appelés
     for agent in (wf.orchestrator, wf.architect, wf.developer, wf.reviewer):
         agent.client = SimpleNamespace(  # type: ignore[assignment]
-            messages=SimpleNamespace(create=AsyncMock(side_effect=_silent_anthropic_should_not_be_called))
+            messages=SimpleNamespace(
+                create=AsyncMock(side_effect=_silent_anthropic_should_not_be_called)
+            )
         )
 
     result = asyncio.run(wf.run(title="t", description="d"))
@@ -59,7 +62,9 @@ def test_workflow_aborts_when_budget_exceeded(
     wf = Workflow(memory=memory, settings=settings, budget=bc)
     for agent in (wf.orchestrator, wf.architect, wf.developer, wf.reviewer):
         agent.client = SimpleNamespace(  # type: ignore[assignment]
-            messages=SimpleNamespace(create=AsyncMock(side_effect=_silent_anthropic_should_not_be_called))
+            messages=SimpleNamespace(
+                create=AsyncMock(side_effect=_silent_anthropic_should_not_be_called)
+            )
         )
 
     result = asyncio.run(wf.run(title="t", description="d"))
@@ -85,10 +90,18 @@ def test_workflow_records_cost_after_success(
         out_tokens=200,
     )
 
-    wf.orchestrator.client = SimpleNamespace(messages=SimpleNamespace(create=AsyncMock(return_value=fake_orch)))  # type: ignore[assignment]
-    wf.architect.client = SimpleNamespace(messages=SimpleNamespace(create=AsyncMock(return_value=fake_arch)))  # type: ignore[assignment]
-    wf.developer.client = SimpleNamespace(messages=SimpleNamespace(create=AsyncMock(return_value=fake_dev)))  # type: ignore[assignment]
-    wf.reviewer.client = SimpleNamespace(messages=SimpleNamespace(create=AsyncMock(return_value=fake_review)))  # type: ignore[assignment]
+    wf.orchestrator.client = SimpleNamespace(
+        messages=SimpleNamespace(create=AsyncMock(return_value=fake_orch))
+    )  # type: ignore[assignment]
+    wf.architect.client = SimpleNamespace(
+        messages=SimpleNamespace(create=AsyncMock(return_value=fake_arch))
+    )  # type: ignore[assignment]
+    wf.developer.client = SimpleNamespace(
+        messages=SimpleNamespace(create=AsyncMock(return_value=fake_dev))
+    )  # type: ignore[assignment]
+    wf.reviewer.client = SimpleNamespace(
+        messages=SimpleNamespace(create=AsyncMock(return_value=fake_review))
+    )  # type: ignore[assignment]
 
     result = asyncio.run(wf.run(title="test mission", description="test"))
     assert result.success is True

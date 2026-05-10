@@ -1,4 +1,5 @@
 """Tests pour les agents de la Guild Creative + routing creative."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -74,7 +75,10 @@ def test_classifier_routes_to_creative(title: str, description: str, expected: s
 def test_classifier_creative_action_verb_in_title_dominates() -> None:
     """'Rédige' (verbe creative fort) dans le titre l'emporte sur des keywords research dans le body."""
     clf = HeuristicGuildClassifier()
-    assert clf.classify(
-        "Rédige une newsletter",
-        "Synthétise les meilleures pratiques marketing pour la cible",
-    ) == "creative"
+    assert (
+        clf.classify(
+            "Rédige une newsletter",
+            "Synthétise les meilleures pratiques marketing pour la cible",
+        )
+        == "creative"
+    )

@@ -9,6 +9,7 @@ Volontairement file-based plutôt que Redis pubsub : zéro dépendance, fonction
 même quand l'infrastructure est partiellement down (justement le cas où on en a
 le plus besoin).
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -29,10 +30,7 @@ class Killswitch:
 
     def engage(self, reason: str = "manual") -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        content = (
-            f"engaged_at: {datetime.now(UTC).isoformat()}\n"
-            f"reason: {reason}\n"
-        )
+        content = f"engaged_at: {datetime.now(UTC).isoformat()}\nreason: {reason}\n"
         self.path.write_text(content, encoding="utf-8")
 
     def release(self) -> bool:

@@ -13,6 +13,7 @@ Usage:
 
 Sécurité : par défaut on refuse d'appliquer une mission non-APPROVED.
 """
+
 from __future__ import annotations
 
 import sys
@@ -60,15 +61,23 @@ def _print_sandbox_result(result) -> None:  # type: ignore[no-untyped-def]
 def apply(
     mission_id_prefix: str = typer.Argument(..., help="Préfixe d'UUID (8+ chars) ou UUID complet"),
     force: bool = typer.Option(False, "--force", help="Overwrite les fichiers existants"),
-    allow_non_approved: bool = typer.Option(False, "--allow-non-approved", help="Applique même si verdict != APPROVED"),
+    allow_non_approved: bool = typer.Option(
+        False, "--allow-non-approved", help="Applique même si verdict != APPROVED"
+    ),
     validate: bool = typer.Option(
-        False, "--validate", help="Après apply, exécute pytest sur les fichiers dans le sandbox Docker"
+        False,
+        "--validate",
+        help="Après apply, exécute pytest sur les fichiers dans le sandbox Docker",
     ),
     validate_only: bool = typer.Option(
-        False, "--validate-only", help="Exécute pytest sandbox SANS écrire les fichiers (dry-validate)"
+        False,
+        "--validate-only",
+        help="Exécute pytest sandbox SANS écrire les fichiers (dry-validate)",
     ),
     sandbox_image: str = typer.Option("iaa-sandbox:latest", "--sandbox-image"),
-    sandbox_timeout: int = typer.Option(60, "--sandbox-timeout", help="Timeout pytest sandbox en secondes"),
+    sandbox_timeout: int = typer.Option(
+        60, "--sandbox-timeout", help="Timeout pytest sandbox en secondes"
+    ),
 ) -> None:
     settings = get_settings()
     memory = FileMemory(settings.project_root / "data" / "memory")
@@ -79,7 +88,9 @@ def apply(
         console.print(f"[red]Aucune mission trouvée avec le préfixe « {mission_id_prefix} ».[/red]")
         raise SystemExit(1)
     if len(matching) > 1:
-        console.print(f"[red]Préfixe ambigu — {len(matching)} missions matchent. Précise plus.[/red]")
+        console.print(
+            f"[red]Préfixe ambigu — {len(matching)} missions matchent. Précise plus.[/red]"
+        )
         for p in matching:
             console.print(f"  - {p.stem}")
         raise SystemExit(1)
@@ -108,11 +119,9 @@ def apply(
 
     # Trouve l'épisode du backend_developer (c'est lui qui produit les fichiers)
     episodes = memory.list_episodes(mission_id)
-    dev_episodes = [
-        p for p in episodes if "backend_developer" in p.stem or "developer" in p.stem
-    ]
+    dev_episodes = [p for p in episodes if "backend_developer" in p.stem or "developer" in p.stem]
     if not dev_episodes:
-        console.print(f"[red]Aucun épisode developer trouvé pour cette mission.[/red]")
+        console.print("[red]Aucun épisode developer trouvé pour cette mission.[/red]")
         raise SystemExit(1)
 
     # Le dernier épisode developer est le plus à jour (cas de boucle de réparation)
@@ -122,10 +131,7 @@ def apply(
     # Re-parse les fichiers depuis la sortie brute
     body = record.body
     raw_marker = "## Sortie brute"
-    if raw_marker in body:
-        raw_section = body.split(raw_marker, 1)[1]
-    else:
-        raw_section = body
+    raw_section = body.split(raw_marker, 1)[1] if raw_marker in body else body
     files = extract_files(raw_section)
 
     if not files:
@@ -168,9 +174,7 @@ def apply(
         table.add_row(f"[{style}]{r.action.value}[/{style}]", r.path, detail)
     console.print(table)
 
-    console.print(
-        f"\n[bold green]{written}/{len(results)} fichier(s) écrits.[/bold green]"
-    )
+    console.print(f"\n[bold green]{written}/{len(results)} fichier(s) écrits.[/bold green]")
 
     # Validate after apply (boucle qualité fermée)
     if validate:
@@ -184,7 +188,10 @@ def apply(
             console.print("[yellow]Aucun fichier écrit, rien à valider.[/yellow]")
             raise SystemExit(0 if written == len(results) else 1)
         sandbox_result = validate_files_in_sandbox(
-            written_files, sandbox_image=sandbox_image, sandbox_timeout=sandbox_timeout, console=console
+            written_files,
+            sandbox_image=sandbox_image,
+            sandbox_timeout=sandbox_timeout,
+            console=console,
         )
         if sandbox_result is None:
             console.print(

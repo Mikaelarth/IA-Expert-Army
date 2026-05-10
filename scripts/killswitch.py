@@ -5,6 +5,7 @@ Usage:
     uv run python scripts/killswitch.py engage --reason "Inspection en cours"
     uv run python scripts/killswitch.py release
 """
+
 from __future__ import annotations
 
 import sys

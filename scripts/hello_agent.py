@@ -9,6 +9,7 @@ Cette commande active le tout premier agent de l'armée. Elle valide :
 Usage:
     uv run python scripts/hello_agent.py
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -77,7 +78,7 @@ async def main() -> int:
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.error("anthropic.call.failed", error=str(exc), exc_info=True)
         console.print(f"\n[bold red]Échec de l'appel Anthropic :[/bold red] {exc}")
         return 1

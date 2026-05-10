@@ -1,4 +1,5 @@
 """Tests pour src.orchestrator.base_agent — Claude est mocké."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -52,7 +53,9 @@ def _fake_response(
 async def test_base_agent_runs_and_records_episode(
     settings: Settings, memory: FileMemory, prompt_file: Path
 ) -> None:
-    fake_client = SimpleNamespace(messages=SimpleNamespace(create=AsyncMock(return_value=_fake_response("hello"))))
+    fake_client = SimpleNamespace(
+        messages=SimpleNamespace(create=AsyncMock(return_value=_fake_response("hello")))
+    )
 
     agent = BaseAgent(
         name="test_agent",
@@ -165,7 +168,6 @@ async def test_base_agent_marks_saturation_when_stop_reason_is_max_tokens(
     assert out.stop_reason == "max_tokens"
 
     # Le metadata persiste l'info pour analyse post-mortem
-    episodes = memory.list_episodes(out.parsed if False else None)
     last_path = sorted(memory.list_episodes())[-1]
     record = memory.read_episode(last_path)
     assert record.metadata.get("saturated") is True
@@ -179,7 +181,9 @@ async def test_base_agent_marks_saturation_at_token_threshold(
     fake_client = SimpleNamespace(
         messages=SimpleNamespace(
             create=AsyncMock(
-                return_value=_fake_response("ok", in_tokens=100, out_tokens=2048, stop_reason="end_turn")
+                return_value=_fake_response(
+                    "ok", in_tokens=100, out_tokens=2048, stop_reason="end_turn"
+                )
             )
         )
     )
@@ -203,7 +207,9 @@ async def test_base_agent_no_saturation_on_normal_completion(
     fake_client = SimpleNamespace(
         messages=SimpleNamespace(
             create=AsyncMock(
-                return_value=_fake_response("ok", in_tokens=100, out_tokens=200, stop_reason="end_turn")
+                return_value=_fake_response(
+                    "ok", in_tokens=100, out_tokens=200, stop_reason="end_turn"
+                )
             )
         )
     )
@@ -253,7 +259,12 @@ async def test_base_agent_rag_injects_precedents_and_indexes(
     vmem.add_episode(
         "precedent_1",
         "Tâche: Implémenter un endpoint healthcheck FastAPI\n\nSortie:\nrouter avec @router.get('/health')",
-        {"agent": "test_agent_rag", "success": True, "quality_score": 0.95, "mission_title": "Endpoint /health"},
+        {
+            "agent": "test_agent_rag",
+            "success": True,
+            "quality_score": 0.95,
+            "mission_title": "Endpoint /health",
+        },
     )
 
     captured_messages: list[str] = []

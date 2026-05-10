@@ -20,10 +20,13 @@ Usage type :
         async def run(self, agent_input):
             ...
 """
+
 from __future__ import annotations
 
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
+
 from typing_extensions import ParamSpec
 
 from src.core.config import get_settings
@@ -77,7 +80,9 @@ def init_tracing(force_disable: bool = False) -> bool:
 
     settings = get_settings()
     public_key = settings.langfuse_public_key
-    secret_key = settings.langfuse_secret_key.get_secret_value() if settings.langfuse_secret_key else ""
+    secret_key = (
+        settings.langfuse_secret_key.get_secret_value() if settings.langfuse_secret_key else ""
+    )
 
     if not public_key or not secret_key:
         _log.info(
@@ -96,6 +101,7 @@ def init_tracing(force_disable: bool = False) -> bool:
     try:
         try:
             from langfuse import Langfuse  # type: ignore[import]
+
             Langfuse(
                 public_key=public_key,
                 secret_key=secret_key,
@@ -104,7 +110,7 @@ def init_tracing(force_disable: bool = False) -> bool:
         except (ImportError, TypeError):
             # Langfuse v2/v3 : les env vars suffisent (LANGFUSE_HOST déjà lu par le SDK)
             pass
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         _log.warning("tracing.init_failed", error=str(exc))
         return False
 

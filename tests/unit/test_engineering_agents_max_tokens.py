@@ -1,4 +1,5 @@
 """Tests max_tokens pour les agents Engineering — fix préventif aligné Research."""
+
 from __future__ import annotations
 
 from pathlib import Path

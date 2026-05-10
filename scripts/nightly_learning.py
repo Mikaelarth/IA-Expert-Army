@@ -7,6 +7,7 @@ Usage:
     uv run python scripts/nightly_learning.py --top-k 5 --min-quality 0.9
     uv run python scripts/nightly_learning.py --dry-run   # ne demande pas Claude, montre juste ce qui serait minté
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -39,12 +40,18 @@ console = Console()
 @app.command()
 def mine(
     top_k: int = typer.Option(3, "--top-k", "-k", help="Nombre d'épisodes top par agent"),
-    min_quality: float = typer.Option(0.85, "--min-quality", "-q", help="Score minimum pour considérer un épisode"),
-    min_episodes: int = typer.Option(2, "--min-episodes", "-n", help="Minimum d'épisodes pour produire une skill"),
+    min_quality: float = typer.Option(
+        0.85, "--min-quality", "-q", help="Score minimum pour considérer un épisode"
+    ),
+    min_episodes: int = typer.Option(
+        2, "--min-episodes", "-n", help="Minimum d'épisodes pour produire une skill"
+    ),
     dry_run: bool = typer.Option(False, "--dry-run", help="Affiche le plan sans appeler Claude"),
     agents: str = typer.Option(
-        None, "--agents", "-a",
-        help="Liste séparée par virgules d'agents à miner (par défaut tous). Ex: research_lead,tech_watch"
+        None,
+        "--agents",
+        "-a",
+        help="Liste séparée par virgules d'agents à miner (par défaut tous). Ex: research_lead,tech_watch",
     ),
 ) -> None:
     settings = get_settings()
@@ -53,9 +60,7 @@ def mine(
     vector_skills = VectorMemory(
         persist_dir=settings.chroma_persist_dir, collection_name="agent_skills"
     )
-    skills_lib = SkillsLibrary(
-        settings.project_root / "skills", vector_memory=vector_skills
-    )
+    skills_lib = SkillsLibrary(settings.project_root / "skills", vector_memory=vector_skills)
 
     selected_agents: tuple[str, ...] | None = None
     if agents:
@@ -85,9 +90,7 @@ def mine(
         plan_table.add_column("Statut", style="white")
         for agent in miner.agents:
             n = len(grouped.get(agent, []))
-            status = (
-                "[yellow]skip[/yellow]" if n < min_episodes else "[green]would mine[/green]"
-            )
+            status = "[yellow]skip[/yellow]" if n < min_episodes else "[green]would mine[/green]"
             plan_table.add_row(agent, str(n), status)
         console.print(plan_table)
         return

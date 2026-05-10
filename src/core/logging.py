@@ -1,4 +1,5 @@
 """Logging — structuré avec structlog, sortie console (dev) ou JSON (prod)."""
+
 from __future__ import annotations
 
 import logging

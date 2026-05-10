@@ -8,6 +8,7 @@ Phase 4+ : remplacera l'heuristique par un mini-classifier Claude (Haiku) qui
 note les ambiguïtés et redirige vers la bonne guilde — ou par un Chief
 Orchestrator enrichi qui inclut `target_guild` dans sa décomposition YAML.
 """
+
 from __future__ import annotations
 
 import re
@@ -321,7 +322,9 @@ class MissionRouter:
         self.killswitch = killswitch
         self.classifier = classifier or HeuristicGuildClassifier()
 
-    def decide(self, title: str, description: str, force_guild: str | None = None) -> RoutingDecision:
+    def decide(
+        self, title: str, description: str, force_guild: str | None = None
+    ) -> RoutingDecision:
         if force_guild:
             return RoutingDecision(guild=force_guild, reason="forced by caller")
         guild = self.classifier.classify(title, description)
@@ -364,7 +367,9 @@ class MissionRouter:
 
         if decision.guild == "creative":
             wf_cre = CreativeWorkflow(**common)
-            cre_result: CreativeMissionResult = await wf_cre.run(title=title, description=description)
+            cre_result: CreativeMissionResult = await wf_cre.run(
+                title=title, description=description
+            )
             return UnifiedMissionResult(
                 mission_id=str(cre_result.mission_id),
                 title=cre_result.title,
@@ -380,7 +385,9 @@ class MissionRouter:
 
         if decision.guild == "business":
             wf_biz = BusinessWorkflow(**common)
-            biz_result: BusinessMissionResult = await wf_biz.run(title=title, description=description)
+            biz_result: BusinessMissionResult = await wf_biz.run(
+                title=title, description=description
+            )
             return UnifiedMissionResult(
                 mission_id=str(biz_result.mission_id),
                 title=biz_result.title,

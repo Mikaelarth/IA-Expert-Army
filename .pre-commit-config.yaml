@@ -1,0 +1,55 @@
+# Pre-commit hooks pour IA-Expert-Army
+#
+# Installation locale (une fois par clone) :
+#   uv sync                        # installe pre-commit dans le venv dev
+#   uv run pre-commit install      # active les hooks Git côté local
+#
+# Run manuel sur tous les fichiers :
+#   uv run pre-commit run --all-files
+#
+# Ces hooks s'exécutent automatiquement à `git commit` et bloquent le commit
+# si l'un d'eux échoue. Bypass urgence : `git commit --no-verify` (fortement
+# déconseillé — l'enjeu est justement de ne RIEN négliger).
+
+repos:
+  # === Hooks fondamentaux upstream ===
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-yaml             # YAML valide (les prompts + docker-compose + ce fichier)
+      - id: check-toml             # pyproject.toml valide
+      - id: check-merge-conflict   # pas de marqueurs <<<<<<< restants
+      - id: check-added-large-files
+        args: ["--maxkb=512"]      # bloque les binaires lourds par mégarde
+      - id: end-of-file-fixer      # newline final
+      - id: trailing-whitespace    # pas d'espaces traînants
+
+  # === Lint + format Python via ruff ===
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      # Auto-fix des erreurs ruff fixables (imports, unused, etc.)
+      - id: ruff
+        args: ["--fix"]
+      # Formattage cohérent
+      - id: ruff-format
+
+  # === Hook custom : tests unit doivent passer ===
+  - repo: local
+    hooks:
+      - id: pytest-unit
+        name: pytest unit suite
+        entry: uv run pytest tests/unit/ -q --tb=line --no-header
+        language: system
+        pass_filenames: false       # on lance toujours toute la suite, pas juste les fichiers modifiés
+        stages: [pre-commit]
+        # Optionnel : limiter aux commits qui touchent du code Python ou tests.
+        # Décommenter si la suite devient lente (>30s) :
+        # files: '\.(py|toml|cfg)$'
+
+      - id: health-check-quick
+        name: IA-Expert-Army health check (quick)
+        entry: uv run python scripts/health_check.py --quick
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]

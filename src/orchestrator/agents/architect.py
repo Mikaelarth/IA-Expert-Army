@@ -1,4 +1,5 @@
 """SoftwareArchitect — produit une proposition d'architecture pour une sous-tâche."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,15 +8,18 @@ from typing import Any
 from anthropic import AsyncAnthropic
 
 from src.core.config import Settings, get_settings
-from src.memory.file_memory import FileMemory
 from src.learning.skills_library import SkillsLibrary
+from src.memory.file_memory import FileMemory
 from src.memory.vector_memory import VectorMemory
 from src.orchestrator.agents._parsers import extract_yaml
 from src.orchestrator.base_agent import AgentInput, BaseAgent
 
 _PROMPT = (
     Path(__file__).resolve().parents[3]
-    / "prompts" / "guilds" / "engineering" / "software_architect.md"
+    / "prompts"
+    / "guilds"
+    / "engineering"
+    / "software_architect.md"
 )
 
 

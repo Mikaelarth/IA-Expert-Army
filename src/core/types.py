@@ -1,4 +1,5 @@
 """Types partagés — schémas pydantic communs aux agents et à l'orchestrateur."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime

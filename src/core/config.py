@@ -1,4 +1,5 @@
 """Settings — configuration centralisée, type-safe, chargée depuis .env."""
+
 from __future__ import annotations
 
 from functools import lru_cache
@@ -24,14 +25,20 @@ class Settings(BaseSettings):
 
     # --- Modèles par tier ---
     model_strategic: str = Field("claude-opus-4-7", description="Modèle pour rôles stratégiques")
-    model_operational: str = Field("claude-sonnet-4-6", description="Modèle pour rôles opérationnels")
-    model_bulk: str = Field("claude-haiku-4-5-20251001", description="Modèle pour tâches volumineuses")
+    model_operational: str = Field(
+        "claude-sonnet-4-6", description="Modèle pour rôles opérationnels"
+    )
+    model_bulk: str = Field(
+        "claude-haiku-4-5-20251001", description="Modèle pour tâches volumineuses"
+    )
 
     # --- Limites & garde-fous ---
     daily_budget_usd: float = Field(10.0, ge=0, description="Plafond budget quotidien en USD")
     max_agent_turns: int = Field(20, ge=1, description="Nombre max de tours par agent")
     max_concurrent_agents: int = Field(5, ge=1, description="Agents concurrents max")
-    circuit_breaker_error_rate: float = Field(0.3, ge=0, le=1, description="Seuil d'erreur déclenchant le circuit breaker")
+    circuit_breaker_error_rate: float = Field(
+        0.3, ge=0, le=1, description="Seuil d'erreur déclenchant le circuit breaker"
+    )
 
     # --- Logging ---
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"

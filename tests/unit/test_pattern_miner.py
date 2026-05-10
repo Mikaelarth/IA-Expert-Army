@@ -1,4 +1,5 @@
 """Tests pour src.learning.pattern_miner — l'extracteur Claude est mocké."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -238,8 +239,9 @@ def test_pattern_miner_excludes_rejected_missions(
     memory: FileMemory, skills: SkillsLibrary, settings: Settings
 ) -> None:
     """Quand final_verdict est propagé : seules les missions APPROVED nourrissent le mining."""
-    from src.memory.file_memory import MemoryRecord
     from uuid import uuid4
+
+    from src.memory.file_memory import MemoryRecord
 
     rejected = MemoryRecord(
         metadata={
@@ -273,8 +275,9 @@ def test_pattern_miner_legacy_episodes_without_final_verdict_use_quality_score(
     memory: FileMemory, skills: SkillsLibrary, settings: Settings
 ) -> None:
     """Les épisodes legacy (sans final_verdict propagé) restent éligibles via quality_score seul."""
-    from src.memory.file_memory import MemoryRecord
     from uuid import uuid4
+
+    from src.memory.file_memory import MemoryRecord
 
     legacy_high = MemoryRecord(
         metadata={"agent": "research_lead", "success": True, "quality_score": 0.95},
@@ -299,8 +302,9 @@ def test_pattern_miner_excludes_saturated_episodes(
 ) -> None:
     """Les épisodes saturés (sortie tronquée) ne doivent pas alimenter le mining."""
     # Ajout via metadata directe
-    from src.memory.file_memory import MemoryRecord
     from uuid import uuid4
+
+    from src.memory.file_memory import MemoryRecord
 
     saturated = MemoryRecord(
         metadata={

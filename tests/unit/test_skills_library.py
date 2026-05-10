@@ -1,4 +1,5 @@
 """Tests pour src.learning.skills_library."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -38,6 +39,7 @@ def test_write_and_read_skill(lib: SkillsLibrary) -> None:
 
 def test_list_skills_returns_most_recent_first(lib: SkillsLibrary) -> None:
     import time
+
     s1 = lib.write_skill("dev", "First skill", "body 1")
     time.sleep(1.05)  # garantit un timestamp différent (slug encodé à la seconde)
     s2 = lib.write_skill("dev", "Second skill", "body 2")
@@ -114,7 +116,9 @@ def test_search_skills_uses_vector_when_available(tmp_path: Path) -> None:
     vmem = VectorMemory(persist_dir=tmp_path / "v_skills", collection_name="t_skills")
     lib = SkillsLibrary(tmp_path / "skills", vector_memory=vmem)
     lib.write_skill(
-        "dev", "FastAPI router pattern", "Use APIRouter and Pydantic models for endpoints",
+        "dev",
+        "FastAPI router pattern",
+        "Use APIRouter and Pydantic models for endpoints",
     )
     lib.write_skill("dev", "Celery worker pattern", "Async background jobs via Redis")
     results = lib.search_skills("dev", query="REST endpoint with Pydantic", n_results=1)

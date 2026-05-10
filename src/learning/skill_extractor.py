@@ -3,6 +3,7 @@
 Hérite de BaseAgent → bénéficie de l'infra commune (logging, pricing, FileMemory).
 On ne lui passe PAS de vector_memory : il ne doit pas s'auto-influencer.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -15,10 +16,7 @@ from src.memory.file_memory import FileMemory
 from src.orchestrator.agents._parsers import extract_yaml
 from src.orchestrator.base_agent import AgentInput, BaseAgent
 
-_PROMPT = (
-    Path(__file__).resolve().parents[2]
-    / "prompts" / "orchestrator" / "skill_extractor.md"
-)
+_PROMPT = Path(__file__).resolve().parents[2] / "prompts" / "orchestrator" / "skill_extractor.md"
 
 
 class SkillExtractor(BaseAgent):

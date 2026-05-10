@@ -1,8 +1,8 @@
 """Tests unitaires pour SandboxRunner — Docker mocké."""
+
 from __future__ import annotations
 
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -16,9 +16,7 @@ def workspace(tmp_path: Path) -> Path:
     (tmp_path / "src" / "foo.py").write_text("def hello(): return 'world'\n")
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "test_foo.py").write_text(
-        "from src.foo import hello\n\n"
-        "def test_hello():\n"
-        "    assert hello() == 'world'\n"
+        "from src.foo import hello\n\ndef test_hello():\n    assert hello() == 'world'\n"
     )
     return tmp_path
 
@@ -193,6 +191,7 @@ def test_runner_image_exists_true_when_image_found() -> None:
 
 def test_runner_image_exists_false_when_not_found() -> None:
     from src.sandbox.runner import ImageNotFound
+
     client = MagicMock()
     client.ping.return_value = True
     client.images.get.side_effect = ImageNotFound("not here")

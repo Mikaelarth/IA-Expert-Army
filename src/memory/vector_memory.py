@@ -11,6 +11,7 @@ Choix techniques :
 - Collection unique "agent_episodes" partagée par tous les agents (filtre par `where`).
 - Pas de delete : on garde tout en append-only (cf. principe d'auditabilité).
 """
+
 from __future__ import annotations
 
 from pathlib import Path

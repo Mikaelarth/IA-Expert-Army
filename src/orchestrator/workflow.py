@@ -5,6 +5,7 @@ Boucle de réparation maximum 1 fois si Reviewer demande des changements.
 
 Phase 3+ : ce module sera remplacé par un graphe LangGraph stateful.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -88,7 +89,9 @@ class Workflow:
                 self.killswitch.assert_clear()
             except KillswitchEngaged as exc:
                 log.warning("workflow.killswitch.refused", mission=str(mission_id), error=str(exc))
-                return self._fail(mission_id, title, started, outputs, "killswitch.engaged", str(exc))
+                return self._fail(
+                    mission_id, title, started, outputs, "killswitch.engaged", str(exc)
+                )
         if self.budget is not None:
             try:
                 self.budget.assert_can_proceed(estimated_cost=0.0)
@@ -105,7 +108,9 @@ class Workflow:
         )
         outputs.append(orch_out)
         if not orch_out.success:
-            return self._fail(mission_id, title, started, outputs, "orchestrator.failed", orch_out.error or "")
+            return self._fail(
+                mission_id, title, started, outputs, "orchestrator.failed", orch_out.error or ""
+            )
 
         decomposition = orch_out.parsed or {}
         first_task = self._first_subtask(decomposition) or description
@@ -120,7 +125,9 @@ class Workflow:
         )
         outputs.append(arch_out)
         if not arch_out.success:
-            return self._fail(mission_id, title, started, outputs, "architect.failed", arch_out.error or "")
+            return self._fail(
+                mission_id, title, started, outputs, "architect.failed", arch_out.error or ""
+            )
 
         # Step 3 — Developer code
         dev_out = await self.developer.run(
@@ -132,7 +139,9 @@ class Workflow:
         )
         outputs.append(dev_out)
         if not dev_out.success:
-            return self._fail(mission_id, title, started, outputs, "developer.failed", dev_out.error or "")
+            return self._fail(
+                mission_id, title, started, outputs, "developer.failed", dev_out.error or ""
+            )
 
         # Step 4 — Reviewer juge
         review_out = await self.reviewer.run(
@@ -147,7 +156,9 @@ class Workflow:
         )
         outputs.append(review_out)
         if not review_out.success:
-            return self._fail(mission_id, title, started, outputs, "reviewer.failed", review_out.error or "")
+            return self._fail(
+                mission_id, title, started, outputs, "reviewer.failed", review_out.error or ""
+            )
 
         verdict = (review_out.parsed or {}).get("verdict", VERDICT_REJECTED)
 
@@ -214,7 +225,7 @@ class Workflow:
         if self.budget is not None and total_cost > 0:
             try:
                 self.budget.record(total_cost)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 log.warning("workflow.budget.record_failed", error=str(exc))
 
         log.info(
@@ -243,7 +254,7 @@ class Workflow:
                     final_verdict=result.final_verdict,
                     mission_title=result.title,
                 )
-            except OSError as exc:  # noqa: BLE001
+            except OSError as exc:
                 log.warning("workflow.score_propagation.failed", path=str(path), error=str(exc))
                 continue
             # Re-index avec le score à jour si VectorMemory branchée et succès
@@ -258,7 +269,7 @@ class Workflow:
                         document=indexed_doc,
                         metadata=updated.metadata,
                     )
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     log.warning("workflow.reindex.failed", path=str(path), error=str(exc))
 
     def _first_subtask(self, decomposition: dict) -> str | None:

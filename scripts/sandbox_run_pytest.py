@@ -13,6 +13,7 @@ partie du projet n'est exposée — pas d'accès à .env, data/, .venv, etc.
 Démontre la chaîne complète Phase 3 :
   workspace minimal → sandbox isolé (no-net, non-root, mem limit) → pytest
 """
+
 from __future__ import annotations
 
 import shutil
@@ -55,16 +56,16 @@ def run(
             raise SystemExit(1)
         try:
             rel = abs_path.relative_to(project_root)
-        except ValueError:
+        except ValueError as exc:
             console.print(f"[red]Fichier hors du project root : {f}[/red]")
-            raise SystemExit(1)
+            raise SystemExit(1) from exc
         resolved_files.append((abs_path, rel))
 
     try:
         runner = SandboxRunner(image=image, timeout_seconds=timeout)
     except SandboxUnavailable as exc:
         console.print(f"[red]Sandbox indisponible : {exc}[/red]")
-        raise SystemExit(2)
+        raise SystemExit(2) from exc
 
     if not runner.image_exists():
         console.print(

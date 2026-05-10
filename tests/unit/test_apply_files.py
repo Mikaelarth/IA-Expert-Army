@@ -1,4 +1,5 @@
 """Tests pour src.tools.apply_files."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -31,7 +32,11 @@ def test_creates_intermediate_dirs(tmp_path: Path) -> None:
 def test_rejects_absolute_path(tmp_path: Path) -> None:
     """Sur Windows /etc/passwd n'est pas absolu (pas de drive letter), mais la résolution sort de project_root."""
     results = apply_files([_file("/etc/passwd", "evil")], tmp_path)
-    assert results[0].action in {ApplyAction.REJECTED_PATH, ApplyAction.REJECTED_OUTSIDE, ApplyAction.REJECTED_DIR}
+    assert results[0].action in {
+        ApplyAction.REJECTED_PATH,
+        ApplyAction.REJECTED_OUTSIDE,
+        ApplyAction.REJECTED_DIR,
+    }
     # L'essentiel : le fichier n'a PAS été écrit
     assert not (tmp_path / "etc" / "passwd").exists()
 

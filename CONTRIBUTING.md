@@ -17,9 +17,29 @@ uv run pytest tests/unit/                      # should be all green
 
 ```powershell
 uv run pytest tests/unit/                      # all tests must pass
+uv run ruff check src/ scripts/ tests/         # lint clean
+uv run ruff format src/ scripts/ tests/        # format applied
 ```
 
 If you've added a new agent, new guild, or new prompt: **add a regression test** that documents the expected behavior. Look at `tests/unit/test_research_agents.py` for the pattern.
+
+### Pre-commit hooks (recommandé)
+
+Le projet fournit une config [pre-commit](https://pre-commit.com/) (`.pre-commit-config.yaml`) qui automatise tout ce qui précède à chaque `git commit`. Activation locale :
+
+```powershell
+uv sync                                        # installe pre-commit dans le venv
+uv run pre-commit install                      # active les hooks Git
+uv run pre-commit run --all-files              # premier run sur tout le repo
+```
+
+Hooks actifs :
+- **ruff** (lint + auto-fix + format)
+- **check-yaml / check-toml / check-merge-conflict / check-added-large-files (>512KB)**
+- **pytest unit suite** (toute la suite, pas juste les fichiers modifiés)
+- **health-check --quick** (settings + 4 guildes + mémoire + classifier)
+
+Bypass urgence : `git commit --no-verify` — fortement déconseillé, l'enjeu est de ne **rien** négliger.
 
 ## Architecture in 30 seconds
 

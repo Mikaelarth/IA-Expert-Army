@@ -9,6 +9,7 @@ Usage:
     uv run python scripts/check_sandbox.py
     uv run python scripts/check_sandbox.py --build  # build l'image si absente
 """
+
 from __future__ import annotations
 
 import sys
@@ -47,10 +48,8 @@ def check(
     except SandboxUnavailable as exc:
         table.add_row("Docker daemon", "[red]FAIL[/red]", str(exc))
         console.print(table)
-        console.print(
-            "\n[yellow]Lance Docker Desktop puis relance ce script.[/yellow]"
-        )
-        raise SystemExit(1)
+        console.print("\n[yellow]Lance Docker Desktop puis relance ce script.[/yellow]")
+        raise SystemExit(1) from exc
 
     if not runner.ping():
         table.add_row("Docker daemon", "[red]FAIL[/red]", "ping refusé")
@@ -64,14 +63,17 @@ def check(
             dockerfile = settings.project_root / "infra" / "docker" / "sandbox.Dockerfile"
             console.print(table)
             console.print(
-                f"\n[yellow]Build de l'image en cours… (peut prendre quelques minutes)[/yellow]"
+                "\n[yellow]Build de l'image en cours… (peut prendre quelques minutes)[/yellow]"
             )
             import subprocess
 
             cmd = [
-                "docker", "build",
-                "-t", "iaa-sandbox:latest",
-                "-f", str(dockerfile),
+                "docker",
+                "build",
+                "-t",
+                "iaa-sandbox:latest",
+                "-f",
+                str(dockerfile),
                 str(dockerfile.parent),
             ]
             r = subprocess.run(cmd, capture_output=True, text=True)

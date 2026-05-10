@@ -9,6 +9,7 @@ C'est l'équivalent Phase 1 de la mémoire 4-niveaux du plan d'architecture :
 L'API privilégie la simplicité : open + read + write de fichiers texte.
 On migrera vers SQLite + Chroma en Phase 2 sans changer cette interface publique.
 """
+
 from __future__ import annotations
 
 import re

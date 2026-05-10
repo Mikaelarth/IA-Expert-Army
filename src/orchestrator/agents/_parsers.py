@@ -1,4 +1,5 @@
 """Parseurs partagés — extraction de YAML / code blocks à partir de la sortie d'un LLM."""
+
 from __future__ import annotations
 
 import re
@@ -24,6 +25,7 @@ def _quote_problematic_list_items(yaml_text: str) -> str:
     contenant ' : ' non quotés. Bug récurrent des LLMs.
 
     Conserve les items déjà quotés ou qui sont des dicts (clé: valeur en début de ligne)."""
+
     def _quote(match: re.Match[str]) -> str:
         indent = match.group("indent")
         content = match.group("content").rstrip()

@@ -1,4 +1,5 @@
 """Agents concrets de la Guild Research (Phase 4)."""
+
 from __future__ import annotations
 
 from pathlib import Path

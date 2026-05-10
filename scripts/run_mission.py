@@ -17,6 +17,7 @@ Mode --validate (Phase 8) : avec --apply, lance pytest dans le sandbox Docker su
 fichiers écrits et fail si les tests ne passent pas (exit 4). Boucle qualité fermée
 DÈS la mission live, sans étape manuelle de re-validation.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -65,15 +66,24 @@ def run(
     title: str = typer.Option(None, "--title", "-t", help="Titre court de la mission"),
     description: str = typer.Option(None, "--description", "-d", help="Description détaillée"),
     interactive: bool = typer.Option(False, "--interactive", "-i", help="Saisie interactive"),
-    apply: bool = typer.Option(False, "--apply", help="Écrit les fichiers sur disque si APPROVED (Engineering only)"),
-    force: bool = typer.Option(False, "--force", help="Avec --apply : overwrite les fichiers existants"),
-    guild: str = typer.Option(None, "--guild", "-g", help="Force la guilde (engineering | research | creative | business)"),
+    apply: bool = typer.Option(
+        False, "--apply", help="Écrit les fichiers sur disque si APPROVED (Engineering only)"
+    ),
+    force: bool = typer.Option(
+        False, "--force", help="Avec --apply : overwrite les fichiers existants"
+    ),
+    guild: str = typer.Option(
+        None, "--guild", "-g", help="Force la guilde (engineering | research | creative | business)"
+    ),
     validate: bool = typer.Option(
-        False, "--validate",
-        help="Avec --apply : lance pytest sandbox sur les fichiers écrits (boucle qualité fermée)"
+        False,
+        "--validate",
+        help="Avec --apply : lance pytest sandbox sur les fichiers écrits (boucle qualité fermée)",
     ),
     sandbox_image: str = typer.Option("iaa-sandbox:latest", "--sandbox-image"),
-    sandbox_timeout: int = typer.Option(60, "--sandbox-timeout", help="Timeout pytest sandbox en secondes"),
+    sandbox_timeout: int = typer.Option(
+        60, "--sandbox-timeout", help="Timeout pytest sandbox en secondes"
+    ),
 ) -> None:
     settings = get_settings()
     setup_logging(level=settings.log_level, fmt=settings.log_format)
@@ -88,9 +98,7 @@ def run(
     vector_skills = VectorMemory(
         persist_dir=settings.chroma_persist_dir, collection_name="agent_skills"
     )
-    skills_library = SkillsLibrary(
-        settings.project_root / "skills", vector_memory=vector_skills
-    )
+    skills_library = SkillsLibrary(settings.project_root / "skills", vector_memory=vector_skills)
     budget = BudgetController(
         state_path=settings.project_root / "data" / "budget_state.json",
         daily_budget_usd=settings.daily_budget_usd,
@@ -132,7 +140,10 @@ def run(
     table.add_row("Mission ID", str(result.mission_id))
     table.add_row("Guilde", result.guild)
     table.add_row("Verdict", result.final_verdict)
-    table.add_row("Quality score", f"{result.quality_score:.2f}" if result.quality_score is not None else "n/a")
+    table.add_row(
+        "Quality score",
+        f"{result.quality_score:.2f}" if result.quality_score is not None else "n/a",
+    )
     table.add_row("Coût total (USD)", f"{result.total_cost_usd:.4f}")
     table.add_row("Durée (s)", f"{result.total_duration_seconds:.2f}")
     if files_produced:
@@ -144,6 +155,7 @@ def run(
     if synthesis_md:
         console.print("\n[bold cyan]Synthèse produite :[/bold cyan]\n")
         from rich.markdown import Markdown
+
         console.print(Markdown(synthesis_md))
 
     if files_produced:
@@ -162,14 +174,13 @@ def run(
                 f"\n[yellow]--apply ignoré : la guilde [bold]{result.guild}[/bold] ne produit pas de fichiers à écrire.[/yellow]"
             )
         elif not result.success:
-            console.print("\n[yellow]--apply ignoré : verdict non-APPROVED, rien n'est écrit.[/yellow]")
+            console.print(
+                "\n[yellow]--apply ignoré : verdict non-APPROVED, rien n'est écrit.[/yellow]"
+            )
         elif not files_produced:
             console.print("\n[yellow]--apply ignoré : aucun fichier à écrire.[/yellow]")
         else:
-            console.print(
-                f"\n[bold cyan]Application sur disque[/bold cyan] "
-                f"(force={force})…"
-            )
+            console.print(f"\n[bold cyan]Application sur disque[/bold cyan] (force={force})…")
             apply_results = apply_files(
                 files=files_produced,
                 project_root=settings.project_root,
@@ -182,9 +193,7 @@ def run(
             for f, r in zip(files_produced, apply_results, strict=False):
                 style = _ACTION_STYLES.get(r.action, "white")
                 detail = (
-                    f"{r.bytes_written} octets"
-                    if r.action == ApplyAction.WRITTEN
-                    else r.reason
+                    f"{r.bytes_written} octets" if r.action == ApplyAction.WRITTEN else r.reason
                 )
                 apply_table.add_row(
                     f"[{style}]{r.action.value}[/{style}]",
@@ -237,7 +246,10 @@ def run(
                         "\n[bold green]Boucle qualité fermée : mission APPROVED + apply OK + sandbox pytest OK.[/bold green]"
                     )
 
-    console.print("\n[dim]Résumé écrit dans :[/dim] " f"{memory_root / 'missions' / (str(result.mission_id) + '.md')}")
+    console.print(
+        "\n[dim]Résumé écrit dans :[/dim] "
+        f"{memory_root / 'missions' / (str(result.mission_id) + '.md')}"
+    )
 
     # Exit code combiné : si validate a fail, exit 4 (cf. apply_mission.py).
     # Sinon, exit selon le succès de la mission elle-même.

@@ -1,4 +1,5 @@
 """Tests pour src.core.tracing — graceful degradation sans Langfuse credentials."""
+
 from __future__ import annotations
 
 import pytest
@@ -18,6 +19,7 @@ def test_init_tracing_disabled_when_no_credentials(monkeypatch: pytest.MonkeyPat
     monkeypatch.delenv("LANGFUSE_SECRET_KEY", raising=False)
     # Force la lecture des settings frais
     from src.core.config import get_settings
+
     get_settings.cache_clear()  # type: ignore[attr-defined]
 
     enabled = tracing.init_tracing()
@@ -28,6 +30,7 @@ def test_init_tracing_disabled_with_force_disable(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-lf-test")
     monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-lf-test")
     from src.core.config import get_settings
+
     get_settings.cache_clear()  # type: ignore[attr-defined]
 
     enabled = tracing.init_tracing(force_disable=True)
@@ -38,6 +41,7 @@ def test_observe_is_noop_without_credentials(monkeypatch: pytest.MonkeyPatch) ->
     """Sans credentials, @observe doit passer la fonction inchangée."""
     monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
     from src.core.config import get_settings
+
     get_settings.cache_clear()  # type: ignore[attr-defined]
 
     @tracing.observe(name="test")
@@ -52,6 +56,7 @@ def test_observe_works_without_parentheses(monkeypatch: pytest.MonkeyPatch) -> N
     """@observe sans () (sur une fonction directement) doit aussi marcher en NO-OP."""
     monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
     from src.core.config import get_settings
+
     get_settings.cache_clear()  # type: ignore[attr-defined]
 
     @tracing.observe
@@ -65,6 +70,7 @@ def test_observe_preserves_function_signature(monkeypatch: pytest.MonkeyPatch) -
     """@functools.wraps doit conserver __name__ et __doc__."""
     monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
     from src.core.config import get_settings
+
     get_settings.cache_clear()  # type: ignore[attr-defined]
 
     @tracing.observe(name="my_func")
@@ -83,6 +89,7 @@ def test_observe_works_on_async_functions(monkeypatch: pytest.MonkeyPatch) -> No
 
     monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
     from src.core.config import get_settings
+
     get_settings.cache_clear()  # type: ignore[attr-defined]
 
     @tracing.observe(name="async_test")
@@ -97,6 +104,7 @@ def test_init_tracing_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
     """Appeler init_tracing() plusieurs fois ne doit pas re-init / casser."""
     monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
     from src.core.config import get_settings
+
     get_settings.cache_clear()  # type: ignore[attr-defined]
 
     first = tracing.init_tracing()
@@ -109,6 +117,7 @@ def test_observe_lazy_init(monkeypatch: pytest.MonkeyPatch) -> None:
     """observe() peut être utilisé avant init_tracing() explicite — il init lazy."""
     monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
     from src.core.config import get_settings
+
     get_settings.cache_clear()  # type: ignore[attr-defined]
 
     # Pas d'init_tracing() préalable

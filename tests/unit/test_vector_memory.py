@@ -3,6 +3,7 @@
 Note : Chroma télécharge un modèle ONNX la première fois (~30 MB).
 Sur CI sans cache, ces tests prennent quelques secondes au premier run.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

@@ -1,4 +1,5 @@
 """Tests pour les helpers statiques de PatternMiner (pas d'I/O Claude)."""
+
 from __future__ import annotations
 
 from src.learning.pattern_miner import PatternMiner

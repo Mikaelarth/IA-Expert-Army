@@ -1,6 +1,7 @@
 """Tests pour les agents de la Guild Research.
 
 Phase 4 — vérifications structurelles (pas d'appel Claude réel)."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -69,9 +70,7 @@ def test_document_synthesizer_max_tokens_high_enough_for_full_synthesis(
     assert agent.max_tokens >= 8192
 
 
-def test_research_reviewer_uses_operational_model(
-    settings: Settings, memory: FileMemory
-) -> None:
+def test_research_reviewer_uses_operational_model(settings: Settings, memory: FileMemory) -> None:
     agent = ResearchReviewer(memory=memory, settings=settings)
     assert "sonnet" in agent.model.lower()
 
@@ -98,9 +97,7 @@ def test_research_lead_max_tokens_high_enough_for_rich_plans(
     assert agent.max_tokens >= 3072
 
 
-def test_all_research_agents_have_distinct_names(
-    settings: Settings, memory: FileMemory
-) -> None:
+def test_all_research_agents_have_distinct_names(settings: Settings, memory: FileMemory) -> None:
     names = {
         ResearchLead(memory=memory, settings=settings).name,
         TechWatch(memory=memory, settings=settings).name,
@@ -110,9 +107,7 @@ def test_all_research_agents_have_distinct_names(
     assert len(names) == 4
 
 
-def test_all_research_agents_load_their_prompts(
-    settings: Settings, memory: FileMemory
-) -> None:
+def test_all_research_agents_load_their_prompts(settings: Settings, memory: FileMemory) -> None:
     """Vérifie que chaque agent trouve bien son fichier prompt et le charge."""
     for agent_class in (ResearchLead, TechWatch, DocumentSynthesizer, ResearchReviewer):
         agent = agent_class(memory=memory, settings=settings)

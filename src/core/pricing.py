@@ -3,6 +3,7 @@
 Tarifs par million de tokens (USD). À actualiser depuis https://www.anthropic.com/pricing.
 Dernière mise à jour : 2026-05-10 (estimations).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

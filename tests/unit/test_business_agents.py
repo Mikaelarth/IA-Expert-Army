@@ -1,4 +1,5 @@
 """Tests pour les agents de la Guild Business + routing business."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -86,7 +87,10 @@ def test_classifier_business_does_not_steal_engineering_intent() -> None:
     """Régression préventive : 'plan' isolé ne doit pas voler une mission engineering."""
     clf = HeuristicGuildClassifier()
     # Mission clairement Engineering (implémente + endpoint + test) avec mention de "plan"
-    assert clf.classify(
-        "Implémente l'endpoint /plan",
-        "Code FastAPI pour exposer le plan de roadmap stocké en SQL. Inclus pytest.",
-    ) == "engineering"
+    assert (
+        clf.classify(
+            "Implémente l'endpoint /plan",
+            "Code FastAPI pour exposer le plan de roadmap stocké en SQL. Inclus pytest.",
+        )
+        == "engineering"
+    )

@@ -8,6 +8,7 @@ Usage:
     uv run python scripts/daily_digest.py --date 2026-05-10
     uv run python scripts/daily_digest.py --output digest.md   # sauvegarde aussi
 """
+
 from __future__ import annotations
 
 import sys
@@ -86,13 +87,12 @@ def _build_digest(target: date) -> str:
     missions = _missions_for_date(memory, target)
     success_count = sum(1 for _, r in missions if r.metadata.get("success"))
     total_cost = sum(float(r.metadata.get("total_cost_usd", 0) or 0) for _, r in missions)
-    avg_quality = (
-        sum(
-            float(r.metadata.get("quality_score", 0) or 0)
-            for _, r in missions
-            if isinstance(r.metadata.get("quality_score"), (int, float))
-        )
-        / max(1, sum(1 for _, r in missions if isinstance(r.metadata.get("quality_score"), (int, float))))
+    avg_quality = sum(
+        float(r.metadata.get("quality_score", 0) or 0)
+        for _, r in missions
+        if isinstance(r.metadata.get("quality_score"), (int, float))
+    ) / max(
+        1, sum(1 for _, r in missions if isinstance(r.metadata.get("quality_score"), (int, float)))
     )
     verdict_counts = Counter(r.metadata.get("final_verdict", "?") for _, r in missions)
 
@@ -105,7 +105,9 @@ def _build_digest(target: date) -> str:
         "## Synthèse",
         "",
         f"- **Missions exécutées :** {len(missions)} ({success_count} APPROVED)",
-        f"- **Score qualité moyen :** {avg_quality:.2f}" if missions else "- **Score qualité moyen :** n/a",
+        f"- **Score qualité moyen :** {avg_quality:.2f}"
+        if missions
+        else "- **Score qualité moyen :** n/a",
         f"- **Coût total des missions :** ${total_cost:.4f}",
         f"- **Skills auto-créées aujourd'hui :** {skills_count}",
         f"- **Budget API du jour :** ${budget_status['spent_usd']:.4f} / "
@@ -139,7 +141,9 @@ def _build_digest(target: date) -> str:
         lines.append("")
 
     if budget_status["percent_used"] >= 100:
-        lines.append("> ⚠ **Budget journalier atteint** — toute nouvelle mission sera refusée jusqu'à minuit.")
+        lines.append(
+            "> ⚠ **Budget journalier atteint** — toute nouvelle mission sera refusée jusqu'à minuit."
+        )
     elif budget_status["percent_used"] >= 80:
         lines.append("> ⚠ Plus de 80% du budget consommé.")
 
@@ -152,7 +156,9 @@ def _build_digest(target: date) -> str:
 @app.command()
 def show(
     date_str: str | None = typer.Option(None, "--date", "-d", help="Date au format YYYY-MM-DD"),
-    output: Path | None = typer.Option(None, "--output", "-o", help="Fichier où sauvegarder le digest"),
+    output: Path | None = typer.Option(
+        None, "--output", "-o", help="Fichier où sauvegarder le digest"
+    ),
 ) -> None:
     target = _parse_date(date_str)
     digest = _build_digest(target)

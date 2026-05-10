@@ -12,6 +12,7 @@ Phase 5 MVP — algorithme :
    - Parse YAML → écrit la skill dans SkillsLibrary
 5. Retourne un MiningReport
 """
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -164,7 +165,7 @@ class PatternMiner:
             "Extrais la skill réutilisable comme indiqué dans ton system prompt.",
             "",
         ]
-        for i, (path, rec) in enumerate(episodes, 1):
+        for i, (_path, rec) in enumerate(episodes, 1):
             score = rec.metadata.get("quality_score", "n/a")
             mission = rec.metadata.get("mission_id", "?")[:8]
             sections.append(f"---\n## Épisode {i} (mission {mission}, score {score})\n")

@@ -9,11 +9,12 @@ Le helper encapsule : préparation workspace temp + auto-conftest + lancement
 sandbox + cleanup. Renvoie None si le sandbox est indisponible (Docker down
 ou image absente) — au caller de décider quoi faire.
 """
+
 from __future__ import annotations
 
 import tempfile
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 from rich.console import Console
 from rich.panel import Panel

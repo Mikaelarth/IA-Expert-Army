@@ -1,4 +1,5 @@
 """Tests pour src.core.pricing."""
+
 from __future__ import annotations
 
 from src.core.pricing import estimate_cost, lookup_pricing

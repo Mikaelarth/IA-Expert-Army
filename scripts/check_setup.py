@@ -10,6 +10,7 @@ Contrôles :
 Usage:
     uv run python scripts/check_setup.py
 """
+
 from __future__ import annotations
 
 import importlib
@@ -32,7 +33,7 @@ def _check(label: str, fn) -> tuple[bool, str]:
     try:
         ok, detail = fn()
         return ok, detail
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return False, f"{type(exc).__name__}: {exc}"
 
 
@@ -108,7 +109,9 @@ def main() -> int:
     console.print(table)
 
     if all_ok:
-        console.print("\n[bold green]Environnement prêt. Lance `uv run python scripts/hello_agent.py`.[/bold green]\n")
+        console.print(
+            "\n[bold green]Environnement prêt. Lance `uv run python scripts/hello_agent.py`.[/bold green]\n"
+        )
         return 0
     console.print("\n[bold red]Setup incomplet. Corrige les erreurs ci-dessus.[/bold red]\n")
     return 1

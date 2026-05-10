@@ -1,4 +1,5 @@
 """Tests pour src.orchestrator.agents._parsers."""
+
 from __future__ import annotations
 
 from src.orchestrator.agents._parsers import extract_files, extract_yaml

@@ -1,4 +1,5 @@
 """Tests pour src.core.budget."""
+
 from __future__ import annotations
 
 import json

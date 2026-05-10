@@ -3,6 +3,7 @@
 Phase 4+ : ajouter Finance Analyst (modélisation financière approfondie) et
 Customer Success (post-launch : feedback, support, FAQ, churn analysis).
 """
+
 from __future__ import annotations
 
 from pathlib import Path

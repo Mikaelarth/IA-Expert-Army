@@ -8,6 +8,7 @@ Usage:
     uv run python scripts/reindex_episodes.py
     uv run python scripts/reindex_episodes.py --reset  # vide la collection avant reindex
 """
+
 from __future__ import annotations
 
 import re
@@ -24,7 +25,7 @@ import typer
 from rich.console import Console
 
 from src.core.config import get_settings
-from src.memory.file_memory import FileMemory, MemoryRecord
+from src.memory.file_memory import FileMemory
 from src.memory.vector_memory import VectorMemory
 
 app = typer.Typer(no_args_is_help=False, add_completion=False)
@@ -90,7 +91,9 @@ def reindex(
         f"\n[bold green]{indexed} épisodes indexés[/bold green]"
         + (f" · [dim]{skipped} ignorés (échec ou vides)[/dim]" if skipped else "")
     )
-    console.print(f"[dim]Collection « {vmem.collection_name} » contient maintenant {vmem.count()} épisodes.[/dim]")
+    console.print(
+        f"[dim]Collection « {vmem.collection_name} » contient maintenant {vmem.count()} épisodes.[/dim]"
+    )
 
 
 if __name__ == "__main__":

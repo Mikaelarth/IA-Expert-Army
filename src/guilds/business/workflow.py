@@ -3,6 +3,7 @@
 Phase 4 MVP — 3 agents séquentiels avec repair loop 1× sur NEEDS_CHANGES
 (le BA peut re-analyser si le Legal a flaggué un blocker conformité).
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -79,7 +80,9 @@ class BusinessWorkflow:
             try:
                 self.killswitch.assert_clear()
             except KillswitchEngaged as exc:
-                return self._fail(mission_id, title, started, outputs, "killswitch.engaged", str(exc))
+                return self._fail(
+                    mission_id, title, started, outputs, "killswitch.engaged", str(exc)
+                )
         if self.budget is not None:
             try:
                 self.budget.assert_can_proceed(estimated_cost=0.0)
@@ -111,7 +114,9 @@ class BusinessWorkflow:
         )
         outputs.append(analyst_out)
         if not analyst_out.success:
-            return self._fail(mission_id, title, started, outputs, "analyst.failed", analyst_out.error or "")
+            return self._fail(
+                mission_id, title, started, outputs, "analyst.failed", analyst_out.error or ""
+            )
 
         # Step 3 — Legal Reviewer juge la conformité
         legal_out = await self.legal.run(
@@ -127,7 +132,9 @@ class BusinessWorkflow:
         )
         outputs.append(legal_out)
         if not legal_out.success:
-            return self._fail(mission_id, title, started, outputs, "legal.failed", legal_out.error or "")
+            return self._fail(
+                mission_id, title, started, outputs, "legal.failed", legal_out.error or ""
+            )
 
         verdict = (legal_out.parsed or {}).get("verdict", VERDICT_REJECTED)
 
@@ -194,7 +201,7 @@ class BusinessWorkflow:
         if self.budget is not None and total_cost > 0:
             try:
                 self.budget.record(total_cost)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 log.warning("business.workflow.budget.record_failed", error=str(exc))
 
         log.info(
@@ -230,9 +237,7 @@ class BusinessWorkflow:
             episodes_count=len(outputs),
         )
 
-    def _propagate_score_to_episodes(
-        self, mission_id: UUID, result: BusinessMissionResult
-    ) -> None:
+    def _propagate_score_to_episodes(self, mission_id: UUID, result: BusinessMissionResult) -> None:
         if result.quality_score is None and result.final_verdict == "":
             return
         for path in self.memory.list_episodes(mission_id):
@@ -244,7 +249,7 @@ class BusinessWorkflow:
                     mission_title=result.title,
                     guild="business",
                 )
-            except OSError as exc:  # noqa: BLE001
+            except OSError as exc:
                 log.warning("business.workflow.score_propagation.failed", error=str(exc))
 
     def _write_summary(
@@ -261,7 +266,7 @@ class BusinessWorkflow:
             f"# {title}",
             "",
             f"**Mission ID :** `{mission_id}`",
-            f"**Guilde :** Business",
+            "**Guilde :** Business",
             f"**Status :** {'✅ ' if result.success else '❌ '}{result.final_verdict}",
             f"**Quality score :** {result.quality_score if result.quality_score is not None else 'n/a'}",
             f"**Coût total :** ${result.total_cost_usd:.4f}",
@@ -278,14 +283,20 @@ class BusinessWorkflow:
             "## Plan projet (PM)",
             "",
             result.project_plan_yaml[:3000]
-            + ("\n\n*…[tronqué dans le résumé, voir l'épisode pm pour la version complète]*"
-               if len(result.project_plan_yaml) > 3000 else ""),
+            + (
+                "\n\n*…[tronqué dans le résumé, voir l'épisode pm pour la version complète]*"
+                if len(result.project_plan_yaml) > 3000
+                else ""
+            ),
             "",
             "## Analyse business (BA)",
             "",
             result.business_analysis_yaml[:3000]
-            + ("\n\n*…[tronqué, voir l'épisode analyst]*"
-               if len(result.business_analysis_yaml) > 3000 else ""),
+            + (
+                "\n\n*…[tronqué, voir l'épisode analyst]*"
+                if len(result.business_analysis_yaml) > 3000
+                else ""
+            ),
             "",
             "## Épisodes",
             "",

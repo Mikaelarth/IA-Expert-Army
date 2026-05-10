@@ -1,4 +1,5 @@
 """Tests pour src.core.types."""
+
 from __future__ import annotations
 
 from src.core.types import Episode, Guild, Mission, MissionStatus, ModelTier

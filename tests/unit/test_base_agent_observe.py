@@ -6,6 +6,7 @@ Découvert 2026-05-10 : un commit prétendait avoir décoré BaseAgent.run
 mais l'Edit avait silencieusement échoué — le code partait en prod sans
 instrumentation. Ce test garantit que ça ne se reproduit pas.
 """
+
 from __future__ import annotations
 
 from src.orchestrator.base_agent import BaseAgent
@@ -18,17 +19,16 @@ def test_base_agent_run_has_observe_wrapper() -> None:
     méthode reste appelable (signature préservée)."""
     import inspect
 
-    source = inspect.getsource(BaseAgent.run)
-    # La méthode source doit commencer par async def (le décorateur est sur la
-    # ligne au-dessus dans inspect, capté via inspect.getsource du wrapper).
-    # On vérifie indirectement en lisant le fichier source :
+    # On vérifie indirectement en lisant le fichier source : le décorateur ne
+    # serait pas visible via inspect.getsource(BaseAgent.run) car functools.wraps
+    # masque le wrapper, donc on grep le fichier brut.
     base_agent_file = inspect.getfile(BaseAgent)
     with open(base_agent_file, encoding="utf-8") as f:
         content = f.read()
 
     # Cherche le décorateur juste avant async def run
     assert '@observe(name="agent.run"' in content, (
-        "BaseAgent.run doit être décoré @observe(name=\"agent.run\", as_type=\"generation\") "
+        'BaseAgent.run doit être décoré @observe(name="agent.run", as_type="generation") '
         "pour permettre le tracing Langfuse"
     )
     assert "from src.core.tracing import observe" in content, (

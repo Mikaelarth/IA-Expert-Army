@@ -10,6 +10,7 @@ Politique :
 - Si une mission tente de démarrer alors que daily_budget est déjà atteint, on lève
   BudgetExceeded — le caller doit le catcher et retourner un MissionResult abort.
 """
+
 from __future__ import annotations
 
 import json
@@ -43,15 +44,17 @@ class BudgetController:
             history = list(data.get("history", []))
             if data.get("spent_usd", 0.0) > 0 and data.get("date"):
                 history.append({"date": data["date"], "spent_usd": data["spent_usd"]})
-            return {"date": _today_iso(), "spent_usd": 0.0, "history": history[-30:]}  # 30 derniers jours
+            return {
+                "date": _today_iso(),
+                "spent_usd": 0.0,
+                "history": history[-30:],
+            }  # 30 derniers jours
         data.setdefault("history", [])
         return data
 
     def _save(self, data: dict[str, Any]) -> None:
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
-        self.state_path.write_text(
-            json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+        self.state_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
     @property
     def spent_today(self) -> float:

@@ -69,7 +69,19 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "RUF"]
-ignore = ["E501"]
+ignore = [
+    "E501",   # ligne >100 chars : géré par le formatter, pas la peine de doublonner
+    # Conventions de nommage métier — exceptions publiques avec sémantique de
+    # domaine (BudgetExceeded, KillswitchEngaged, SandboxUnavailable). Ces noms
+    # sont stables, documentés et utilisés tels quels par les scripts.
+    "N818",
+    # typer.Option / typer.Argument dans les défauts de signature : c'est LA
+    # façon canonique de déclarer une CLI typer — le linter a tort ici.
+    "B008",
+    # On rédige en français et on utilise volontiers les caractères mathématiques
+    # (×, ≥, …) dans les commentaires/docstrings. Désambiguïser n'apporte rien.
+    "RUF001", "RUF002", "RUF003",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -93,6 +105,7 @@ ignore_missing_imports = true
 [dependency-groups]
 dev = [
     "fastapi>=0.136.1",
+    "pre-commit>=4.6.0",
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
 ]

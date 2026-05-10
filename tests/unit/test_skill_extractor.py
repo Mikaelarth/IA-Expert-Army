@@ -1,4 +1,5 @@
 """Test régression pour SkillExtractor max_tokens."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -33,9 +34,7 @@ def test_skill_extractor_max_tokens_high_enough_for_full_yaml(
     assert agent.max_tokens >= 4096
 
 
-def test_skill_extractor_does_not_use_vector_memory(
-    settings: Settings, memory: FileMemory
-) -> None:
+def test_skill_extractor_does_not_use_vector_memory(settings: Settings, memory: FileMemory) -> None:
     """Le SkillExtractor ne doit PAS recevoir de VectorMemory pour éviter
     une boucle d'auto-influence (ses propres skills extraites alimenteraient
     ses futures extractions)."""

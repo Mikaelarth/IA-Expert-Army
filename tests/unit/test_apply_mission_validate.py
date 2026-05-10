@@ -6,6 +6,7 @@ On le teste avec un SandboxRunner mocké pour ne pas dépendre de Docker en CI.
 NOTE : depuis le refactor (ADR/sprint-X), la logique est dans
 src.tools.sandbox_validate. apply_mission.py n'est qu'un wrapper.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -95,7 +96,10 @@ def test_validate_in_sandbox_writes_files_and_runs_pytest(
     result = validate_files_in_sandbox(
         files=[
             _file("src/foo.py", "def hello(): return 'world'\n"),
-            _file("tests/test_foo.py", "from src.foo import hello\n\ndef test_hello(): assert hello() == 'world'\n"),
+            _file(
+                "tests/test_foo.py",
+                "from src.foo import hello\n\ndef test_hello(): assert hello() == 'world'\n",
+            ),
         ],
         sandbox_image="iaa-sandbox:latest",
         sandbox_timeout=30,
@@ -114,8 +118,13 @@ def test_validate_in_sandbox_skips_files_without_path(
     from src.sandbox.runner import SandboxResult
 
     fake_result = SandboxResult(
-        exit_code=0, stdout="", stderr="", duration_seconds=0.1,
-        timed_out=False, image="iaa-sandbox:latest", command=["pytest"],
+        exit_code=0,
+        stdout="",
+        stderr="",
+        duration_seconds=0.1,
+        timed_out=False,
+        image="iaa-sandbox:latest",
+        command=["pytest"],
     )
     fake_runner = MagicMock()
     fake_runner.image_exists.return_value = True
@@ -145,8 +154,13 @@ def test_validate_in_sandbox_creates_conftest_for_imports(
     from src.sandbox.runner import SandboxResult
 
     fake_result = SandboxResult(
-        exit_code=0, stdout="", stderr="", duration_seconds=0.1,
-        timed_out=False, image="iaa-sandbox:latest", command=["pytest"],
+        exit_code=0,
+        stdout="",
+        stderr="",
+        duration_seconds=0.1,
+        timed_out=False,
+        image="iaa-sandbox:latest",
+        command=["pytest"],
     )
     fake_runner = MagicMock()
     fake_runner.image_exists.return_value = True
@@ -178,8 +192,13 @@ def test_validate_in_sandbox_preserves_user_conftest(
     from src.sandbox.runner import SandboxResult
 
     fake_result = SandboxResult(
-        exit_code=0, stdout="", stderr="", duration_seconds=0.1,
-        timed_out=False, image="iaa-sandbox:latest", command=["pytest"],
+        exit_code=0,
+        stdout="",
+        stderr="",
+        duration_seconds=0.1,
+        timed_out=False,
+        image="iaa-sandbox:latest",
+        command=["pytest"],
     )
     fake_runner = MagicMock()
     fake_runner.image_exists.return_value = True
@@ -216,8 +235,8 @@ def test_apply_mission_exposes_legacy_aliases() -> None:
     import importlib
     import sys
 
-    SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
-    sys.path.insert(0, str(SCRIPTS_DIR))
+    scripts_dir = Path(__file__).resolve().parents[2] / "scripts"
+    sys.path.insert(0, str(scripts_dir))
     try:
         if "apply_mission" in sys.modules:
             del sys.modules["apply_mission"]
@@ -227,5 +246,5 @@ def test_apply_mission_exposes_legacy_aliases() -> None:
         assert callable(module._validate_in_sandbox)
         assert callable(module._print_sandbox_result)
     finally:
-        if str(SCRIPTS_DIR) in sys.path:
-            sys.path.remove(str(SCRIPTS_DIR))
+        if str(scripts_dir) in sys.path:
+            sys.path.remove(str(scripts_dir))

@@ -12,6 +12,7 @@ API :
 Quand un VectorMemory dédié (typiquement une collection séparée "agent_skills")
 est passé au constructeur, chaque write_skill l'indexe automatiquement.
 """
+
 from __future__ import annotations
 
 import re
@@ -90,11 +91,7 @@ class SkillsLibrary:
         if self.vector_memory is None:
             return
         try:
-            document = (
-                f"Skill: {skill.title}\n"
-                f"Résumé: {skill.summary}\n\n"
-                f"{skill.body[:2000]}"
-            )
+            document = f"Skill: {skill.title}\nRésumé: {skill.summary}\n\n{skill.body[:2000]}"
             self.vector_memory.add_episode(
                 episode_id=f"skill_{skill.skill_id}",
                 document=document,
@@ -105,7 +102,7 @@ class SkillsLibrary:
                     "summary": skill.summary,
                 },
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             _log.warning("skill.index.failed", skill=skill.skill_id, error=str(exc))
 
     def list_skills(self, agent: str, limit: int | None = None) -> list[Skill]:
@@ -177,7 +174,7 @@ class SkillsLibrary:
                 where={"agent": agent},
                 max_distance=max_distance,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             _log.warning("skills.semantic_search.failed", error=str(exc))
             return self.list_skills(agent, limit=n_results)
 
@@ -223,7 +220,11 @@ class SkillsLibrary:
             "",
         ]
         for i, s in enumerate(skills, 1):
-            body = s.body if len(s.body) <= max_chars_per_skill else s.body[:max_chars_per_skill].rstrip() + "\n…[tronqué]"
+            body = (
+                s.body
+                if len(s.body) <= max_chars_per_skill
+                else s.body[:max_chars_per_skill].rstrip() + "\n…[tronqué]"
+            )
             parts.append(f"## Skill {i} : {s.title}")
             if s.summary:
                 parts.append(f"*{s.summary.strip()}*")

@@ -4,6 +4,7 @@ Phase 4 MVP — 3 agents séquentiels avec repair loop 1× sur NEEDS_CHANGES.
 Phase 4+ : ajouter Marketing Specialist (CTA + SEO) et Visual Designer
 (prompts d'images) en parallèle entre Strategist et Editor.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -79,7 +80,9 @@ class CreativeWorkflow:
             try:
                 self.killswitch.assert_clear()
             except KillswitchEngaged as exc:
-                return self._fail(mission_id, title, started, outputs, "killswitch.engaged", str(exc))
+                return self._fail(
+                    mission_id, title, started, outputs, "killswitch.engaged", str(exc)
+                )
         if self.budget is not None:
             try:
                 self.budget.assert_can_proceed(estimated_cost=0.0)
@@ -96,7 +99,9 @@ class CreativeWorkflow:
         )
         outputs.append(strat_out)
         if not strat_out.success:
-            return self._fail(mission_id, title, started, outputs, "strategist.failed", strat_out.error or "")
+            return self._fail(
+                mission_id, title, started, outputs, "strategist.failed", strat_out.error or ""
+            )
 
         # Step 2 — Copywriter rédige
         copy_out = await self.copywriter.run(
@@ -111,7 +116,9 @@ class CreativeWorkflow:
         )
         outputs.append(copy_out)
         if not copy_out.success:
-            return self._fail(mission_id, title, started, outputs, "copywriter.failed", copy_out.error or "")
+            return self._fail(
+                mission_id, title, started, outputs, "copywriter.failed", copy_out.error or ""
+            )
 
         # Step 3 — Editor juge
         editor_out = await self.editor.run(
@@ -127,7 +134,9 @@ class CreativeWorkflow:
         )
         outputs.append(editor_out)
         if not editor_out.success:
-            return self._fail(mission_id, title, started, outputs, "editor.failed", editor_out.error or "")
+            return self._fail(
+                mission_id, title, started, outputs, "editor.failed", editor_out.error or ""
+            )
 
         verdict = (editor_out.parsed or {}).get("verdict", VERDICT_REJECTED)
 
@@ -193,7 +202,7 @@ class CreativeWorkflow:
         if self.budget is not None and total_cost > 0:
             try:
                 self.budget.record(total_cost)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 log.warning("creative.workflow.budget.record_failed", error=str(exc))
 
         log.info(
@@ -228,9 +237,7 @@ class CreativeWorkflow:
             episodes_count=len(outputs),
         )
 
-    def _propagate_score_to_episodes(
-        self, mission_id: UUID, result: CreativeMissionResult
-    ) -> None:
+    def _propagate_score_to_episodes(self, mission_id: UUID, result: CreativeMissionResult) -> None:
         if result.quality_score is None and result.final_verdict == "":
             return
         for path in self.memory.list_episodes(mission_id):
@@ -242,7 +249,7 @@ class CreativeWorkflow:
                     mission_title=result.title,
                     guild="creative",
                 )
-            except OSError as exc:  # noqa: BLE001
+            except OSError as exc:
                 log.warning("creative.workflow.score_propagation.failed", error=str(exc))
 
     def _write_summary(
@@ -259,7 +266,7 @@ class CreativeWorkflow:
             f"# {title}",
             "",
             f"**Mission ID :** `{mission_id}`",
-            f"**Guilde :** Creative",
+            "**Guilde :** Creative",
             f"**Status :** {'✅ ' if result.success else '❌ '}{result.final_verdict}",
             f"**Quality score :** {result.quality_score if result.quality_score is not None else 'n/a'}",
             f"**Coût total :** ${result.total_cost_usd:.4f}",
@@ -276,8 +283,11 @@ class CreativeWorkflow:
             "## Texte final produit",
             "",
             result.final_text_markdown[:5000]
-            + ("\n\n*…[tronqué dans le résumé, voir l'épisode copywriter pour le texte complet]*"
-               if len(result.final_text_markdown) > 5000 else ""),
+            + (
+                "\n\n*…[tronqué dans le résumé, voir l'épisode copywriter pour le texte complet]*"
+                if len(result.final_text_markdown) > 5000
+                else ""
+            ),
             "",
             "## Épisodes",
             "",

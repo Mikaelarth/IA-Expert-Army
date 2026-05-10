@@ -1,10 +1,9 @@
 """Tests pour src.orchestrator.router — classifieur + dispatch."""
+
 from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -121,7 +120,9 @@ def test_classifier_title_keywords_weighted_double() -> None:
     # Titre research, body engineering — research doit gagner grâce au poids du titre
     assert clf.classify("Compare two options", "module foo with test cases") == "research"
     # Titre engineering, body research — engineering doit gagner
-    assert clf.classify("Implement a function", "compare with research alternatives") == "engineering"
+    assert (
+        clf.classify("Implement a function", "compare with research alternatives") == "engineering"
+    )
 
 
 # ===== Router decide() =====
@@ -213,8 +214,6 @@ def test_router_dispatches_to_research(
     )
     _patch_research(monkeypatch, fake)
     router = MissionRouter(memory=memory, settings=settings)
-    result = asyncio.run(
-        router.run("Compare frameworks Python", "Synthétise les options 2026")
-    )
+    result = asyncio.run(router.run("Compare frameworks Python", "Synthétise les options 2026"))
     assert result.guild == "research"
     assert "TL;DR" in result.raw_result["synthesis_markdown"]

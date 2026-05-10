@@ -12,9 +12,7 @@ from src.api.info import router
 async def client() -> AsyncClient:
     app = FastAPI()
     app.include_router(router)
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
 
 

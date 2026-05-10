@@ -6,6 +6,7 @@ re-rédige avec le feedback).
 
 Phase 4+ : parallélisme Tech Watch / sources, web MCP, Knowledge Curator.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -90,7 +91,9 @@ class ResearchWorkflow:
             try:
                 self.killswitch.assert_clear()
             except KillswitchEngaged as exc:
-                return self._fail(mission_id, title, started, outputs, "killswitch.engaged", str(exc))
+                return self._fail(
+                    mission_id, title, started, outputs, "killswitch.engaged", str(exc)
+                )
         if self.budget is not None:
             try:
                 self.budget.assert_can_proceed(estimated_cost=0.0)
@@ -107,7 +110,9 @@ class ResearchWorkflow:
         )
         outputs.append(lead_out)
         if not lead_out.success:
-            return self._fail(mission_id, title, started, outputs, "research_lead.failed", lead_out.error or "")
+            return self._fail(
+                mission_id, title, started, outputs, "research_lead.failed", lead_out.error or ""
+            )
 
         # Step 2 — Tech Watch fouille pour chaque sous-question
         watch_out = await self.watch.run(
@@ -120,13 +125,15 @@ class ResearchWorkflow:
         )
         outputs.append(watch_out)
         if not watch_out.success:
-            return self._fail(mission_id, title, started, outputs, "tech_watch.failed", watch_out.error or "")
+            return self._fail(
+                mission_id, title, started, outputs, "tech_watch.failed", watch_out.error or ""
+            )
 
         # Step 3 — Synthesizer rédige
         synth_out = await self.synth.run(
             AgentInput(
                 mission_id=mission_id,
-                task=f"Rédige la synthèse Markdown qui répond à la mission.",
+                task="Rédige la synthèse Markdown qui répond à la mission.",
                 context={
                     "mission_description": description,
                     "research_plan_yaml": lead_out.raw_text,
@@ -136,7 +143,9 @@ class ResearchWorkflow:
         )
         outputs.append(synth_out)
         if not synth_out.success:
-            return self._fail(mission_id, title, started, outputs, "synthesizer.failed", synth_out.error or "")
+            return self._fail(
+                mission_id, title, started, outputs, "synthesizer.failed", synth_out.error or ""
+            )
 
         # Step 4 — Reviewer juge
         review_out = await self.reviewer.run(
@@ -153,7 +162,14 @@ class ResearchWorkflow:
         )
         outputs.append(review_out)
         if not review_out.success:
-            return self._fail(mission_id, title, started, outputs, "research_reviewer.failed", review_out.error or "")
+            return self._fail(
+                mission_id,
+                title,
+                started,
+                outputs,
+                "research_reviewer.failed",
+                review_out.error or "",
+            )
 
         verdict = (review_out.parsed or {}).get("verdict", VERDICT_REJECTED)
 
@@ -221,7 +237,7 @@ class ResearchWorkflow:
         if self.budget is not None and total_cost > 0:
             try:
                 self.budget.record(total_cost)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 log.warning("research.workflow.budget.record_failed", error=str(exc))
 
         log.info(
@@ -256,9 +272,7 @@ class ResearchWorkflow:
             episodes_count=len(outputs),
         )
 
-    def _propagate_score_to_episodes(
-        self, mission_id: UUID, result: ResearchMissionResult
-    ) -> None:
+    def _propagate_score_to_episodes(self, mission_id: UUID, result: ResearchMissionResult) -> None:
         if result.quality_score is None and result.final_verdict == "":
             return
         for path in self.memory.list_episodes(mission_id):
@@ -270,7 +284,7 @@ class ResearchWorkflow:
                     mission_title=result.title,
                     guild="research",
                 )
-            except OSError as exc:  # noqa: BLE001
+            except OSError as exc:
                 log.warning("research.workflow.score_propagation.failed", error=str(exc))
 
     def _write_summary(
@@ -287,7 +301,7 @@ class ResearchWorkflow:
             f"# {title}",
             "",
             f"**Mission ID :** `{mission_id}`",
-            f"**Guilde :** Research",
+            "**Guilde :** Research",
             f"**Status :** {'✅ ' if result.success else '❌ '}{result.final_verdict}",
             f"**Quality score :** {result.quality_score if result.quality_score is not None else 'n/a'}",
             f"**Coût total :** ${result.total_cost_usd:.4f}",
@@ -303,7 +317,12 @@ class ResearchWorkflow:
             "",
             "## Synthèse produite",
             "",
-            result.synthesis_markdown[:5000] + ("\n\n*…[tronqué dans le résumé, voir l'épisode synthesizer pour le texte complet]*" if len(result.synthesis_markdown) > 5000 else ""),
+            result.synthesis_markdown[:5000]
+            + (
+                "\n\n*…[tronqué dans le résumé, voir l'épisode synthesizer pour le texte complet]*"
+                if len(result.synthesis_markdown) > 5000
+                else ""
+            ),
             "",
             "## Épisodes",
             "",

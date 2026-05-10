@@ -58,9 +58,7 @@ async def test_version_python_version_format(app: FastAPI) -> None:
 
 
 def test_get_git_commit_returns_stripped_hash(monkeypatch: pytest.MonkeyPatch) -> None:
-    mock_result = subprocess.CompletedProcess(
-        args=[], returncode=0, stdout="a1b2c3d\n", stderr=""
-    )
+    mock_result = subprocess.CompletedProcess(args=[], returncode=0, stdout="a1b2c3d\n", stderr="")
     monkeypatch.setattr(subprocess, "run", lambda *a, **kw: mock_result)
 
     assert _get_git_commit() == "a1b2c3d"

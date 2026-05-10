@@ -14,8 +14,10 @@ Politique par défaut :
 Le runner ne lève pas d'exception sur exit code != 0 — il retourne un SandboxResult
 qui contient stdout/stderr/exit_code/timed_out. Au caller de juger.
 """
+
 from __future__ import annotations
 
+import contextlib
 import io
 import tarfile
 import time
@@ -28,6 +30,7 @@ from pydantic import BaseModel
 try:
     import docker
     from docker.errors import ContainerError, DockerException, ImageNotFound, NotFound
+
     _DOCKER_AVAILABLE = True
 except ImportError:
     docker = None  # type: ignore[assignment]
@@ -91,7 +94,7 @@ class SandboxRunner:
         try:
             self._client.ping()
             return True
-        except Exception:  # noqa: BLE001
+        except Exception:
             return False
 
     def image_exists(self, image: str | None = None) -> bool:
@@ -162,10 +165,8 @@ class SandboxRunner:
             except Exception:  # ReadTimeout & co
                 timed_out = True
                 exit_code = -1
-                try:
+                with contextlib.suppress(Exception):
                     container.kill()
-                except Exception:  # noqa: BLE001
-                    pass
 
             stdout = container.logs(stdout=True, stderr=False).decode("utf-8", errors="replace")
             stderr = container.logs(stdout=False, stderr=True).decode("utf-8", errors="replace")
@@ -193,7 +194,7 @@ class SandboxRunner:
                     container.remove(force=True)
                 except NotFound:
                     pass
-                except DockerException as exc:  # noqa: BLE001
+                except DockerException as exc:
                     log.warning("sandbox.cleanup.failed", error=str(exc))
 
     @staticmethod
@@ -202,7 +203,10 @@ class SandboxRunner:
         buf = io.BytesIO()
         with tarfile.open(fileobj=buf, mode="w") as tar:
             for entry in source_dir.rglob("*"):
-                if any(part in {".git", "__pycache__", ".venv", ".pytest_cache"} for part in entry.parts):
+                if any(
+                    part in {".git", "__pycache__", ".venv", ".pytest_cache"}
+                    for part in entry.parts
+                ):
                     continue
                 arcname = entry.relative_to(source_dir).as_posix()
                 tar.add(str(entry), arcname=arcname, recursive=False)
