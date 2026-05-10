@@ -114,23 +114,23 @@ pitfalls_avoided:
   - Pas d'invention de preuves : les éléments non fournis dans le brief sont flaggés explicitement comme "Preuve manquante" dans les notes
 example_template: |
   [Attaque qualifiante : 1-2 phrases factuelles qui posent le contexte ou la dichotomie]
-  
+
   ---
-  
+
   **[Section preuves]**
   — [Chiffre/fait] — [interprétation demi-phrase]
   — [Chiffre/fait] — [interprétation demi-phrase]
-  
+
   ---
-  
+
   [Section "comment c'est construit" : 3-4 phrases avec vocabulaire technique brut]
-  
+
   ---
-  
+
   [CTA primaire (lien) + secondaire couplé], formulation micro-qualifiée.
-  
+
   ---
-  
+
   ## Notes copywriting (à supprimer avant publication)
   - Choix de l'attaque : [justification]
   - Ton préservé : [mots-clés du brief respectés]

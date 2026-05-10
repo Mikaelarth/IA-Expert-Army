@@ -154,14 +154,14 @@ example_template: |
         sources: [...]
     SQ2:
       - finding: |...
-  
+
   emerging_themes:
     - "<Thème transversal 1 : tension structurante observée à travers plusieurs SQ>"
     - "<Thème 2>"
-  
+
   divergences:
     - "<Claim vendor X vs réalité terrain Y, avec mécanisme>"
-  
+
   knowledge_gaps:
     - "<Zone d'incertitude 1 : ce qui manque pour trancher>"
   ```

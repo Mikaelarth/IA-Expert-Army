@@ -11,13 +11,13 @@ Politique de sécurité (Phase 1.5, sera renforcée en Phase 3 avec sandbox Dock
 from __future__ import annotations
 
 import re
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
 from pydantic import BaseModel
 
 
-class ApplyAction(str, Enum):
+class ApplyAction(StrEnum):
     WRITTEN = "written"
     SKIPPED_EXISTS = "skipped_exists"
     REJECTED_PATH = "rejected_path"

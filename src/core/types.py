@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -14,20 +14,20 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
-class Guild(str, Enum):
+class Guild(StrEnum):
     ENGINEERING = "engineering"
     RESEARCH = "research"
     CREATIVE = "creative"
     BUSINESS = "business"
 
 
-class ModelTier(str, Enum):
+class ModelTier(StrEnum):
     STRATEGIC = "strategic"
     OPERATIONAL = "operational"
     BULK = "bulk"
 
 
-class MissionStatus(str, Enum):
+class MissionStatus(StrEnum):
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     SUCCEEDED = "succeeded"

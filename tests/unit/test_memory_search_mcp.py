@@ -178,8 +178,6 @@ def test_search_skills_handles_library_exception(fake_skills: MagicMock) -> None
     assert "error" in payload
 
 
-
-
 # ===== list_recent_missions =====
 
 
@@ -209,12 +207,24 @@ def file_memory(tmp_path: Path) -> FileMemory:
 
 def test_list_recent_missions_returns_chronological_order(file_memory: FileMemory) -> None:
     """Les missions doivent être triées par started_at décroissant."""
-    _write_mission(file_memory, "11111111-1111-1111-1111-111111111111",
-                   started_at="2026-05-08T10:00:00+00:00", title="Old")
-    _write_mission(file_memory, "22222222-2222-2222-2222-222222222222",
-                   started_at="2026-05-10T10:00:00+00:00", title="Recent")
-    _write_mission(file_memory, "33333333-3333-3333-3333-333333333333",
-                   started_at="2026-05-09T10:00:00+00:00", title="Middle")
+    _write_mission(
+        file_memory,
+        "11111111-1111-1111-1111-111111111111",
+        started_at="2026-05-08T10:00:00+00:00",
+        title="Old",
+    )
+    _write_mission(
+        file_memory,
+        "22222222-2222-2222-2222-222222222222",
+        started_at="2026-05-10T10:00:00+00:00",
+        title="Recent",
+    )
+    _write_mission(
+        file_memory,
+        "33333333-3333-3333-3333-333333333333",
+        started_at="2026-05-09T10:00:00+00:00",
+        title="Middle",
+    )
 
     result = _handle_list_recent_missions(file_memory, {"limit": 10})
     payload = json.loads(result[0].text)
@@ -254,9 +264,13 @@ def test_list_recent_missions_clamps_limit(file_memory: FileMemory) -> None:
 def test_list_recent_missions_returns_metadata_fields(file_memory: FileMemory) -> None:
     """Le payload doit inclure les champs essentiels (verdict, score, coût)."""
     _write_mission(
-        file_memory, "deadbeef-dead-beef-dead-beefdeadbeef",
-        title="Test", guild="creative", quality_score=0.92,
-        total_cost_usd=0.34, final_verdict="APPROVED",
+        file_memory,
+        "deadbeef-dead-beef-dead-beefdeadbeef",
+        title="Test",
+        guild="creative",
+        quality_score=0.92,
+        total_cost_usd=0.34,
+        final_verdict="APPROVED",
     )
 
     result = _handle_list_recent_missions(file_memory, {})

@@ -26,7 +26,7 @@ repos:
 
   # === Lint + format Python via ruff ===
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.6
+    rev: v0.15.12
     hooks:
       # Auto-fix des erreurs ruff fixables (imports, unused, etc.)
       - id: ruff
