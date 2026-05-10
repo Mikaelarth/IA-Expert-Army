@@ -19,6 +19,7 @@ from src.core.budget import BudgetController
 from src.core.config import Settings, get_settings
 from src.core.killswitch import Killswitch
 from src.core.logging import get_logger
+from src.core.tracing import observe
 from src.guilds.business.workflow import BusinessMissionResult, BusinessWorkflow
 from src.guilds.creative.workflow import CreativeMissionResult, CreativeWorkflow
 from src.guilds.research.workflow import ResearchMissionResult, ResearchWorkflow
@@ -326,6 +327,7 @@ class MissionRouter:
         guild = self.classifier.classify(title, description)
         return RoutingDecision(guild=guild, reason="heuristic keyword classification")
 
+    @observe(name="mission.router.run")
     async def run(
         self,
         title: str,
