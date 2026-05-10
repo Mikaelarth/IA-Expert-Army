@@ -71,3 +71,79 @@ def test_hello():
 
 def test_extract_files_empty_when_no_blocks() -> None:
     assert extract_files("just text, no fenced files") == []
+
+
+def test_extract_files_handles_empty_code_blocks() -> None:
+    """Régression : __init__.py vides ne doivent pas avaler le bloc suivant."""
+    text = """## Fichiers produits
+
+### `src/__init__.py`
+
+```python
+```
+
+### `src/api/__init__.py`
+
+```python
+```
+
+### `src/api/health.py`
+
+```python
+def health():
+    return {"status": "ok"}
+```
+"""
+    files = extract_files(text)
+    assert len(files) == 3
+    assert files[0]["path"] == "src/__init__.py"
+    assert files[0]["content"] == ""
+    assert files[1]["path"] == "src/api/__init__.py"
+    assert files[1]["content"] == ""
+    assert files[2]["path"] == "src/api/health.py"
+    assert "def health" in files[2]["content"]
+
+
+def test_extract_files_handles_paths_with_special_chars() -> None:
+    text = """### `pyproject.toml (section à fusionner)`
+
+```toml
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+```
+"""
+    files = extract_files(text)
+    assert len(files) == 1
+    assert files[0]["path"] == "pyproject.toml (section à fusionner)"
+    assert files[0]["language"] == "toml"
+    assert "asyncio_mode" in files[0]["content"]
+
+
+def test_extract_files_skips_unclosed_fences() -> None:
+    text = """### `broken.py`
+
+```python
+def foo():
+    pass
+"""
+    assert extract_files(text) == []
+
+
+def test_extract_files_preserves_internal_blank_lines() -> None:
+    text = """### `module.py`
+
+```python
+def a():
+    pass
+
+
+def b():
+    pass
+```
+"""
+    files = extract_files(text)
+    assert len(files) == 1
+    assert "def a" in files[0]["content"]
+    assert "def b" in files[0]["content"]
+    # La ligne vide entre a et b doit être préservée
+    assert "\n\n\n" in files[0]["content"]

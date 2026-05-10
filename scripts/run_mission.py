@@ -2,10 +2,15 @@
 
 Usage:
     uv run python scripts/run_mission.py --title "Titre court" --description "Description longue"
-    uv run python scripts/run_mission.py  # mode interactif
+    uv run python scripts/run_mission.py --title "..." --description "..." --apply
+    uv run python scripts/run_mission.py --interactive
 
 La mission est exécutée en chaîne : Orchestrator → Architect → Developer → Reviewer.
 Les épisodes et le résumé sont écrits dans data/memory/.
+
+Mode --apply (Phase 1.5) : si le verdict est APPROVED, les fichiers proposés sont écrits
+sur disque dans les dossiers whitelistés (src/, tests/, scripts/, docs/, prompts/, skills/).
+Par défaut --apply n'overwrite pas les fichiers existants — utiliser --force pour cela.
 """
 from __future__ import annotations
 
@@ -29,9 +34,20 @@ from src.core.config import get_settings
 from src.core.logging import setup_logging
 from src.memory.file_memory import FileMemory
 from src.orchestrator.workflow import Workflow
+from src.tools.apply_files import ApplyAction, apply_files
 
 app = typer.Typer(no_args_is_help=False, add_completion=False)
 console = Console()
+
+
+_ACTION_STYLES = {
+    ApplyAction.WRITTEN: "green",
+    ApplyAction.SKIPPED_EXISTS: "yellow",
+    ApplyAction.REJECTED_PATH: "red",
+    ApplyAction.REJECTED_NAME: "red",
+    ApplyAction.REJECTED_OUTSIDE: "red",
+    ApplyAction.REJECTED_DIR: "red",
+}
 
 
 @app.command()
@@ -39,6 +55,8 @@ def run(
     title: str = typer.Option(None, "--title", "-t", help="Titre court de la mission"),
     description: str = typer.Option(None, "--description", "-d", help="Description détaillée"),
     interactive: bool = typer.Option(False, "--interactive", "-i", help="Saisie interactive"),
+    apply: bool = typer.Option(False, "--apply", help="Écrit les fichiers sur disque si APPROVED"),
+    force: bool = typer.Option(False, "--force", help="Avec --apply : overwrite les fichiers existants"),
 ) -> None:
     settings = get_settings()
     setup_logging(level=settings.log_level, fmt=settings.log_format)
@@ -74,11 +92,49 @@ def run(
     console.print(table)
 
     if result.files_produced:
-        console.print("\n[bold cyan]Fichiers produits :[/bold cyan]")
+        console.print("\n[bold cyan]Fichiers proposés :[/bold cyan]")
         for f in result.files_produced:
             console.print(f"\n[bold]{f['path']}[/bold]")
             lang = f.get("language") or "text"
             console.print(Syntax(f["content"], lang, theme="monokai", line_numbers=True))
+
+    # --- Apply mode (Phase 1.5) ---
+    if apply:
+        if not result.success:
+            console.print("\n[yellow]--apply ignoré : verdict non-APPROVED, rien n'est écrit.[/yellow]")
+        elif not result.files_produced:
+            console.print("\n[yellow]--apply ignoré : aucun fichier à écrire.[/yellow]")
+        else:
+            console.print(
+                f"\n[bold cyan]Application sur disque[/bold cyan] "
+                f"(force={force})…"
+            )
+            apply_results = apply_files(
+                files=result.files_produced,
+                project_root=settings.project_root,
+                force=force,
+            )
+            apply_table = Table(show_lines=False)
+            apply_table.add_column("Action", style="white")
+            apply_table.add_column("Fichier", style="cyan")
+            apply_table.add_column("Détail", style="dim")
+            for r in apply_results:
+                style = _ACTION_STYLES.get(r.action, "white")
+                detail = (
+                    f"{r.bytes_written} octets"
+                    if r.action == ApplyAction.WRITTEN
+                    else r.reason
+                )
+                apply_table.add_row(
+                    f"[{style}]{r.action.value}[/{style}]",
+                    r.path,
+                    detail,
+                )
+            console.print(apply_table)
+    else:
+        console.print(
+            "\n[dim]Mode dry-run actif. Ajoute [bold]--apply[/bold] pour écrire les fichiers sur disque.[/dim]"
+        )
 
     console.print("\n[dim]Résumé écrit dans :[/dim] " f"{memory_root / 'missions' / (str(result.mission_id) + '.md')}")
     raise SystemExit(0 if result.success else 1)
