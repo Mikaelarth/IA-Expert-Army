@@ -42,6 +42,10 @@ def mine(
     min_quality: float = typer.Option(0.85, "--min-quality", "-q", help="Score minimum pour considérer un épisode"),
     min_episodes: int = typer.Option(2, "--min-episodes", "-n", help="Minimum d'épisodes pour produire une skill"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Affiche le plan sans appeler Claude"),
+    agents: str = typer.Option(
+        None, "--agents", "-a",
+        help="Liste séparée par virgules d'agents à miner (par défaut tous). Ex: research_lead,tech_watch"
+    ),
 ) -> None:
     settings = get_settings()
     setup_logging(level=settings.log_level, fmt=settings.log_format)
@@ -53,6 +57,16 @@ def mine(
         settings.project_root / "skills", vector_memory=vector_skills
     )
 
+    selected_agents: tuple[str, ...] | None = None
+    if agents:
+        selected_agents = tuple(a.strip() for a in agents.split(",") if a.strip())
+        unknown = [a for a in selected_agents if a not in PatternMiner.AGENT_WHITELIST]
+        if unknown:
+            console.print(
+                f"[red]Agents inconnus : {unknown}. Connus : {PatternMiner.AGENT_WHITELIST}[/red]"
+            )
+            raise SystemExit(2)
+
     miner = PatternMiner(
         memory=memory,
         skills=skills_lib,
@@ -60,6 +74,7 @@ def mine(
         min_episodes=min_episodes,
         top_k=top_k,
         min_quality=min_quality,
+        agents=selected_agents,
     )
 
     if dry_run:
@@ -68,7 +83,7 @@ def mine(
         plan_table.add_column("Agent", style="cyan")
         plan_table.add_column("Épisodes éligibles", justify="right")
         plan_table.add_column("Statut", style="white")
-        for agent in PatternMiner.AGENT_WHITELIST:
+        for agent in miner.agents:
             n = len(grouped.get(agent, []))
             status = (
                 "[yellow]skip[/yellow]" if n < min_episodes else "[green]would mine[/green]"

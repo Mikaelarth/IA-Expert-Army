@@ -55,13 +55,20 @@ class MiningReport(BaseModel):
 class PatternMiner:
     """Orchestre le mining nocturne. Stateless — ré-instancie à chaque run."""
 
-    # Agents pour lesquels on extrait des skills (les "exécutants" surtout).
-    # Le skill_extractor lui-même est exclu (sinon récursion).
+    # Agents pour lesquels on extrait des skills (tous les agents productifs des
+    # guildes). Le skill_extractor lui-même est exclu (sinon récursion).
     AGENT_WHITELIST: tuple[str, ...] = (
+        # Comité de direction
         "chief_orchestrator",
+        # Guild Engineering
         "software_architect",
         "backend_developer",
         "code_reviewer",
+        # Guild Research (ajoutée Phase 4)
+        "research_lead",
+        "tech_watch",
+        "document_synthesizer",
+        "research_reviewer",
     )
 
     def __init__(
@@ -73,6 +80,7 @@ class PatternMiner:
         min_episodes: int = 2,
         top_k: int = 3,
         min_quality: float = 0.85,
+        agents: tuple[str, ...] | None = None,
     ) -> None:
         self.memory = memory
         self.skills = skills
@@ -81,9 +89,16 @@ class PatternMiner:
         self.min_episodes = min_episodes
         self.top_k = top_k
         self.min_quality = min_quality
+        # Sous-ensemble facultatif d'agents à miner (par défaut tous le whitelist).
+        # Permet de cibler une guilde précise sans re-miner inutilement les autres.
+        self.agents = agents or self.AGENT_WHITELIST
 
     def _load_eligible_episodes(self) -> dict[str, list[tuple[Path, MemoryRecord]]]:
-        """Retourne {agent: [(path, record), ...]} filtré sur succès + quality."""
+        """Retourne {agent: [(path, record), ...]} filtré sur succès + quality.
+
+        Ignore aussi les épisodes saturés (sortie tronquée par max_tokens) car
+        leur YAML est probablement incomplet et minerait sur une donnée corrompue.
+        """
         grouped: dict[str, list[tuple[Path, MemoryRecord]]] = defaultdict(list)
         for path in self.memory.list_episodes():
             try:
@@ -93,8 +108,19 @@ class PatternMiner:
             meta = record.metadata
             if not meta.get("success"):
                 continue
+            if meta.get("saturated") is True:
+                # Détection ajoutée Phase 4 polish — exclut les épisodes coupés.
+                continue
+            # Si le verdict de mission a été propagé (post-Sprint 1, commit 62041a4),
+            # on ne mine QUE les missions APPROVED. Le 'success' au niveau de l'agent
+            # individuel signifie juste "l'appel API a abouti" — pas que le résultat
+            # global a été validé. Cas non propagé (legacy) : on retombe sur le check
+            # de quality_score plus bas.
+            final_verdict = meta.get("final_verdict")
+            if final_verdict and final_verdict != "APPROVED":
+                continue
             agent = meta.get("agent", "")
-            if agent not in self.AGENT_WHITELIST:
+            if agent not in self.agents:
                 continue
             score = meta.get("quality_score")
             if isinstance(score, (int, float)) and score < self.min_quality:
@@ -150,7 +176,7 @@ class PatternMiner:
         total_cost = 0.0
         skills_created = 0
 
-        for agent in self.AGENT_WHITELIST:
+        for agent in self.agents:
             episodes = grouped.get(agent, [])
             if len(episodes) < self.min_episodes:
                 log.info(

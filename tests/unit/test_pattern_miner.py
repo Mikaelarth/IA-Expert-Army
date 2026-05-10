@@ -187,3 +187,133 @@ async def test_mine_reports_per_agent_status(
     assert len(report.per_agent) == len(PatternMiner.AGENT_WHITELIST)
     # Tous skip car min_episodes=2
     assert all(r.skill_extracted is None for r in report.per_agent)
+
+
+def test_whitelist_includes_all_research_agents() -> None:
+    """Régression : la Research Guild doit être dans le whitelist par défaut.
+    Auparavant seuls les agents Engineering étaient minés (oubli Phase 4)."""
+    for agent in (
+        "research_lead",
+        "tech_watch",
+        "document_synthesizer",
+        "research_reviewer",
+    ):
+        assert agent in PatternMiner.AGENT_WHITELIST, (
+            f"{agent} doit être dans le whitelist pour bénéficier du mining"
+        )
+
+
+def test_pattern_miner_respects_agents_filter(
+    memory: FileMemory, skills: SkillsLibrary, settings: Settings
+) -> None:
+    """La sous-sélection d'agents doit être respectée (pas miner tout le whitelist)."""
+    _add_episode(memory, "research_lead", quality_score=0.90)
+    _add_episode(memory, "research_lead", quality_score=0.92)
+    _add_episode(memory, "software_architect", quality_score=0.95)
+    _add_episode(memory, "software_architect", quality_score=0.93)
+
+    miner = PatternMiner(
+        memory=memory,
+        skills=skills,
+        settings=settings,
+        min_episodes=2,
+        agents=("research_lead",),  # filtre explicite
+    )
+    grouped = miner._load_eligible_episodes()
+    # Seul research_lead doit être groupé (software_architect filtré)
+    assert "research_lead" in grouped
+    assert "software_architect" not in grouped
+
+
+def test_pattern_miner_excludes_rejected_missions(
+    memory: FileMemory, skills: SkillsLibrary, settings: Settings
+) -> None:
+    """Quand final_verdict est propagé : seules les missions APPROVED nourrissent le mining."""
+    from src.memory.file_memory import MemoryRecord
+    from uuid import uuid4
+
+    rejected = MemoryRecord(
+        metadata={
+            "agent": "research_lead",
+            "success": True,
+            "quality_score": None,  # rejet → pas de score
+            "final_verdict": "REJECTED",
+        },
+        body="## Tâche\n\ntest\n\n## Sortie brute\n\nrejeté en aval",
+    )
+    approved = MemoryRecord(
+        metadata={
+            "agent": "research_lead",
+            "success": True,
+            "quality_score": 0.92,
+            "final_verdict": "APPROVED",
+        },
+        body="## Tâche\n\ntest\n\n## Sortie brute\n\nbon",
+    )
+    memory.write_episode(uuid4(), "research_lead", rejected)
+    memory.write_episode(uuid4(), "research_lead", approved)
+
+    miner = PatternMiner(memory=memory, skills=skills, settings=settings, min_episodes=1)
+    grouped = miner._load_eligible_episodes()
+    # Seul l'approved compte
+    assert len(grouped["research_lead"]) == 1
+    assert grouped["research_lead"][0][1].metadata["final_verdict"] == "APPROVED"
+
+
+def test_pattern_miner_legacy_episodes_without_final_verdict_use_quality_score(
+    memory: FileMemory, skills: SkillsLibrary, settings: Settings
+) -> None:
+    """Les épisodes legacy (sans final_verdict propagé) restent éligibles via quality_score seul."""
+    from src.memory.file_memory import MemoryRecord
+    from uuid import uuid4
+
+    legacy_high = MemoryRecord(
+        metadata={"agent": "research_lead", "success": True, "quality_score": 0.95},
+        body="## Tâche\n\ntest\n\n## Sortie brute\n\nok",
+    )
+    legacy_low = MemoryRecord(
+        metadata={"agent": "research_lead", "success": True, "quality_score": 0.50},
+        body="## Tâche\n\ntest\n\n## Sortie brute\n\nfaible",
+    )
+    memory.write_episode(uuid4(), "research_lead", legacy_high)
+    memory.write_episode(uuid4(), "research_lead", legacy_low)
+
+    miner = PatternMiner(
+        memory=memory, skills=skills, settings=settings, min_episodes=1, min_quality=0.85
+    )
+    grouped = miner._load_eligible_episodes()
+    assert len(grouped["research_lead"]) == 1
+
+
+def test_pattern_miner_excludes_saturated_episodes(
+    memory: FileMemory, skills: SkillsLibrary, settings: Settings
+) -> None:
+    """Les épisodes saturés (sortie tronquée) ne doivent pas alimenter le mining."""
+    # Ajout via metadata directe
+    from src.memory.file_memory import MemoryRecord
+    from uuid import uuid4
+
+    saturated = MemoryRecord(
+        metadata={
+            "agent": "research_lead",
+            "success": True,
+            "quality_score": 0.9,
+            "saturated": True,
+        },
+        body="## Tâche\n\ntest\n\n## Sortie brute\n\ntronqué",
+    )
+    clean = MemoryRecord(
+        metadata={
+            "agent": "research_lead",
+            "success": True,
+            "quality_score": 0.9,
+            "saturated": False,
+        },
+        body="## Tâche\n\ntest\n\n## Sortie brute\n\nok",
+    )
+    memory.write_episode(uuid4(), "research_lead", saturated)
+    memory.write_episode(uuid4(), "research_lead", clean)
+
+    miner = PatternMiner(memory=memory, skills=skills, settings=settings, min_episodes=1)
+    grouped = miner._load_eligible_episodes()
+    assert len(grouped["research_lead"]) == 1  # le saturé filtré
