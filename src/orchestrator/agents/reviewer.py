@@ -8,6 +8,7 @@ from anthropic import AsyncAnthropic
 
 from src.core.config import Settings, get_settings
 from src.memory.file_memory import FileMemory
+from src.memory.vector_memory import VectorMemory
 from src.orchestrator.agents._parsers import extract_yaml
 from src.orchestrator.base_agent import AgentInput, BaseAgent
 
@@ -23,6 +24,7 @@ class CodeReviewer(BaseAgent):
         memory: FileMemory,
         settings: Settings | None = None,
         client: AsyncAnthropic | None = None,
+        vector_memory: VectorMemory | None = None,
     ) -> None:
         s = settings or get_settings()
         super().__init__(
@@ -33,6 +35,7 @@ class CodeReviewer(BaseAgent):
             settings=s,
             client=client,
             max_tokens=2048,
+            vector_memory=vector_memory,
         )
 
     def parse_output(self, raw: str, agent_input: AgentInput) -> dict[str, Any] | None:

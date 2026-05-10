@@ -939,6 +939,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
+    { name = "chromadb" },
     { name = "httpx" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -984,6 +985,7 @@ dev = [
 requires-dist = [
     { name = "aiosqlite", marker = "extra == 'memory'", specifier = ">=0.20.0" },
     { name = "anthropic", specifier = ">=0.40.0" },
+    { name = "chromadb", specifier = ">=1.5.9" },
     { name = "chromadb", marker = "extra == 'memory'", specifier = ">=0.5.20" },
     { name = "claude-agent-sdk", marker = "extra == 'agents'", specifier = ">=0.1.0" },
     { name = "docker", marker = "extra == 'orchestration'", specifier = ">=7.1.0" },

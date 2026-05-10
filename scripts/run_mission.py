@@ -33,6 +33,7 @@ from rich.table import Table
 from src.core.config import get_settings
 from src.core.logging import setup_logging
 from src.memory.file_memory import FileMemory
+from src.memory.vector_memory import VectorMemory
 from src.orchestrator.workflow import Workflow
 from src.tools.apply_files import ApplyAction, apply_files
 
@@ -67,16 +68,18 @@ def run(
 
     memory_root = settings.project_root / "data" / "memory"
     memory = FileMemory(memory_root)
+    vector_memory = VectorMemory(persist_dir=settings.chroma_persist_dir)
 
     console.print(
         Panel.fit(
             f"[bold cyan]Mission :[/bold cyan] {title}\n"
-            f"[dim]Mémoire : {memory_root}[/dim]",
+            f"[dim]Mémoire fichier : {memory_root}[/dim]\n"
+            f"[dim]Mémoire vectorielle : {settings.chroma_persist_dir} ({vector_memory.count()} épisodes indexés)[/dim]",
             border_style="cyan",
         )
     )
 
-    workflow = Workflow(memory=memory, settings=settings)
+    workflow = Workflow(memory=memory, settings=settings, vector_memory=vector_memory)
     result = asyncio.run(workflow.run(title=title, description=description))
 
     table = Table(title="Résultat de la mission", show_lines=True)

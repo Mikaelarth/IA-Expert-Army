@@ -129,3 +129,50 @@ def test_base_agent_user_message_includes_context(
     assert "faire X" in msg
     assert "input_y" in msg
     assert "valeur Y" in msg
+
+
+@pytest.mark.asyncio
+async def test_base_agent_rag_injects_precedents_and_indexes(
+    settings: Settings, memory: FileMemory, prompt_file: Path, tmp_path: Path
+) -> None:
+    """Phase 2 : si VectorMemory est fourni, les précédents sont injectés au prompt
+    ET la nouvelle exécution est indexée pour les futures requêtes."""
+    from src.memory.vector_memory import VectorMemory
+
+    vmem = VectorMemory(persist_dir=tmp_path / "chroma_int")
+    # Pré-charge un précédent qui matchera sémantiquement la tâche
+    vmem.add_episode(
+        "precedent_1",
+        "Tâche: Implémenter un endpoint healthcheck FastAPI\n\nSortie:\nrouter avec @router.get('/health')",
+        {"agent": "test_agent_rag", "success": True, "quality_score": 0.95, "mission_title": "Endpoint /health"},
+    )
+
+    captured_messages: list[str] = []
+
+    async def capture(*args, **kwargs):
+        captured_messages.append(kwargs["messages"][0]["content"])
+        return _fake_response("réponse de test", in_tokens=100, out_tokens=50)
+
+    fake_client = SimpleNamespace(messages=SimpleNamespace(create=AsyncMock(side_effect=capture)))
+
+    agent = BaseAgent(
+        name="test_agent_rag",
+        prompt_path=prompt_file,
+        model="claude-sonnet-4-6",
+        memory=memory,
+        settings=settings,
+        client=fake_client,  # type: ignore[arg-type]
+        vector_memory=vmem,
+        rag_max_distance=2.0,  # large pour garantir que le précédent passe en test
+    )
+
+    out = await agent.run(
+        AgentInput(mission_id=uuid4(), task="Crée un endpoint REST de santé pour mon API")
+    )
+    assert out.success is True
+    # Le user_message envoyé à Claude doit contenir la section "Précédents pertinents"
+    assert len(captured_messages) == 1
+    assert "Précédents pertinents" in captured_messages[0]
+    assert "Endpoint /health" in captured_messages[0]
+    # Le nouvel épisode doit avoir été indexé
+    assert vmem.count() == 2

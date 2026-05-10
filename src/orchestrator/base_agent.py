@@ -26,6 +26,7 @@ from src.core.config import Settings, get_settings
 from src.core.logging import get_logger
 from src.core.pricing import estimate_cost
 from src.memory.file_memory import FileMemory, MemoryRecord
+from src.memory.vector_memory import EpisodeMatch, VectorMemory
 
 
 class AgentInput(BaseModel):
@@ -58,11 +59,17 @@ class BaseAgent:
         settings: Settings | None = None,
         client: AsyncAnthropic | None = None,
         max_tokens: int = 2048,
+        vector_memory: VectorMemory | None = None,
+        rag_top_k: int = 2,
+        rag_max_distance: float = 0.7,
     ) -> None:
         self.name = name
         self.prompt_path = prompt_path
         self.model = model
         self.memory = memory
+        self.vector_memory = vector_memory
+        self.rag_top_k = rag_top_k
+        self.rag_max_distance = rag_max_distance
         self.settings = settings or get_settings()
         self.max_tokens = max_tokens
         self._log = get_logger(f"agent.{name}")
@@ -83,8 +90,12 @@ class BaseAgent:
         record = MemoryRecord.from_markdown(text)
         return record.body
 
-    def build_user_message(self, agent_input: AgentInput) -> str:
-        """Assemble le message utilisateur en injectant la tâche et le contexte."""
+    def build_user_message(
+        self,
+        agent_input: AgentInput,
+        precedents: list[EpisodeMatch] | None = None,
+    ) -> str:
+        """Assemble le message utilisateur : tâche + contexte + précédents (RAG)."""
         parts = [f"# Tâche\n\n{agent_input.task.strip()}"]
         if agent_input.context:
             ctx_lines = []
@@ -94,14 +105,67 @@ class BaseAgent:
                 else:
                     ctx_lines.append(f"## {key}\n\n```json\n{value}\n```")
             parts.append("# Contexte\n\n" + "\n\n".join(ctx_lines))
+        if precedents:
+            prec_lines = [
+                "# Précédents pertinents (mémoire de l'équipe)",
+                "",
+                "Voici des épisodes passés similaires de TON propre rôle. Inspire-toi de ce qui a marché, "
+                "évite ce qui a échoué. Cite explicitement un précédent si tu réutilises son approche.",
+                "",
+            ]
+            for i, p in enumerate(precedents, 1):
+                title = p.metadata.get("mission_title") or p.metadata.get("agent") or "épisode"
+                score = p.metadata.get("quality_score")
+                score_str = f" · score {score:.2f}" if isinstance(score, (int, float)) else ""
+                prec_lines.append(
+                    f"## Précédent {i} : « {title} »{score_str} (similarité : {1 - p.distance:.2f})"
+                )
+                prec_lines.append("")
+                prec_lines.append(self._truncate(p.document, 800))
+                prec_lines.append("")
+            parts.append("\n".join(prec_lines))
         return "\n\n".join(parts)
+
+    @staticmethod
+    def _truncate(text: str, max_chars: int) -> str:
+        if len(text) <= max_chars:
+            return text
+        return text[:max_chars].rstrip() + "\n…[tronqué]"
+
+    def _retrieve_precedents(self, agent_input: AgentInput) -> list[EpisodeMatch]:
+        """Cherche dans la mémoire vectorielle les épisodes passés pertinents."""
+        if self.vector_memory is None or self.vector_memory.count() == 0:
+            return []
+        try:
+            return self.vector_memory.search(
+                query=agent_input.task,
+                n_results=self.rag_top_k,
+                where={
+                    "$and": [
+                        {"agent": self.name},
+                        {"success": True},
+                    ]
+                },
+                max_distance=self.rag_max_distance,
+            )
+        except Exception as exc:  # noqa: BLE001
+            self._log.warning("rag.search.failed", error=str(exc))
+            return []
 
     def parse_output(self, raw: str, agent_input: AgentInput) -> Any:
         """Override pour interpréter la sortie (yaml, json, code blocks…). Default = passthrough."""
         return None
 
     async def run(self, agent_input: AgentInput) -> AgentOutput:
-        user_message = self.build_user_message(agent_input)
+        precedents = self._retrieve_precedents(agent_input)
+        if precedents:
+            self._log.info(
+                "rag.precedents.injected",
+                agent=self.name,
+                count=len(precedents),
+                ids=[p.episode_id for p in precedents],
+            )
+        user_message = self.build_user_message(agent_input, precedents=precedents)
         started = time.perf_counter()
         started_at = datetime.now(UTC)
 
@@ -166,23 +230,40 @@ class BaseAgent:
         self, agent_input: AgentInput, output: AgentOutput, started_at: datetime
     ) -> None:
         ended_at = datetime.now(UTC)
-        record = MemoryRecord(
-            metadata={
-                "mission_id": str(agent_input.mission_id),
-                "agent": self.name,
-                "model": self.model,
-                "started_at": started_at.isoformat(),
-                "ended_at": ended_at.isoformat(),
-                "tokens_in": output.tokens_in,
-                "tokens_out": output.tokens_out,
-                "cost_usd": round(output.cost_usd, 6),
-                "duration_seconds": round(output.duration_seconds, 3),
-                "success": output.success,
-                "error": output.error,
-            },
-            body=(
-                f"## Tâche\n\n{agent_input.task}\n\n"
-                f"## Sortie brute\n\n{output.raw_text or '(aucune)'}\n"
-            ),
+        metadata = {
+            "mission_id": str(agent_input.mission_id),
+            "agent": self.name,
+            "model": self.model,
+            "started_at": started_at.isoformat(),
+            "ended_at": ended_at.isoformat(),
+            "tokens_in": output.tokens_in,
+            "tokens_out": output.tokens_out,
+            "cost_usd": round(output.cost_usd, 6),
+            "duration_seconds": round(output.duration_seconds, 3),
+            "success": output.success,
+            "error": output.error,
+        }
+        body = (
+            f"## Tâche\n\n{agent_input.task}\n\n"
+            f"## Sortie brute\n\n{output.raw_text or '(aucune)'}\n"
         )
+        record = MemoryRecord(metadata=metadata, body=body)
         self.memory.write_episode(agent_input.mission_id, self.name, record)
+
+        # Indexation sémantique (Phase 2)
+        if self.vector_memory is not None and output.success:
+            try:
+                # On indexe : tâche + sortie pour permettre à la fois la recherche
+                # par similarité de question ET par similarité de solution.
+                indexed_doc = (
+                    f"Tâche: {agent_input.task}\n\n"
+                    f"Sortie:\n{self._truncate(output.raw_text or '', 2000)}"
+                )
+                episode_id = f"{agent_input.mission_id}_{self.name}_{int(started_at.timestamp())}"
+                self.vector_memory.add_episode(
+                    episode_id=episode_id,
+                    document=indexed_doc,
+                    metadata=metadata,
+                )
+            except Exception as exc:  # noqa: BLE001
+                self._log.warning("rag.index.failed", error=str(exc))

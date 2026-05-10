@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from src.core.config import Settings, get_settings
 from src.core.logging import get_logger
 from src.memory.file_memory import FileMemory, MemoryRecord
+from src.memory.vector_memory import VectorMemory
 from src.orchestrator.agents import (
     BackendDeveloper,
     ChiefOrchestrator,
@@ -50,13 +51,19 @@ class Workflow:
     Tous les épisodes sont écrits dans la mémoire fichier passée en paramètre.
     """
 
-    def __init__(self, memory: FileMemory, settings: Settings | None = None) -> None:
+    def __init__(
+        self,
+        memory: FileMemory,
+        settings: Settings | None = None,
+        vector_memory: VectorMemory | None = None,
+    ) -> None:
         self.memory = memory
+        self.vector_memory = vector_memory
         self.settings = settings or get_settings()
-        self.orchestrator = ChiefOrchestrator(memory, self.settings)
-        self.architect = SoftwareArchitect(memory, self.settings)
-        self.developer = BackendDeveloper(memory, self.settings)
-        self.reviewer = CodeReviewer(memory, self.settings)
+        self.orchestrator = ChiefOrchestrator(memory, self.settings, vector_memory=vector_memory)
+        self.architect = SoftwareArchitect(memory, self.settings, vector_memory=vector_memory)
+        self.developer = BackendDeveloper(memory, self.settings, vector_memory=vector_memory)
+        self.reviewer = CodeReviewer(memory, self.settings, vector_memory=vector_memory)
 
     async def run(self, title: str, description: str) -> MissionResult:
         mission_id = uuid4()
