@@ -12,6 +12,7 @@ data/memory.db-*
 data/chroma/
 data/episodes/
 data/backups/
+data/memory/        # FileMemory (Phase 1) : épisodes + missions + working
 *.log
 logs/
 
