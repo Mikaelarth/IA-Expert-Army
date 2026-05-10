@@ -135,12 +135,15 @@ class BaseAgent:
             parts.append(_SL.render_for_prompt(skills))
         return "\n\n".join(parts)
 
-    def _retrieve_skills(self) -> list[Skill]:
-        """Charge les N skills les plus récentes de ce rôle."""
+    def _retrieve_skills(self, agent_input: AgentInput | None = None) -> list[Skill]:
+        """Charge les N skills les plus pertinentes (sémantique si possible, sinon récentes)."""
         if self.skills_library is None or self.skills_top_k <= 0:
             return []
+        query = agent_input.task if agent_input is not None else None
         try:
-            return self.skills_library.list_skills(self.name, limit=self.skills_top_k)
+            return self.skills_library.search_skills(
+                self.name, query=query, n_results=self.skills_top_k
+            )
         except Exception as exc:  # noqa: BLE001
             self._log.warning("skills.load.failed", error=str(exc))
             return []
@@ -184,7 +187,7 @@ class BaseAgent:
                 count=len(precedents),
                 ids=[p.episode_id for p in precedents],
             )
-        skills = self._retrieve_skills()
+        skills = self._retrieve_skills(agent_input)
         if skills:
             self._log.info(
                 "skills.injected",

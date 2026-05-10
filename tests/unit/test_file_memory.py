@@ -71,6 +71,20 @@ def test_mission_summary(memory: FileMemory) -> None:
     assert fetched.metadata["final_verdict"] == "APPROVED"
 
 
+def test_update_episode_metadata_patches_frontmatter(memory: FileMemory) -> None:
+    mid = uuid4()
+    path = memory.write_episode(
+        mid, "agent_x", MemoryRecord(metadata={"k": 1, "success": True}, body="b1")
+    )
+    memory.update_episode_metadata(path, quality_score=0.94, final_verdict="APPROVED")
+    reloaded = memory.read_episode(path)
+    assert reloaded.metadata["k"] == 1  # ancien champ préservé
+    assert reloaded.metadata["success"] is True
+    assert reloaded.metadata["quality_score"] == 0.94
+    assert reloaded.metadata["final_verdict"] == "APPROVED"
+    assert reloaded.body == "b1"  # corps inchangé
+
+
 def test_search_episodes_naive(memory: FileMemory) -> None:
     memory.write_episode(uuid4(), "a1", MemoryRecord(body="fastapi endpoint authentication"))
     memory.write_episode(uuid4(), "a2", MemoryRecord(body="celery worker queue"))

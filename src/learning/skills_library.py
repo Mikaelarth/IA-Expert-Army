@@ -3,13 +3,14 @@
 Une skill est un fichier markdown dans `skills/<agent>/<id>.md` avec frontmatter YAML.
 Format aligné avec `skills/README.md` et avec la sortie du Skill Extractor (Phase 5).
 
-L'API est volontairement minimaliste pour la Phase 5 MVP :
-- Liste des skills d'un agent (les N plus récentes)
-- Écriture d'une nouvelle skill (versionne dans Git via le commit habituel)
-- Compactage textuel pour injection dans le prompt d'un agent
+API :
+- write_skill / list_skills (récence) / count
+- render_for_prompt : compactage textuel pour injection dans un user_message
+- search_skills : recherche sémantique si une VectorMemory est branchée,
+  sinon fallback sur les N plus récentes
 
-Phase 5 complète (plus tard) : indexation Chroma sémantique, A/B testing entre
-versions de skills, expiration automatique des skills sous-performantes.
+Quand un VectorMemory dédié (typiquement une collection séparée "agent_skills")
+est passé au constructeur, chaque write_skill l'indexe automatiquement.
 """
 from __future__ import annotations
 
@@ -20,7 +21,11 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from src.core.logging import get_logger
 from src.memory.file_memory import MemoryRecord
+from src.memory.vector_memory import VectorMemory
+
+_log = get_logger("skills_library")
 
 
 class Skill(BaseModel):
@@ -36,9 +41,10 @@ class Skill(BaseModel):
 
 
 class SkillsLibrary:
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, vector_memory: VectorMemory | None = None) -> None:
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
+        self.vector_memory = vector_memory
 
     def agent_dir(self, agent: str) -> Path:
         d = self.root / agent
@@ -67,7 +73,7 @@ class SkillsLibrary:
         record = MemoryRecord(metadata=meta, body=body.strip() + "\n")
         path = self.agent_dir(agent) / f"{skill_id}.md"
         path.write_text(record.to_markdown(), encoding="utf-8")
-        return Skill(
+        skill = Skill(
             skill_id=skill_id,
             agent=agent,
             title=title,
@@ -76,6 +82,31 @@ class SkillsLibrary:
             metadata=meta,
             path=path,
         )
+        self._index_in_vector(skill)
+        return skill
+
+    def _index_in_vector(self, skill: Skill) -> None:
+        """Indexe la skill dans la VectorMemory associée (si fournie)."""
+        if self.vector_memory is None:
+            return
+        try:
+            document = (
+                f"Skill: {skill.title}\n"
+                f"Résumé: {skill.summary}\n\n"
+                f"{skill.body[:2000]}"
+            )
+            self.vector_memory.add_episode(
+                episode_id=f"skill_{skill.skill_id}",
+                document=document,
+                metadata={
+                    "agent": skill.agent,
+                    "title": skill.title,
+                    "skill_id": skill.skill_id,
+                    "summary": skill.summary,
+                },
+            )
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("skill.index.failed", skill=skill.skill_id, error=str(exc))
 
     def list_skills(self, agent: str, limit: int | None = None) -> list[Skill]:
         d = self.agent_dir(agent)
@@ -106,6 +137,78 @@ class SkillsLibrary:
         if agent is None:
             return sum(len(list(d.glob("*.md"))) for d in self.root.iterdir() if d.is_dir())
         return len(list(self.agent_dir(agent).glob("*.md")))
+
+    def get_skill_by_id(self, agent: str, skill_id: str) -> Skill | None:
+        path = self.agent_dir(agent) / f"{skill_id}.md"
+        if not path.exists():
+            return None
+        record = MemoryRecord.from_markdown(path.read_text(encoding="utf-8"))
+        meta = record.metadata
+        return Skill(
+            skill_id=meta.get("skill_id", skill_id),
+            agent=meta.get("agent", agent),
+            title=meta.get("title", skill_id),
+            summary=str(meta.get("summary", "")),
+            body=record.body,
+            metadata=meta,
+            path=path,
+        )
+
+    def search_skills(
+        self,
+        agent: str,
+        query: str | None = None,
+        n_results: int = 2,
+        max_distance: float = 1.0,
+    ) -> list[Skill]:
+        """Cherche les skills les plus pertinentes pour un agent.
+
+        - Si une VectorMemory est branchée et qu'une `query` est fournie : recherche
+          sémantique (skills triées par pertinence).
+        - Sinon : fallback sur les N plus récentes (list_skills).
+        """
+        if self.vector_memory is None or not query or self.vector_memory.count() == 0:
+            return self.list_skills(agent, limit=n_results)
+
+        try:
+            matches = self.vector_memory.search(
+                query=query,
+                n_results=n_results,
+                where={"agent": agent},
+                max_distance=max_distance,
+            )
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("skills.semantic_search.failed", error=str(exc))
+            return self.list_skills(agent, limit=n_results)
+
+        skills: list[Skill] = []
+        for match in matches:
+            skill_id = match.metadata.get("skill_id")
+            if not skill_id:
+                continue
+            skill = self.get_skill_by_id(agent, str(skill_id))
+            if skill is not None:
+                skills.append(skill)
+        # Si la recherche sémantique ne retourne rien (skills non encore indexées),
+        # fallback sur la récence pour ne pas pénaliser.
+        if not skills:
+            return self.list_skills(agent, limit=n_results)
+        return skills
+
+    def reindex_existing(self) -> int:
+        """Backfill : indexe dans la VectorMemory toutes les skills déjà sur disque.
+        Retourne le nombre de skills indexées. No-op sans VectorMemory.
+        """
+        if self.vector_memory is None:
+            return 0
+        count = 0
+        for agent_dir in self.root.iterdir():
+            if not agent_dir.is_dir():
+                continue
+            for skill in self.list_skills(agent_dir.name):
+                self._index_in_vector(skill)
+                count += 1
+        return count
 
     @staticmethod
     def render_for_prompt(skills: list[Skill], max_chars_per_skill: int = 800) -> str:

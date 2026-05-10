@@ -96,6 +96,19 @@ class FileMemory:
     def read_episode(self, path: Path) -> MemoryRecord:
         return MemoryRecord.from_markdown(path.read_text(encoding="utf-8"))
 
+    def update_episode_metadata(self, path: Path, **fields: Any) -> MemoryRecord:
+        """Patch les champs de frontmatter d'un épisode existant et réécrit le fichier.
+
+        Utilisé par le Workflow pour injecter quality_score + final_verdict sur
+        chaque épisode après le verdict du Reviewer. La clé `None` n'est pas écrite
+        (préserve les valeurs existantes pour les champs effacés explicitement).
+        """
+        record = self.read_episode(path)
+        for key, value in fields.items():
+            record.metadata[key] = value
+        path.write_text(record.to_markdown(), encoding="utf-8")
+        return record
+
     # ----- mission summaries (permanent) -----
 
     def write_mission_summary(self, mission_id: UUID | str, record: MemoryRecord) -> Path:

@@ -70,14 +70,20 @@ def run(
     memory_root = settings.project_root / "data" / "memory"
     memory = FileMemory(memory_root)
     vector_memory = VectorMemory(persist_dir=settings.chroma_persist_dir)
-    skills_library = SkillsLibrary(settings.project_root / "skills")
+    vector_skills = VectorMemory(
+        persist_dir=settings.chroma_persist_dir, collection_name="agent_skills"
+    )
+    skills_library = SkillsLibrary(
+        settings.project_root / "skills", vector_memory=vector_skills
+    )
 
     console.print(
         Panel.fit(
             f"[bold cyan]Mission :[/bold cyan] {title}\n"
             f"[dim]Mémoire fichier : {memory_root}[/dim]\n"
             f"[dim]Mémoire vectorielle : {vector_memory.count()} épisodes indexés[/dim]\n"
-            f"[dim]Skills library : {skills_library.count()} skill(s) apprises[/dim]",
+            f"[dim]Skills library : {skills_library.count()} skill(s) apprises "
+            f"(sémantique : {vector_skills.count()} indexées)[/dim]",
             border_style="cyan",
         )
     )

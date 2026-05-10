@@ -188,6 +188,7 @@ class Workflow:
         )
 
         self._write_summary(mission_id, title, description, started, ended, outputs, result)
+        self._propagate_score_to_episodes(mission_id, result)
         log.info(
             "workflow.end",
             mission=str(mission_id),
@@ -196,6 +197,41 @@ class Workflow:
             duration_s=round(total_duration, 2),
         )
         return result
+
+    def _propagate_score_to_episodes(self, mission_id: UUID, result: MissionResult) -> None:
+        """Patche chaque épisode de la mission avec quality_score + final_verdict.
+
+        Permet au PatternMiner de filtrer correctement par quality_score et au
+        VectorMemory de retourner des résultats triables par qualité réelle.
+        Re-indexe aussi dans la VectorMemory si présente.
+        """
+        if result.quality_score is None and result.final_verdict == "":
+            return
+        for path in self.memory.list_episodes(mission_id):
+            try:
+                updated = self.memory.update_episode_metadata(
+                    path,
+                    quality_score=result.quality_score,
+                    final_verdict=result.final_verdict,
+                    mission_title=result.title,
+                )
+            except OSError as exc:  # noqa: BLE001
+                log.warning("workflow.score_propagation.failed", path=str(path), error=str(exc))
+                continue
+            # Re-index avec le score à jour si VectorMemory branchée et succès
+            if self.vector_memory is not None and updated.metadata.get("success"):
+                try:
+                    indexed_doc = (
+                        f"Tâche: {updated.body.split('## Tâche', 1)[-1].split('## Sortie', 1)[0].strip()}\n\n"
+                        f"Sortie:\n{updated.body.split('## Sortie brute', 1)[-1][:2000].strip()}"
+                    )
+                    self.vector_memory.add_episode(
+                        episode_id=path.stem,
+                        document=indexed_doc,
+                        metadata=updated.metadata,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("workflow.reindex.failed", path=str(path), error=str(exc))
 
     def _first_subtask(self, decomposition: dict) -> str | None:
         tasks = decomposition.get("decomposition") or decomposition.get("subtasks")

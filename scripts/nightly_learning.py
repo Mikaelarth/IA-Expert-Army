@@ -30,6 +30,7 @@ from src.core.logging import setup_logging
 from src.learning.pattern_miner import PatternMiner
 from src.learning.skills_library import SkillsLibrary
 from src.memory.file_memory import FileMemory
+from src.memory.vector_memory import VectorMemory
 
 app = typer.Typer(no_args_is_help=False, add_completion=False)
 console = Console()
@@ -45,7 +46,12 @@ def mine(
     settings = get_settings()
     setup_logging(level=settings.log_level, fmt=settings.log_format)
     memory = FileMemory(settings.project_root / "data" / "memory")
-    skills_lib = SkillsLibrary(settings.project_root / "skills")
+    vector_skills = VectorMemory(
+        persist_dir=settings.chroma_persist_dir, collection_name="agent_skills"
+    )
+    skills_lib = SkillsLibrary(
+        settings.project_root / "skills", vector_memory=vector_skills
+    )
 
     miner = PatternMiner(
         memory=memory,

@@ -229,6 +229,17 @@ class PatternMiner:
         )
         return report
 
+    @staticmethod
+    def _strip_outer_fence(text: str) -> str:
+        """Retire un éventuel ```lang...``` wrapper, pour éviter les fences imbriqués."""
+        t = text.strip()
+        if not t.startswith("```"):
+            return t
+        first_nl = t.find("\n")
+        if first_nl < 0 or not t.endswith("```"):
+            return t
+        return t[first_nl + 1 : -3].rstrip()
+
     def _persist_skill(
         self,
         agent: str,
@@ -238,6 +249,7 @@ class PatternMiner:
     ) -> Skill:
         title = str(yaml_data.get("title", "Untitled skill")).strip()
         summary = str(yaml_data.get("summary", "")).strip()
+        clean_yaml = self._strip_outer_fence(raw_yaml)
         body_lines = [
             f"## Résumé\n\n{summary}",
             "",
@@ -265,7 +277,7 @@ class PatternMiner:
             "<details><summary>YAML brut du Skill Extractor</summary>",
             "",
             "```yaml",
-            raw_yaml.strip(),
+            clean_yaml,
             "```",
             "",
             "</details>",

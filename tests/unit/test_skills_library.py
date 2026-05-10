@@ -99,6 +99,45 @@ def test_render_for_prompt_includes_titles_and_truncates() -> None:
     assert "[tronqué]" in rendered
 
 
+def test_search_skills_falls_back_to_recency_without_vector(lib: SkillsLibrary) -> None:
+    s1 = lib.write_skill("dev", "Skill A", "body A")
+    s2 = lib.write_skill("dev", "Skill B", "body B")
+    results = lib.search_skills("dev", query="anything", n_results=2)
+    assert len(results) == 2
+    # Le plus récent en premier (fallback récence)
+    assert results[0].skill_id in {s1.skill_id, s2.skill_id}
+
+
+def test_search_skills_uses_vector_when_available(tmp_path: Path) -> None:
+    from src.memory.vector_memory import VectorMemory
+
+    vmem = VectorMemory(persist_dir=tmp_path / "v_skills", collection_name="t_skills")
+    lib = SkillsLibrary(tmp_path / "skills", vector_memory=vmem)
+    lib.write_skill(
+        "dev", "FastAPI router pattern", "Use APIRouter and Pydantic models for endpoints",
+    )
+    lib.write_skill("dev", "Celery worker pattern", "Async background jobs via Redis")
+    results = lib.search_skills("dev", query="REST endpoint with Pydantic", n_results=1)
+    assert len(results) == 1
+    assert "FastAPI" in results[0].title
+
+
+def test_reindex_existing_backfills_vector(tmp_path: Path) -> None:
+    from src.memory.vector_memory import VectorMemory
+
+    # 1. Ecrit sans vector
+    lib = SkillsLibrary(tmp_path / "skills")
+    lib.write_skill("dev", "Skill 1", "body 1")
+    lib.write_skill("dev", "Skill 2", "body 2")
+
+    # 2. Branche un vector et reindex
+    vmem = VectorMemory(persist_dir=tmp_path / "v", collection_name="backfill_test")
+    lib.vector_memory = vmem
+    n = lib.reindex_existing()
+    assert n == 2
+    assert vmem.count() == 2
+
+
 def test_metadata_is_persisted(lib: SkillsLibrary) -> None:
     lib.write_skill(
         "dev",
