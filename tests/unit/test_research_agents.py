@@ -59,6 +59,16 @@ def test_document_synthesizer_uses_operational_model(
     assert "sonnet" in agent.model.lower()
 
 
+def test_document_synthesizer_max_tokens_high_enough_for_full_synthesis(
+    settings: Settings, memory: FileMemory
+) -> None:
+    """Régression : la synthèse markdown (TL;DR + N sections + divergences +
+    conclusion + sources) saturait à 4096 sur 7+ missions consécutives,
+    excluant les épisodes du mining. Minimum sûr : 8192."""
+    agent = DocumentSynthesizer(memory=memory, settings=settings)
+    assert agent.max_tokens >= 8192
+
+
 def test_research_reviewer_uses_operational_model(
     settings: Settings, memory: FileMemory
 ) -> None:

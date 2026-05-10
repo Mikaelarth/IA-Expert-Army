@@ -22,6 +22,13 @@ _PROMPT = (
 
 
 class SkillExtractor(BaseAgent):
+    # YAML structuré : title + tags + summary + N key_patterns + N techniques
+    # + N pitfalls_avoided + example_template. Pour 3+ épisodes massifs en input,
+    # le YAML output saturait à 2048 (mining d'avril 2026 : 2/3 skills perdues
+    # sur tech_watch + research_lead, $0.87 dépensés sans résultat parseable).
+    # Fix aligné sur les autres agents verbeux : 4096.
+    DEFAULT_MAX_TOKENS = 4096
+
     def __init__(
         self,
         memory: FileMemory,
@@ -36,7 +43,7 @@ class SkillExtractor(BaseAgent):
             memory=memory,
             settings=s,
             client=client,
-            max_tokens=2048,
+            max_tokens=self.DEFAULT_MAX_TOKENS,
             vector_memory=None,  # explicit : pas d'auto-influence
         )
 

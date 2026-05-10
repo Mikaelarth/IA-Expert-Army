@@ -81,6 +81,13 @@ class TechWatch(BaseAgent):
 
 
 class DocumentSynthesizer(BaseAgent):
+    # Markdown structuré : TL;DR + N sections (1 par sous-question) + divergences
+    # + conclusion + sources consolidées. Pour 5-6 SQ, ça dépasse 4096 tokens
+    # systématiquement (saturé sur 7+ épisodes consécutifs en prod). Fix préventif
+    # aligné sur TechWatch (8192) après détection via le miner qui excluait
+    # tous les épisodes synthesizer pour cause de saturation.
+    DEFAULT_MAX_TOKENS = 8192
+
     def __init__(
         self,
         memory: FileMemory,
@@ -97,7 +104,7 @@ class DocumentSynthesizer(BaseAgent):
             memory=memory,
             settings=s,
             client=client,
-            max_tokens=4096,
+            max_tokens=self.DEFAULT_MAX_TOKENS,
             vector_memory=vector_memory,
             skills_library=skills_library,
         )
