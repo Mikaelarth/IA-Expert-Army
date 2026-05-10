@@ -12,7 +12,9 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel
 
+from src.core.budget import BudgetController, BudgetExceeded
 from src.core.config import Settings, get_settings
+from src.core.killswitch import Killswitch, KillswitchEngaged
 from src.core.logging import get_logger
 from src.learning.skills_library import SkillsLibrary
 from src.memory.file_memory import FileMemory, MemoryRecord
@@ -58,11 +60,15 @@ class Workflow:
         settings: Settings | None = None,
         vector_memory: VectorMemory | None = None,
         skills_library: SkillsLibrary | None = None,
+        budget: BudgetController | None = None,
+        killswitch: Killswitch | None = None,
     ) -> None:
         self.memory = memory
         self.vector_memory = vector_memory
         self.skills_library = skills_library
         self.settings = settings or get_settings()
+        self.budget = budget
+        self.killswitch = killswitch
         common = {"vector_memory": vector_memory, "skills_library": skills_library}
         self.orchestrator = ChiefOrchestrator(memory, self.settings, **common)
         self.architect = SoftwareArchitect(memory, self.settings, **common)
@@ -75,6 +81,20 @@ class Workflow:
         outputs: list[AgentOutput] = []
 
         log.info("workflow.start", mission=str(mission_id), title=title)
+
+        # Garde-fous Phase 6 — vérifications avant tout appel LLM
+        if self.killswitch is not None:
+            try:
+                self.killswitch.assert_clear()
+            except KillswitchEngaged as exc:
+                log.warning("workflow.killswitch.refused", mission=str(mission_id), error=str(exc))
+                return self._fail(mission_id, title, started, outputs, "killswitch.engaged", str(exc))
+        if self.budget is not None:
+            try:
+                self.budget.assert_can_proceed(estimated_cost=0.0)
+            except BudgetExceeded as exc:
+                log.warning("workflow.budget.refused", mission=str(mission_id), error=str(exc))
+                return self._fail(mission_id, title, started, outputs, "budget.exceeded", str(exc))
 
         # Step 1 — Orchestrator décompose
         orch_out = await self.orchestrator.run(
@@ -189,6 +209,14 @@ class Workflow:
 
         self._write_summary(mission_id, title, description, started, ended, outputs, result)
         self._propagate_score_to_episodes(mission_id, result)
+
+        # Enregistre la dépense effective dans le budget controller
+        if self.budget is not None and total_cost > 0:
+            try:
+                self.budget.record(total_cost)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("workflow.budget.record_failed", error=str(exc))
+
         log.info(
             "workflow.end",
             mission=str(mission_id),
