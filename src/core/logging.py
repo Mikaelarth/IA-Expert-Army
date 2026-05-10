@@ -24,14 +24,13 @@ def setup_logging(level: str = "INFO", fmt: str = "console") -> None:
 
     shared_processors: list[Any] = [
         structlog.contextvars.merge_contextvars,
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
+        structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
     ]
 
     if fmt == "json":
+        shared_processors.append(structlog.processors.format_exc_info)
         shared_processors.append(structlog.processors.JSONRenderer())
     else:
         shared_processors.append(structlog.dev.ConsoleRenderer(colors=True))
@@ -47,8 +46,11 @@ def setup_logging(level: str = "INFO", fmt: str = "console") -> None:
     _configured = True
 
 
-def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
-    """Retourne un logger structuré nommé."""
+def get_logger(name: str | None = None):
+    """Retourne un logger structuré nommé (le nom est bind comme contexte 'logger')."""
     if not _configured:
         setup_logging()
-    return structlog.get_logger(name)
+    log = structlog.get_logger()
+    if name:
+        log = log.bind(logger=name)
+    return log
