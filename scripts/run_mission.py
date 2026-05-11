@@ -5,6 +5,7 @@ Usage:
     uv run python scripts/run_mission.py --title "..." --description "..." --apply
     uv run python scripts/run_mission.py --title "..." --description "..." --apply --validate
     uv run python scripts/run_mission.py --interactive
+    uv run python scripts/run_mission.py --title "..." --description "..." --meta
 
 La mission est exécutée en chaîne : Orchestrator → Architect → Developer → Reviewer.
 Les épisodes et le résumé sont écrits dans data/memory/.
@@ -16,6 +17,12 @@ Par défaut --apply n'overwrite pas les fichiers existants — utiliser --force 
 Mode --validate (Phase 8) : avec --apply, lance pytest dans le sandbox Docker sur les
 fichiers écrits et fail si les tests ne passent pas (exit 4). Boucle qualité fermée
 DÈS la mission live, sans étape manuelle de re-validation.
+
+Mode --meta (Phase 7) : la mission est cross-domaine et doit être décomposée en 2-4
+sous-missions routées chacune vers UNE guilde. Un MetaDecomposer (Opus) découpe,
+puis les sous-missions sont exécutées séquentiellement (avec contexte amont injecté).
+Incompatible avec --apply / --validate / --guild (le routage est piloté par la
+décomposition). Coût attendu : ~3-5× une mission single-guild.
 """
 
 from __future__ import annotations
@@ -43,6 +50,7 @@ from src.core.logging import setup_logging
 from src.learning.skills_library import SkillsLibrary
 from src.memory.file_memory import FileMemory
 from src.memory.vector_memory import VectorMemory
+from src.orchestrator.meta_workflow import MetaDecompositionError, MetaWorkflow
 from src.orchestrator.router import MissionRouter
 from src.tools.apply_files import ApplyAction, apply_files
 from src.tools.sandbox_validate import print_sandbox_result, validate_files_in_sandbox
@@ -84,6 +92,11 @@ def run(
     sandbox_timeout: int = typer.Option(
         60, "--sandbox-timeout", help="Timeout pytest sandbox en secondes"
     ),
+    meta: bool = typer.Option(
+        False,
+        "--meta",
+        help="Mission cross-guildes : décompose en 2-4 sous-missions et orchestre (Phase 7)",
+    ),
 ) -> None:
     settings = get_settings()
     setup_logging(level=settings.log_level, fmt=settings.log_format)
@@ -91,6 +104,15 @@ def run(
     if interactive or not title or not description:
         title = title or typer.prompt("Titre de la mission")
         description = description or typer.prompt("Description complète")
+
+    if meta and (apply or force or guild or validate):
+        console.print(
+            "[bold red]--meta est incompatible avec --apply/--force/--guild/--validate[/bold red]\n"
+            "[dim]Le routage est piloté par la décomposition Opus, pas par l'utilisateur. "
+            "Lance d'abord la mission cross-guildes, puis applique la sous-mission "
+            "engineering séparément avec apply_mission.py si besoin.[/dim]"
+        )
+        raise SystemExit(2)
 
     memory_root = settings.project_root / "data" / "memory"
     memory = FileMemory(memory_root)
@@ -113,6 +135,21 @@ def run(
         budget=budget,
         killswitch=killswitch,
     )
+
+    if meta:
+        _run_meta_mission(
+            title=title,
+            description=description,
+            memory=memory,
+            settings=settings,
+            router=router,
+            budget=budget,
+            vector_memory=vector_memory,
+            skills_library=skills_library,
+            vector_skills_count=vector_skills.count(),
+        )
+        return
+
     decision = router.decide(title, description, force_guild=guild)
 
     console.print(
@@ -256,6 +293,106 @@ def run(
     if validation_failed:
         raise SystemExit(4)
     raise SystemExit(0 if result.success else 1)
+
+
+def _run_meta_mission(
+    title: str,
+    description: str,
+    memory: FileMemory,
+    settings,
+    router: MissionRouter,
+    budget: BudgetController,
+    vector_memory: VectorMemory,
+    skills_library: SkillsLibrary,
+    vector_skills_count: int,
+) -> None:
+    """Path d'exécution pour --meta : MetaWorkflow + rendu adapté."""
+    console.print(
+        Panel.fit(
+            f"[bold magenta]Mission cross-guildes :[/bold magenta] {title}\n"
+            f"[dim]Décomposition par MetaDecomposer (Opus) — coût attendu : 3-5× single-guild[/dim]\n"
+            f"[dim]Mémoire vectorielle : {vector_memory.count()} épisodes indexés[/dim]\n"
+            f"[dim]Skills library : {skills_library.count()} skill(s) "
+            f"(sémantique : {vector_skills_count} indexées)[/dim]\n"
+            f"[dim]Budget restant : ${budget.remaining_today():.4f} / ${settings.daily_budget_usd:.2f}[/dim]",
+            border_style="magenta",
+        )
+    )
+
+    wf = MetaWorkflow(
+        memory=memory,
+        settings=settings,
+        vector_memory=vector_memory,
+        skills_library=skills_library,
+        budget=budget,
+        killswitch=router.killswitch,
+        router=router,
+    )
+    try:
+        result = asyncio.run(wf.run(title=title, description=description))
+    except MetaDecompositionError as exc:
+        console.print(f"\n[bold red]Décomposition échouée :[/bold red] {exc}")
+        raise SystemExit(3) from exc
+
+    table = Table(title="Résultat meta-mission", show_lines=True)
+    table.add_column("Champ", style="cyan")
+    table.add_column("Valeur", style="white")
+    table.add_row("Meta mission ID", str(result.meta_mission_id))
+    table.add_row("Sous-missions", str(len(result.sub_results)))
+    table.add_row("Guildes", " → ".join(r.guild for r in result.sub_results))
+    table.add_row("Verdict global", result.final_verdict)
+    table.add_row(
+        "Score moyen",
+        f"{result.overall_quality_score:.2f}"
+        if result.overall_quality_score is not None
+        else "n/a",
+    )
+    table.add_row("Coût total (USD)", f"{result.total_cost_usd:.4f}")
+    table.add_row("Durée totale (s)", f"{result.total_duration_seconds:.2f}")
+    console.print(table)
+
+    if result.decomposition_rationale:
+        console.print(
+            Panel(
+                result.decomposition_rationale,
+                title="[bold cyan]Rationale de décomposition[/bold cyan]",
+                border_style="cyan",
+            )
+        )
+
+    sub_table = Table(title="Détail des sous-missions", show_lines=False)
+    sub_table.add_column("#", style="dim", width=3)
+    sub_table.add_column("Guilde", style="magenta")
+    sub_table.add_column("Titre", style="white")
+    sub_table.add_column("Verdict", justify="center")
+    sub_table.add_column("Score", justify="right")
+    sub_table.add_column("Coût $", justify="right")
+    for i, r in enumerate(result.sub_results, 1):
+        verdict_style = (
+            "green"
+            if r.final_verdict == "APPROVED"
+            else "yellow"
+            if r.final_verdict == "NEEDS_CHANGES"
+            else "red"
+        )
+        sub_table.add_row(
+            str(i),
+            r.guild,
+            r.title[:60],
+            f"[{verdict_style}]{r.final_verdict}[/{verdict_style}]",
+            f"{r.quality_score:.2f}" if r.quality_score is not None else "n/a",
+            f"{r.total_cost_usd:.4f}",
+        )
+    console.print(sub_table)
+
+    meta_path = memory.root / "meta_missions" / f"{result.meta_mission_id}.md"
+    console.print(f"\n[dim]Meta-mission archivée :[/dim] {meta_path}")
+    console.print(
+        "[dim]Sous-missions individuelles dans data/memory/missions/ "
+        "(IDs visibles ci-dessus).[/dim]"
+    )
+
+    raise SystemExit(0 if result.final_verdict == "APPROVED" else 1)
 
 
 if __name__ == "__main__":
