@@ -40,9 +40,11 @@ def test_legal_reviewer_uses_operational_model(settings: Settings, memory: FileM
 
 
 def test_business_agents_max_tokens_aligned() -> None:
-    """max_tokens calibrés sur les leçons Research/Creative — pas de saturation surprise."""
+    """max_tokens calibrés sur les leçons Research/Creative + incident
+    cross-guildes water-tracker (BA saturé à 6144 en repair loop, mission
+    cc670899 du 2026-05-11) — pas de saturation surprise."""
     assert ProjectManager.DEFAULT_MAX_TOKENS >= 4096
-    assert BusinessAnalyst.DEFAULT_MAX_TOKENS >= 6144
+    assert BusinessAnalyst.DEFAULT_MAX_TOKENS >= 8192  # bumpé après incident water-tracker
     assert LegalReviewer.DEFAULT_MAX_TOKENS >= 8192  # reviewer = aligné sur les autres
 
 

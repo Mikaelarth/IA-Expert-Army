@@ -53,9 +53,12 @@ class ProjectManager(BaseAgent):
 
 class BusinessAnalyst(BaseAgent):
     # Analyse YAML riche : market + UVP + unit_economics + KPIs + risks + verdict.
-    # Aligné avec les autres analystes stratégiques à 4096+. On part directement
-    # à 6144 pour les analyses complexes (économies multi-segments).
-    DEFAULT_MAX_TOKENS = 6144
+    # 6144 a saturé en repair loop sur la mission cross-guildes water-tracker
+    # 2026-05-11 (cc670899) — l'input du repair contient le verdict complet
+    # du legal_reviewer (~6000 tokens) + l'analyse v1 + tâche originale =
+    # 21k tokens IN, output capé à 6144 OUT, score figé à 0.84 NEEDS_CHANGES.
+    # Aligné désormais sur les autres reviewers/analystes à 8192.
+    DEFAULT_MAX_TOKENS = 8192
 
     def __init__(
         self,
