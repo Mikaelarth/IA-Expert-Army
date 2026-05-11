@@ -188,9 +188,7 @@ class MetaWorkflow:
         self._persist(result)
         return result
 
-    async def _decompose(
-        self, meta_id: UUID, title: str, description: str
-    ) -> MetaDecomposition:
+    async def _decompose(self, meta_id: UUID, title: str, description: str) -> MetaDecomposition:
         agent_input = AgentInput(
             mission_id=meta_id,
             task=f"Mission cross-domaine à décomposer.\n\nTitre : {title}\n\nDescription :\n{description}",

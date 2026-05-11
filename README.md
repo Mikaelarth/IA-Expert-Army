@@ -3,11 +3,12 @@
 > Une armée d'agents IA experts spécialisés qui collaborent comme une entreprise distribuée :
 > mémoire partagée vivante, évolution par expérience, autonomie sécurisée.
 
-[![Tests](https://img.shields.io/badge/tests-212%20passing-brightgreen)](tests/unit/)
+[![CI](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml/badge.svg)](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-241%20passing-brightgreen)](tests/unit/)
 [![Python](https://img.shields.io/badge/python-3.12+-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Guildes](https://img.shields.io/badge/guildes-4%20opérationnelles-blueviolet)](#les-4-guildes)
-[![Skills](https://img.shields.io/badge/skills-14%20auto--générées-orange)](skills/)
+[![Guildes](https://img.shields.io/badge/guildes-4%20+%20cross--guildes-blueviolet)](#les-4-guildes)
+[![Skills](https://img.shields.io/badge/skills-16%20auto--générées-orange)](skills/)
 
 **Auteur :** MikaelArth (Mike Arthur) · **Démarré :** 2026-05-10
 

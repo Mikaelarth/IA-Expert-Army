@@ -10,7 +10,6 @@ guildes fonctionnent — séparation des responsabilités."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
@@ -22,7 +21,6 @@ from src.memory.file_memory import FileMemory
 from src.orchestrator.base_agent import AgentOutput
 from src.orchestrator.meta_workflow import (
     MetaDecomposer,
-    MetaDecomposition,
     MetaDecompositionError,
     MetaWorkflow,
     SubMissionSpec,
