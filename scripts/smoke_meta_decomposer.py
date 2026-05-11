@@ -22,6 +22,8 @@ if sys.platform == "win32":
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from uuid import uuid4
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
@@ -31,7 +33,6 @@ from src.core.logging import setup_logging
 from src.memory.file_memory import FileMemory
 from src.orchestrator.base_agent import AgentInput
 from src.orchestrator.meta_workflow import MetaDecomposer, _parse_decomposition
-from uuid import uuid4
 
 console = Console()
 

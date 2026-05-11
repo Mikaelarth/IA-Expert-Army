@@ -15,6 +15,7 @@ v2 (futur) : parallélisation des sous-missions sans dépendance via asyncio.gat
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -142,6 +143,18 @@ class MetaWorkflow:
 
     @observe(name="meta_workflow.run")
     async def run(self, title: str, description: str) -> MetaMissionResult:
+        """Exécute la mission cross-guildes : décompose puis exécute par
+        niveaux de DAG. Toutes les sous-missions d'un même niveau tournent
+        en parallèle via asyncio.gather — gain typique 2-3× sur des missions
+        all-parallel comme water-tracker (3 sub-missions indépendantes
+        passent de 625s séquentiels à ~max(eng, creative, business) en //).
+
+        Note budget : si BudgetController est partagé entre sub-missions
+        concurrentes, des coûts peuvent se chevaucher sur la même
+        read-modify-write du fichier état. C'est acceptable (l'imprécision
+        est de l'ordre du cent ; le killswitch côté hard-cap reste un
+        garde-fou robuste car il bloque le PROCHAIN appel).
+        """
         meta_id = uuid4()
         started_at = datetime.now(UTC)
         log.info("meta.start", meta_id=str(meta_id), title=title)
@@ -154,27 +167,62 @@ class MetaWorkflow:
             guilds=[s.guild for s in decomposition.sub_missions],
         )
 
-        ordered_indices = _topological_order(decomposition.sub_missions)
+        levels = _level_order(decomposition.sub_missions)
+        log.info(
+            "meta.levels",
+            meta_id=str(meta_id),
+            n_levels=len(levels),
+            level_sizes=[len(lv) for lv in levels],
+        )
 
         sub_results: dict[int, UnifiedMissionResult] = {}
-        for idx in ordered_indices:
-            sub = decomposition.sub_missions[idx]
-            upstream = [sub_results[d] for d in sub.depends_on if d in sub_results]
-            enriched_description = _enrich_description(sub.description, upstream)
-            log.info(
-                "meta.dispatch",
-                meta_id=str(meta_id),
-                sub_index=idx,
-                guild=sub.guild,
-                title=sub.title,
-                depends_on=sub.depends_on,
-            )
-            res = await self.router.run(
-                title=sub.title,
-                description=enriched_description,
-                force_guild=sub.guild,
-            )
-            sub_results[idx] = res
+        for level_idx, indices in enumerate(levels):
+            # Prépare le contexte amont (déterministe car les niveaux précédents
+            # sont déjà résolus) puis lance toutes les sous-missions du niveau
+            # en parallèle.
+            sub_specs: list[tuple[int, SubMissionSpec, str]] = []
+            for idx in indices:
+                sub = decomposition.sub_missions[idx]
+                upstream = [sub_results[d] for d in sub.depends_on]
+                enriched = _enrich_description(sub.description, upstream)
+                sub_specs.append((idx, sub, enriched))
+                log.info(
+                    "meta.dispatch",
+                    meta_id=str(meta_id),
+                    level=level_idx,
+                    sub_index=idx,
+                    guild=sub.guild,
+                    title=sub.title,
+                    depends_on=sub.depends_on,
+                )
+
+            coros = [
+                self.router.run(
+                    title=sub.title,
+                    description=enriched,
+                    force_guild=sub.guild,
+                )
+                for _, sub, enriched in sub_specs
+            ]
+            # return_exceptions=True : l'échec d'une sous-mission ne tue pas
+            # les autres en parallèle (elles finissent leur run et leurs
+            # épisodes sont archivés). On re-lève après que TOUT le niveau
+            # ait fini, pour ne pas perdre du travail déjà payé.
+            level_results = await asyncio.gather(*coros, return_exceptions=True)
+
+            failures: list[tuple[int, BaseException]] = []
+            for (idx, _sub, _enriched), res in zip(sub_specs, level_results, strict=True):
+                if isinstance(res, BaseException):
+                    failures.append((idx, res))
+                else:
+                    sub_results[idx] = res
+
+            if failures:
+                msgs = [f"sub_index={idx}: {type(exc).__name__}: {exc}" for idx, exc in failures]
+                raise MetaDecompositionError(
+                    f"Niveau {level_idx} a échoué pour {len(failures)} sous-mission(s) : "
+                    + " | ".join(msgs)
+                )
 
         ordered_results = [sub_results[i] for i in range(len(decomposition.sub_missions))]
         result = self._aggregate(
@@ -302,7 +350,10 @@ def _parse_decomposition(parsed: dict[str, Any]) -> MetaDecomposition:
 
 
 def _topological_order(sub_missions: list[SubMissionSpec]) -> list[int]:
-    """Tri topologique (Kahn). Lève si cycle détecté."""
+    """Tri topologique (Kahn). Lève si cycle détecté.
+
+    Conservé pour usage par tests et pour pré-flight cycle check rapide
+    (la v2 du run() utilise _level_order pour la parallélisation)."""
     n = len(sub_missions)
     in_degree = [len(s.depends_on) for s in sub_missions]
     children: list[list[int]] = [[] for _ in range(n)]
@@ -327,6 +378,44 @@ def _topological_order(sub_missions: list[SubMissionSpec]) -> list[int]:
             f"Cycle détecté dans les dépendances (résolu {len(order)}/{n} sous-missions)"
         )
     return order
+
+
+def _level_order(sub_missions: list[SubMissionSpec]) -> list[list[int]]:
+    """Tri par niveaux (Kahn modifié). Chaque niveau regroupe les noeuds
+    dont toutes les dépendances sont satisfaites par les niveaux précédents.
+
+    Tous les noeuds d'un même niveau sont indépendants entre eux et peuvent
+    s'exécuter en parallèle.
+
+    Exemples :
+    - [A, B, C] sans dépendance → [[0, 1, 2]] (1 niveau, 3 // )
+    - A → B → C (chaîne) → [[0], [1], [2]] (3 niveaux séquentiels)
+    - Diamond A→{B,C}→D → [[0], [1, 2], [3]] (3 niveaux, niveau 1 en //)
+
+    Lève MetaDecompositionError si cycle.
+    """
+    n = len(sub_missions)
+    in_degree = [len(s.depends_on) for s in sub_missions]
+    children: list[list[int]] = [[] for _ in range(n)]
+    for i, s in enumerate(sub_missions):
+        for d in s.depends_on:
+            children[d].append(i)
+
+    levels: list[list[int]] = []
+    processed = 0
+    while processed < n:
+        current_level = sorted(i for i, deg in enumerate(in_degree) if deg == 0)
+        if not current_level:
+            raise MetaDecompositionError(
+                f"Cycle détecté dans les dépendances (résolu {processed}/{n} sous-missions)"
+            )
+        levels.append(current_level)
+        for i in current_level:
+            in_degree[i] = -1  # marque comme traité (évite re-sélection)
+            for c in children[i]:
+                in_degree[c] -= 1
+        processed += len(current_level)
+    return levels
 
 
 def _enrich_description(description: str, upstream_results: list[UnifiedMissionResult]) -> str:

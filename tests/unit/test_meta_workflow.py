@@ -10,6 +10,7 @@ guildes fonctionnent — séparation des responsabilités."""
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
@@ -25,6 +26,7 @@ from src.orchestrator.meta_workflow import (
     MetaWorkflow,
     SubMissionSpec,
     _enrich_description,
+    _level_order,
     _parse_decomposition,
     _topological_order,
 )
@@ -417,3 +419,221 @@ async def test_meta_workflow_raises_when_decomposer_fails(
         await wf.run(title="X", description="y")
     # Aucun appel au router ne doit avoir été fait
     fake_router.run.assert_not_called()
+
+
+# ===== _level_order =====
+
+
+def test_level_order_all_independent_single_level() -> None:
+    """3 sub-missions sans dépendance → 1 niveau contenant toutes."""
+    subs = [
+        SubMissionSpec(guild="engineering", title="A", description="x"),
+        SubMissionSpec(guild="creative", title="B", description="x"),
+        SubMissionSpec(guild="business", title="C", description="x"),
+    ]
+    levels = _level_order(subs)
+    assert levels == [[0, 1, 2]]
+
+
+def test_level_order_linear_chain() -> None:
+    """A → B → C → 3 niveaux séquentiels."""
+    subs = [
+        SubMissionSpec(guild="business", title="A", description="x"),
+        SubMissionSpec(guild="engineering", title="B", description="x", depends_on=[0]),
+        SubMissionSpec(guild="creative", title="C", description="x", depends_on=[1]),
+    ]
+    levels = _level_order(subs)
+    assert levels == [[0], [1], [2]]
+
+
+def test_level_order_diamond_three_levels() -> None:
+    """A → {B, C} → D → niveaux [[A], [B, C], [D]]. B et C parallèles."""
+    subs = [
+        SubMissionSpec(guild="business", title="A", description="x"),
+        SubMissionSpec(guild="engineering", title="B", description="x", depends_on=[0]),
+        SubMissionSpec(guild="creative", title="C", description="x", depends_on=[0]),
+        SubMissionSpec(guild="research", title="D", description="x", depends_on=[1, 2]),
+    ]
+    levels = _level_order(subs)
+    assert levels == [[0], [1, 2], [3]]
+
+
+def test_level_order_detects_cycle() -> None:
+    subs = [
+        SubMissionSpec(guild="engineering", title="A", description="x", depends_on=[1]),
+        SubMissionSpec(guild="engineering", title="B", description="x", depends_on=[0]),
+    ]
+    with pytest.raises(MetaDecompositionError, match="Cycle"):
+        _level_order(subs)
+
+
+def test_level_order_water_tracker_pattern() -> None:
+    """Régression : la mission water-tracker (3 sub-missions all-parallel)
+    doit produire UN seul niveau de 3 — pas 3 niveaux comme la v1 séquentielle."""
+    subs = [
+        SubMissionSpec(guild="engineering", title="Endpoint", description="x"),
+        SubMissionSpec(guild="creative", title="Landing", description="x"),
+        SubMissionSpec(guild="business", title="Roadmap", description="x"),
+    ]
+    levels = _level_order(subs)
+    assert len(levels) == 1, "all-parallel → 1 seul niveau"
+    assert sorted(levels[0]) == [0, 1, 2]
+
+
+# ===== MetaWorkflow parallélisation =====
+
+
+@pytest.mark.asyncio
+async def test_meta_workflow_runs_same_level_in_parallel(
+    settings: Settings, memory: FileMemory
+) -> None:
+    """Les sub-missions d'un même niveau doivent s'exécuter en parallèle.
+    On le mesure : chaque mock sleep 100ms ; 3 en // ≈ 100-150ms, vs 300ms+
+    en séquentiel. Si le seuil n'est pas tenu c'est qu'on n'a pas paralllélisé."""
+    import time
+
+    decomposition_payload = _decomp_yaml(
+        ("engineering", "A", []),
+        ("creative", "B", []),
+        ("business", "C", []),
+    )
+
+    fake_decomposer = MagicMock(spec=MetaDecomposer)
+    fake_decomposer.run = AsyncMock(
+        return_value=AgentOutput(
+            agent_name="meta_decomposer",
+            mission_id=uuid4(),
+            success=True,
+            raw_text="",
+            parsed=decomposition_payload,
+            tokens_in=10,
+            tokens_out=10,
+            cost_usd=0.01,
+            duration_seconds=0.5,
+        )
+    )
+
+    async def _slow_run(**kwargs) -> UnifiedMissionResult:
+        await asyncio.sleep(0.1)
+        return _unified_result(guild=kwargs["force_guild"], title=kwargs["title"])
+
+    fake_router = MagicMock(spec=MissionRouter)
+    fake_router.run = AsyncMock(side_effect=_slow_run)
+
+    wf = MetaWorkflow(
+        memory=memory, settings=settings, router=fake_router, decomposer=fake_decomposer
+    )
+
+    start = time.perf_counter()
+    result = await wf.run(title="X", description="y")
+    elapsed = time.perf_counter() - start
+
+    assert len(result.sub_results) == 3
+    # 3 sleeps de 100ms en parallèle ≈ 100-200ms (overhead test). Si séquentiel
+    # on serait à 300ms+. On garde une marge généreuse pour la CI lente.
+    assert elapsed < 0.28, f"Exécution trop lente ({elapsed:.3f}s) — // pas active ?"
+
+
+@pytest.mark.asyncio
+async def test_meta_workflow_serializes_dependent_levels(
+    settings: Settings, memory: FileMemory
+) -> None:
+    """Diamond pattern : niveau 0 doit finir AVANT niveau 1, qui doit finir
+    AVANT niveau 2. On vérifie via l'ordre des appels au router."""
+    decomposition_payload = _decomp_yaml(
+        ("business", "L0", []),
+        ("engineering", "L1a", [0]),
+        ("creative", "L1b", [0]),
+        ("research", "L2", [1, 2]),
+    )
+
+    fake_decomposer = MagicMock(spec=MetaDecomposer)
+    fake_decomposer.run = AsyncMock(
+        return_value=AgentOutput(
+            agent_name="meta_decomposer",
+            mission_id=uuid4(),
+            success=True,
+            raw_text="",
+            parsed=decomposition_payload,
+            tokens_in=10,
+            tokens_out=10,
+            cost_usd=0.01,
+            duration_seconds=0.5,
+        )
+    )
+
+    call_order: list[str] = []
+
+    async def _track_run(**kwargs) -> UnifiedMissionResult:
+        call_order.append(kwargs["title"])
+        return _unified_result(guild=kwargs["force_guild"], title=kwargs["title"])
+
+    fake_router = MagicMock(spec=MissionRouter)
+    fake_router.run = AsyncMock(side_effect=_track_run)
+
+    wf = MetaWorkflow(
+        memory=memory, settings=settings, router=fake_router, decomposer=fake_decomposer
+    )
+    await wf.run(title="X", description="y")
+
+    # L0 doit être avant L1a/L1b ; L1a/L1b doivent être avant L2.
+    pos = {t: call_order.index(t) for t in ("L0", "L1a", "L1b", "L2")}
+    assert pos["L0"] < pos["L1a"]
+    assert pos["L0"] < pos["L1b"]
+    assert pos["L1a"] < pos["L2"]
+    assert pos["L1b"] < pos["L2"]
+
+
+@pytest.mark.asyncio
+async def test_meta_workflow_isolates_failures_within_level(
+    settings: Settings, memory: FileMemory
+) -> None:
+    """Si une sub-mission d'un niveau lève une exception, les autres du même
+    niveau finissent leur travail (return_exceptions=True). On relève après
+    coup avec un message agrégé."""
+    decomposition_payload = _decomp_yaml(
+        ("engineering", "A", []),
+        ("creative", "B-fails", []),
+        ("business", "C", []),
+    )
+
+    fake_decomposer = MagicMock(spec=MetaDecomposer)
+    fake_decomposer.run = AsyncMock(
+        return_value=AgentOutput(
+            agent_name="meta_decomposer",
+            mission_id=uuid4(),
+            success=True,
+            raw_text="",
+            parsed=decomposition_payload,
+            tokens_in=10,
+            tokens_out=10,
+            cost_usd=0.01,
+            duration_seconds=0.5,
+        )
+    )
+
+    completed_titles: list[str] = []
+
+    async def _maybe_fail(**kwargs) -> UnifiedMissionResult:
+        title = kwargs["title"]
+        if "fails" in title:
+            await asyncio.sleep(0.01)
+            raise RuntimeError("simulated guild failure")
+        await asyncio.sleep(0.05)
+        completed_titles.append(title)
+        return _unified_result(guild=kwargs["force_guild"], title=title)
+
+    fake_router = MagicMock(spec=MissionRouter)
+    fake_router.run = AsyncMock(side_effect=_maybe_fail)
+
+    wf = MetaWorkflow(
+        memory=memory, settings=settings, router=fake_router, decomposer=fake_decomposer
+    )
+
+    with pytest.raises(MetaDecompositionError, match="Niveau 0"):
+        await wf.run(title="X", description="y")
+
+    # A et C doivent avoir tourné jusqu'au bout malgré l'échec de B
+    assert "A" in completed_titles
+    assert "C" in completed_titles
+    assert "B-fails" not in completed_titles
