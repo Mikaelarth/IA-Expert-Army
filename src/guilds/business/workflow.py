@@ -1,7 +1,20 @@
 """BusinessWorkflow — pipeline linéaire PM → Analyst → Legal Reviewer.
 
-Phase 4 MVP — 3 agents séquentiels avec repair loop 1× sur NEEDS_CHANGES
-(le BA peut re-analyser si le Legal a flaggué un blocker conformité).
+Phase 4 MVP — 3 agents séquentiels avec repair loop 1× sur NEEDS_CHANGES.
+
+Le repair loop **ré-exécute les 3 agents** dans l'ordre :
+1. PM v2 : reçoit la BA initiale + le verdict Legal → met à jour son plan
+   (typiquement pour intégrer les conformity required_actions dans les DoD
+   des milestones).
+2. BA v2 : analyse en s'appuyant sur le PLAN MIS À JOUR + le feedback Legal.
+3. Legal v2 : re-juge sur les v2.
+
+Pourquoi PM aussi (et pas seulement BA, comme la v1) : sur la mission
+water-tracker du 2026-05-11 (cf. ADR-009), le Legal demandait que les
+livrables conformité (CGU/Privacy/DPA) soient gravés dans la Definition
+of Done du plan PM, pas juste recommandés dans l'analyse BA. Repair loop
+v1 (BA-only) tournait éternellement à NEEDS_CHANGES car le plan PM
+restait figé.
 """
 
 from __future__ import annotations
@@ -138,30 +151,59 @@ class BusinessWorkflow:
 
         verdict = (legal_out.parsed or {}).get("verdict", VERDICT_REJECTED)
 
-        # Repair loop 1×
+        # Repair loop 1× — PM puis BA puis Legal, dans l'ordre, chacun voit
+        # les sorties amont mises à jour. Cf. docstring du module pour la
+        # rationale (mission water-tracker, ADR-009).
         if verdict == VERDICT_NEEDS_CHANGES:
             log.info("business.workflow.repair_loop", mission=str(mission_id))
+
+            # Step 1 (repair) — PM met à jour le plan en intégrant le feedback Legal
+            pm_out2 = await self.pm.run(
+                AgentInput(
+                    mission_id=mission_id,
+                    task=(
+                        "Re-produis le plan projet YAML en intégrant les issues "
+                        "conformité signalées par Legal. Grave notamment les "
+                        "required_actions de l'analyse BA dans les Definition "
+                        "of Done des milestones (ex. CGU, Privacy Policy, DPA "
+                        "fournisseurs)."
+                    ),
+                    context={
+                        "mission_description": description,
+                        "previous_plan_yaml": pm_out.raw_text,
+                        "business_analysis_yaml": analyst_out.raw_text,
+                        "legal_feedback_yaml": legal_out.raw_text,
+                    },
+                )
+            )
+            outputs.append(pm_out2)
+            current_pm = pm_out2 if pm_out2.success else pm_out
+
+            # Step 2 (repair) — BA re-analyse sur le plan MIS À JOUR
             analyst_out2 = await self.analyst.run(
                 AgentInput(
                     mission_id=mission_id,
-                    task="Re-analyse en intégrant les issues conformité signalées par Legal.",
+                    task="Re-analyse en intégrant les issues conformité signalées par Legal, "
+                    "sur le plan PM mis à jour.",
                     context={
                         "mission_description": description,
-                        "project_plan_yaml": pm_out.raw_text,
+                        "project_plan_yaml": current_pm.raw_text,
                         "previous_analysis_yaml": analyst_out.raw_text,
                         "legal_feedback_yaml": legal_out.raw_text,
                     },
                 )
             )
             outputs.append(analyst_out2)
+
+            # Step 3 (repair) — Legal re-juge l'ensemble v2
             if analyst_out2.success:
                 legal_out2 = await self.legal.run(
                     AgentInput(
                         mission_id=mission_id,
-                        task="Juge la nouvelle analyse.",
+                        task="Juge le nouveau plan et la nouvelle analyse.",
                         context={
                             "mission_description": description,
-                            "project_plan_yaml": pm_out.raw_text,
+                            "project_plan_yaml": current_pm.raw_text,
                             "business_analysis_yaml": analyst_out2.raw_text,
                             "previous_review_yaml": legal_out.raw_text,
                         },
@@ -171,6 +213,7 @@ class BusinessWorkflow:
                 if legal_out2.success:
                     legal_out = legal_out2
                     analyst_out = analyst_out2
+                    pm_out = current_pm
                     verdict = (legal_out2.parsed or {}).get("verdict", VERDICT_REJECTED)
 
         review_data = legal_out.parsed or {}
