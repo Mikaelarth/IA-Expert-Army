@@ -24,8 +24,11 @@ Liste des incidents :
 | 4 | 38fd387d | research_reviewer | 4096 | $0.54 |
 | 5 | mining bis | skill_extractor | 2048 | $0.63 |
 | 6 | 5e1e3cc7 (×2) | document_synthesizer | 4096 | (mission OK mais episodes filtrés) |
+| 7 | cc670899 (water-tracker meta) | business_analyst | 6144 (repair loop) | ~$0.78 |
 
-**Total dépenses brûlées en saturation : ~$2.68.**
+**Total dépenses brûlées en saturation : ~$3.46.**
+
+**Note incident 7 (2026-05-11)** : première saturation observée sur un **repair loop**, et sur la **Business Guild**. Contexte : la mission cross-guildes water-tracker (cf. ADR-009 si créé pour le MetaWorkflow) a fait passer la business à 1 boucle de repair. À la 2ᵉ passe, le `business_analyst` reçoit en input le verdict legal complet (~5919 tokens out, riche en `required_actions`) + son analyse v1 + tâche originale = 21404 tokens IN. Output capé à 6144 → analyse tronquée → blockers de conformité (CGU, Privacy Policy, DPA) recommandés en BA mais non gravés dans les Definition of Done des milestones — exactement le détail qu'aurait précisé la fin tronquée. Verdict figé NEEDS_CHANGES, coût gaspillé du repair ~$0.78. Fix : bump à 8192 (aligné avec les reviewers). Leçon : **les agents Business saturent aussi sur missions multi-passes** — la liste historique focalisée Research/Creative était incomplète.
 
 ## Décision
 
@@ -44,9 +47,10 @@ Valeurs actuelles (mai 2026) :
 | Tech Watch | 8192 | Findings YAML pour 3-6 sous-questions × 5-7 findings |
 | ResearchLead, ContentStrategist | 3072–4096 | Plan/Brief structuré mais court |
 | ProjectManager | 4096 | Plan avec 3-6 milestones + risks + checkpoints |
-| BusinessAnalyst | 6144 | Analyse économique multi-segments (input dense) |
+| BusinessAnalyst | 8192 | Analyse économique + survit aux repair loops (incident 7) |
 | Chief Orchestrator | 2048 | Décomposition courte |
 | Skill Extractor | 4096 | YAML structuré, input parfois énorme (3+ épisodes) |
+| MetaDecomposer | 4096 | Décomposition courte (YAML 2-4 sub-missions + rationale) |
 
 ### 2. Détection explicite + warning (curatif léger)
 

@@ -33,3 +33,4 @@ Format minimal :
 - [ADR-006 — Stratégie de mining et critères d'éligibilité des épisodes](006-mining-strategy-and-eligibility.md)
 - [ADR-007 — Stratégie d'A/B testing automatique des prompts versionnés](007-prompt-ab-testing-strategy.md) (Proposed)
 - [ADR-008 — Sandbox : trade-off `read_only=False` accepté](008-sandbox-readonly-tradeoff.md)
+- [ADR-009 — MetaWorkflow cross-guildes (Phase 7)](009-meta-workflow-cross-guilds.md)
