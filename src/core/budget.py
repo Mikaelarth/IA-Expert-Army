@@ -36,12 +36,17 @@ def _today_iso() -> str:
 
 
 @contextmanager
-def _file_lock(lock_path: Path, timeout: float = 5.0) -> Iterator[None]:
+def _file_lock(lock_path: Path, timeout: float = 30.0) -> Iterator[None]:
     """Lock fichier portable via `O_CREAT | O_EXCL` (atomique sur tous les OS).
 
     Busy-wait avec sleep 50ms entre les tentatives. Si un lock semble bloqué
     > 2× timeout, on le considère stale et on force la prise (pour ne pas
     geler le système après un crash de process).
+
+    Timeout défaut 30s : généreux pour absorber les variations de scheduling
+    OS sous charge (test concurrence Sprint VV était flaky à 5s sous full
+    pytest suite sur Windows + Python 3.14 async). En prod le lock est tenu
+    <10ms, donc ce timeout n'est jamais atteint nominalement.
     """
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     deadline = time.monotonic() + timeout

@@ -24,6 +24,10 @@ data/autonomous_runs/*.md
 !data/autonomous_runs/20260514T131532.md
 # Backups (Sprint BBB) — archives locales, jamais committées (volume + secrets potentiels)
 data/backups/
+# Approvals (Sprint CCC) — état runtime local, decisions horodatées par user
+# Note : la policy.yml SI on la commit ferait sens (politique partagée équipe),
+# mais pour v1 chacun la sienne en local.
+data/approvals/
 *.log
 logs/
 

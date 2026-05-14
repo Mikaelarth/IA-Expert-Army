@@ -27,7 +27,6 @@ from src.core.backup import (
     rotate_backups,
 )
 
-
 # ===== Fixtures : un mini-projet en tmp_path =====
 
 
@@ -93,9 +92,7 @@ def test_create_backup_excludes_pycache(project_root: Path, backup_dir: Path) ->
         assert not n.endswith(".pyc"), f"PYC file in backup: {n}"
 
 
-def test_create_backup_manifest_has_correct_metadata(
-    project_root: Path, backup_dir: Path
-) -> None:
+def test_create_backup_manifest_has_correct_metadata(project_root: Path, backup_dir: Path) -> None:
     archive = create_backup(project_root, backup_dir)
     with zipfile.ZipFile(archive, "r") as zf:
         manifest_raw = zf.read("manifest.json").decode("utf-8")
@@ -152,9 +149,7 @@ def test_rotate_keeps_only_last_n(project_root: Path, backup_dir: Path) -> None:
     assert len(deleted) == 2
 
 
-def test_rotate_no_op_when_fewer_than_keep_last(
-    project_root: Path, backup_dir: Path
-) -> None:
+def test_rotate_no_op_when_fewer_than_keep_last(project_root: Path, backup_dir: Path) -> None:
     create_backup(project_root, backup_dir)
     deleted = rotate_backups(backup_dir, keep_last=10)
     assert deleted == []
@@ -184,9 +179,7 @@ def test_read_manifest_returns_none_on_corrupt(backup_dir: Path, tmp_path: Path)
     assert read_manifest(fake) is None
 
 
-def test_read_manifest_returns_none_when_manifest_missing(
-    backup_dir: Path, tmp_path: Path
-) -> None:
+def test_read_manifest_returns_none_when_manifest_missing(backup_dir: Path, tmp_path: Path) -> None:
     empty_zip = tmp_path / "empty.zip"
     with zipfile.ZipFile(empty_zip, "w") as zf:
         zf.writestr("not-manifest.txt", "hello")
@@ -213,9 +206,9 @@ def test_restore_backup_refuses_overwrite_by_default(
 
     assert stats["skipped_existing"] >= 1
     # Le fichier existant a été préservé
-    assert (
-        target / "skills" / "agent_x" / "skill1.md"
-    ).read_text(encoding="utf-8") == "EXISTING DO NOT OVERWRITE"
+    assert (target / "skills" / "agent_x" / "skill1.md").read_text(
+        encoding="utf-8"
+    ) == "EXISTING DO NOT OVERWRITE"
 
 
 def test_restore_backup_overwrites_when_flag_set(
@@ -235,9 +228,7 @@ def test_restore_backup_overwrites_when_flag_set(
     assert content == "# Skill 1"
 
 
-def test_restore_creates_target_dirs(
-    project_root: Path, backup_dir: Path, tmp_path: Path
-) -> None:
+def test_restore_creates_target_dirs(project_root: Path, backup_dir: Path, tmp_path: Path) -> None:
     archive = create_backup(project_root, backup_dir)
     target = tmp_path / "fresh_restore"  # n'existe pas encore
     stats = restore_backup(archive, target)

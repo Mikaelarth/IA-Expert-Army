@@ -28,6 +28,7 @@ Rotation : on garde les N derniers backups (défaut 7), suppression LRU.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -87,9 +88,7 @@ def _detect_iaa_version(project_root: Path) -> str:
     return "unknown"
 
 
-def _iter_files_to_backup(
-    project_root: Path, sources: list[str]
-) -> Iterable[tuple[Path, Path]]:
+def _iter_files_to_backup(project_root: Path, sources: list[str]) -> Iterable[tuple[Path, Path]]:
     """Génère (chemin_absolu, chemin_relatif_dans_archive) pour chaque fichier à backup.
 
     `sources` est une liste de chemins relatifs au project_root. Chaque source
@@ -204,20 +203,17 @@ def rotate_backups(backup_dir: Path, keep_last: int = 7) -> list[Path]:
     backups = list_backups(backup_dir)
     to_delete = backups[keep_last:]
     for path in to_delete:
-        try:
+        # Pas critique si une suppression échoue — on retentera la prochaine fois
+        with contextlib.suppress(OSError):
             path.unlink()
-        except OSError:
-            # On laisse passer — pas critique
-            pass
     return to_delete
 
 
 def read_manifest(backup_path: Path) -> BackupManifest | None:
     """Lit le manifest.json d'un backup. Retourne None si absent/corrompu."""
     try:
-        with zipfile.ZipFile(backup_path, "r") as zf:
-            with zf.open("manifest.json") as f:
-                data = json.loads(f.read().decode("utf-8"))
+        with zipfile.ZipFile(backup_path, "r") as zf, zf.open("manifest.json") as f:
+            data = json.loads(f.read().decode("utf-8"))
         return BackupManifest(**data)
     except (KeyError, zipfile.BadZipFile, json.JSONDecodeError, OSError):
         return None

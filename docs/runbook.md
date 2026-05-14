@@ -349,7 +349,44 @@ just killswitch release
 
 ---
 
-## 11. Variables d'env shell qui shadowent `.env` (récurrent sur cette machine)
+## 11. Demandes d'approbation HITL en attente
+
+**Symptômes :**
+- Un script bloque sur `ApprovalRequired` (mode blocking=True)
+- Une mission autonome a skippé une étape critique en pending
+- Le `daily_digest` mentionne des approvals pending non décidés
+
+**Diagnostic :**
+
+```powershell
+just approvals                        # liste les demandes pending (FIFO)
+just approval-show <id>               # détail d'une demande (context, qui demande, quand)
+```
+
+**Action — décider :**
+
+```powershell
+# Approuver (raison optionnelle mais recommandée pour audit)
+just approve <id> "Backup pris à 15h25, overwrite OK"
+
+# Rejeter (raison OBLIGATOIRE)
+just reject <id> "Audit sécu pas encore fait, attendre"
+```
+
+**Action — historique :**
+
+```powershell
+just approvals-history                # 20 dernières décisions, plus récente en premier
+```
+
+**Prévention :**
+- Définir une politique d'auto-approve dans `data/approvals/policy.yml` pour les cas évidents (cf. ADR-014 et exemples dans la doc du module).
+- En mode autonome, configurer `wait_for_decision(timeout=N)` adapté au cycle de revue humaine (par défaut 300s = 5 min).
+- `data/approvals/` doit être backupé (sera intégré au backup Sprint BBB dans la prochaine itération).
+
+---
+
+## 12. Variables d'env shell qui shadowent `.env` (récurrent sur cette machine)
 
 **Symptômes :**
 - `health_check` : `ANTHROPIC_API_KEY absent ou invalide` alors que `.env` contient la clé.

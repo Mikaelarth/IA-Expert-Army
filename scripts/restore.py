@@ -66,9 +66,7 @@ def restore(
     elif backup:
         backup_path = backup
     else:
-        console.print(
-            "[red]Précise --backup <path> ou --latest pour le plus récent.[/red]"
-        )
+        console.print("[red]Précise --backup <path> ou --latest pour le plus récent.[/red]")
         raise SystemExit(2)
 
     if not backup_path.exists():
@@ -104,7 +102,7 @@ def restore(
             console.print("[yellow]Restore annulé.[/yellow]")
             raise SystemExit(0)
 
-    console.print(f"[bold cyan]Restoration en cours...[/bold cyan]")
+    console.print("[bold cyan]Restoration en cours...[/bold cyan]")
     stats = restore_backup(backup_path, target_dir, overwrite=overwrite)
 
     console.print(
@@ -116,8 +114,7 @@ def restore(
 
     if stats["skipped_existing"] > 0 and not overwrite:
         console.print(
-            "\n[dim]→ Pour écraser les fichiers existants, "
-            "relance avec --overwrite.[/dim]"
+            "\n[dim]→ Pour écraser les fichiers existants, relance avec --overwrite.[/dim]"
         )
     if stats["failed"] > 0:
         console.print(

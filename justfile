@@ -139,6 +139,28 @@ restore-latest:
 restore-from BACKUP:
     uv run python scripts/restore.py --backup {{BACKUP}}
 
+# === HITL — Human-In-The-Loop approvals (Sprint CCC) ===
+
+# Liste les demandes d'approbation en attente
+approvals:
+    uv run python scripts/approvals.py list
+
+# Liste l'historique des décisions
+approvals-history:
+    uv run python scripts/approvals.py list --decided
+
+# Détail d'une demande (usage: just approval-show <id>)
+approval-show ID:
+    uv run python scripts/approvals.py show {{ID}}
+
+# Approuve une demande (usage: just approve <id> "raison optionnelle")
+approve ID REASON="":
+    uv run python scripts/approvals.py approve {{ID}} --reason "{{REASON}}"
+
+# Rejette une demande (usage: just reject <id> "raison OBLIGATOIRE")
+reject ID REASON:
+    uv run python scripts/approvals.py reject {{ID}} --reason "{{REASON}}"
+
 # === Git ===
 
 # Statut + dernier commit
