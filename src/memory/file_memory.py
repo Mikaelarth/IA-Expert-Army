@@ -127,6 +127,24 @@ class FileMemory:
     def list_missions(self) -> list[Path]:
         return sorted(self.missions_dir.glob("*.md"))
 
+    def update_mission_summary_metadata(
+        self, mission_id: UUID | str, **fields: Any
+    ) -> MemoryRecord | None:
+        """Patch les champs de frontmatter d'un mission summary existant.
+
+        Utilisé Sprint ZZ par le `MissionRouter` pour injecter les champs `qg_*`
+        après que la guilde a déjà écrit son summary. Retourne `None` si le
+        summary n'existe pas (silent fail — pas critique pour le run).
+        """
+        record = self.get_mission_summary(mission_id)
+        if record is None:
+            return None
+        for key, value in fields.items():
+            record.metadata[key] = value
+        path = self.missions_dir / f"{mission_id}.md"
+        path.write_text(record.to_markdown(), encoding="utf-8")
+        return record
+
     # ----- meta-mission summaries (Phase 7, cross-guildes) -----
 
     def write_meta_mission_summary(self, meta_mission_id: UUID | str, record: MemoryRecord) -> Path:

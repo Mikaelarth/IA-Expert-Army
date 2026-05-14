@@ -80,6 +80,46 @@ def _meta_missions_for_date(memory: FileMemory, target: date) -> list:
     return out
 
 
+def _compute_qg_stats(missions: list) -> dict:
+    """Sprint ZZ.3 — Agrège les métriques Quality Guardian d'un lot de missions.
+
+    Retourne :
+      - count_with_qg : nombre de missions ayant un qg_verdict (= QG appliqué)
+      - verdict_counts : Counter{ACCEPT, NEEDS_REWORK, ESCALATE}
+      - divergence_count : missions où qg_verdict != ACCEPT mais guild_verdict == APPROVED
+        (= cas où le QG a flaggé quelque chose que la guilde avait raté)
+      - score_diff_significant : missions où |qg_final_score - guild_score| > 0.10
+        (= signal de divergence de calibration)
+    """
+    verdict_counts: Counter[str] = Counter()
+    divergence_count = 0
+    score_diff_significant = 0
+    count_with_qg = 0
+    for _, rec in missions:
+        m = rec.metadata
+        qg = m.get("qg_verdict")
+        if qg is None:
+            continue
+        count_with_qg += 1
+        verdict_counts[str(qg)] += 1
+        if qg != "ACCEPT" and m.get("final_verdict") == "APPROVED":
+            divergence_count += 1
+        qg_score = m.get("qg_final_score")
+        guild_score = m.get("quality_score")
+        if (
+            isinstance(qg_score, (int, float))
+            and isinstance(guild_score, (int, float))
+            and abs(float(qg_score) - float(guild_score)) > 0.10
+        ):
+            score_diff_significant += 1
+    return {
+        "count_with_qg": count_with_qg,
+        "verdict_counts": verdict_counts,
+        "divergence_count": divergence_count,
+        "score_diff_significant": score_diff_significant,
+    }
+
+
 def _compute_meta_stats(meta_missions: list) -> dict:
     """Agrège les métriques d'un lot de meta-missions du jour.
 
@@ -168,6 +208,7 @@ def _build_digest(target: date) -> str:
 
     meta_missions = _meta_missions_for_date(memory, target)
     meta_stats = _compute_meta_stats(meta_missions)
+    qg_stats = _compute_qg_stats(missions)
 
     skills_count = _skills_created_on(skills, target)
     budget_status = budget.status()
@@ -192,6 +233,31 @@ def _build_digest(target: date) -> str:
         lines.append("")
         for v, n in verdict_counts.most_common():
             lines.append(f"- {v} : {n}")
+        lines.append("")
+
+    if qg_stats["count_with_qg"]:
+        lines.append("## Quality Guardian (peer review méta)")
+        lines.append("")
+        lines.append(
+            f"- **Missions auditées :** {qg_stats['count_with_qg']} / {len(missions)} "
+            f"({100 * qg_stats['count_with_qg'] // max(1, len(missions))}%)"
+        )
+        if qg_stats["verdict_counts"]:
+            verdicts_str = " · ".join(
+                f"{v}={n}" for v, n in qg_stats["verdict_counts"].most_common()
+            )
+            lines.append(f"- **Verdicts QG :** {verdicts_str}")
+        if qg_stats["divergence_count"]:
+            lines.append(
+                f"- ⚠ **Divergence guilde↔QG :** {qg_stats['divergence_count']} missions "
+                f"APPROVED par la guilde mais flaggées par le QG"
+            )
+        if qg_stats["score_diff_significant"]:
+            lines.append(
+                f"- **Écart de score |QG − guild| > 0.10 :** "
+                f"{qg_stats['score_diff_significant']} missions "
+                f"(signal de calibration drift à surveiller)"
+            )
         lines.append("")
 
     if meta_stats["count"]:

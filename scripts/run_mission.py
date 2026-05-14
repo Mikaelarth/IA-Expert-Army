@@ -97,9 +97,21 @@ def run(
         "--meta",
         help="Mission cross-guildes : décompose en 2-4 sous-missions et orchestre (Phase 7)",
     ),
+    qg: bool = typer.Option(
+        False,
+        "--qg",
+        help="Active le Quality Guardian pour cette mission (+1 appel Opus, ~$0.10-0.20). "
+        "Indépendant de la Setting globale ENABLE_QUALITY_GUARDIAN.",
+    ),
 ) -> None:
     settings = get_settings()
     setup_logging(level=settings.log_level, fmt=settings.log_format)
+
+    # Sprint ZZ.1 — flag CLI override la setting globale, sans la modifier
+    # de manière persistante (les autres consommateurs gardent la config .env).
+    if qg and not settings.enable_quality_guardian:
+        settings = settings.model_copy(update={"enable_quality_guardian": True})
+        console.print("[dim]QG activé pour cette mission (via --qg).[/dim]")
 
     if interactive or not title or not description:
         title = title or typer.prompt("Titre de la mission")
@@ -187,7 +199,32 @@ def run(
         table.add_row("Fichiers produits", str(len(files_produced)))
     if synthesis_md:
         table.add_row("Synthèse (chars)", str(len(synthesis_md)))
+    # Sprint ZZ.1 — affichage Quality Guardian si appliqué
+    if result.qg_verdict is not None:
+        style = {
+            "ACCEPT": "green",
+            "NEEDS_REWORK": "yellow",
+            "ESCALATE": "magenta",
+        }.get(result.qg_verdict, "white")
+        qg_label = f"[{style}]{result.qg_verdict}[/{style}]"
+        if result.qg_final_score is not None:
+            qg_label += f" · score {result.qg_final_score:.2f}"
+        table.add_row("Quality Guardian", qg_label)
+        if result.qg_concerns:
+            table.add_row(
+                "QG meta-concerns",
+                "\n".join(f"• {c}" for c in result.qg_concerns),
+            )
     console.print(table)
+
+    if result.qg_rationale:
+        console.print(
+            Panel(
+                result.qg_rationale,
+                title="[bold]Quality Guardian — rationale[/bold]",
+                border_style="magenta",
+            )
+        )
 
     if synthesis_md:
         console.print("\n[bold cyan]Synthèse produite :[/bold cyan]\n")

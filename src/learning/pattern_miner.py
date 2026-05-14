@@ -112,6 +112,10 @@ class PatternMiner:
         leur YAML est probablement incomplet et minerait sur une donnée corrompue.
         """
         grouped: dict[str, list[tuple[Path, MemoryRecord]]] = defaultdict(list)
+        # Sprint ZZ.2 — cache des verdicts QG par mission_id, pour ne pas relire
+        # le mission summary N fois si plusieurs épisodes de la même mission.
+        qg_cache: dict[str, str | None] = {}
+
         for path in self.memory.list_episodes():
             try:
                 record = self.memory.read_episode(path)
@@ -137,6 +141,21 @@ class PatternMiner:
             score = meta.get("quality_score")
             if isinstance(score, (int, float)) and score < self.min_quality:
                 continue
+
+            # Sprint ZZ.2 — filtre QG : si la mission a un qg_verdict NEEDS_REWORK
+            # ou ESCALATE, on n'inclut PAS ses épisodes dans le mining. Le verdict
+            # guilde est resté APPROVED (pas d'override automatique, cf. ADR-011)
+            # mais le QG a flaggé un problème méta — la skill apprise serait polluée.
+            mission_id = meta.get("mission_id")
+            if mission_id:
+                mid_str = str(mission_id)
+                if mid_str not in qg_cache:
+                    summary = self.memory.get_mission_summary(mid_str)
+                    qg_cache[mid_str] = summary.metadata.get("qg_verdict") if summary else None
+                qg_verdict = qg_cache[mid_str]
+                if qg_verdict in {"NEEDS_REWORK", "ESCALATE"}:
+                    continue
+
             grouped[agent].append((path, record))
         return grouped
 

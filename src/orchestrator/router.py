@@ -464,6 +464,21 @@ class MissionRouter:
             qg_final_score=verdict.final_score,
             qg_concerns_count=len(verdict.meta_concerns),
         )
+
+        # Persiste les champs qg_* dans le mission summary (Sprint ZZ.0) pour
+        # que les consommateurs downstream (PatternMiner, daily_digest, MCP)
+        # voient le verdict QG sans avoir à recalculer.
+        try:
+            self.memory.update_mission_summary_metadata(
+                unified.mission_id,
+                qg_verdict=verdict.verdict_qg,
+                qg_final_score=verdict.final_score,
+                qg_concerns=verdict.meta_concerns,
+                qg_rationale=verdict.rationale,
+            )
+        except Exception as exc:
+            log.warning("qg.persist_failed", mission_id=unified.mission_id, error=str(exc))
+
         # Pydantic v2 immutable update
         return unified.model_copy(
             update={
