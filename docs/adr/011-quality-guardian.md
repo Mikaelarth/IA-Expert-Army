@@ -80,13 +80,30 @@ Si la guilde retourne `REJECTED`, le QG **valide sans appel API** (économie + c
 - **QG en mode synchrone bloquant** : adopté. L'alternative async-fire-and-forget (logguer le QG sans bloquer le return) ferait perdre l'enrichissement du `UnifiedMissionResult` pour le caller — trop fragile.
 - **Sonnet au lieu d'Opus pour le QG** : testé mentalement, rejeté. Le QG doit avoir du discernement subtil (calibration de score, détection over-engineering) — Opus produit des verdicts plus défendables. Coût marginal +$0.10/mission acceptable pour la valeur.
 
-## Validation expérimentale
+## Validation expérimentale (smoke run Sprint YY, 2026-05-14)
 
-Smoke run Sprint YY (à compléter post-commit) : 1 mission engineering simple avec `enable_quality_guardian=true`. Critères de succès :
-1. Le QG est appelé et retourne un verdict YAML parsable.
-2. Les champs `qg_*` sont peuplés dans le `UnifiedMissionResult` final.
-3. Le verdict guilde n'est pas modifié.
-4. Coût additionnel mesuré : doit être dans la fourchette $0.10-0.20.
+Mission engineering simple « Slugify utility v2 » (~30 lignes de logique + 14 tests). `ENABLE_QUALITY_GUARDIAN=true`.
+
+**Critères ADR-011 validés** :
+
+| # | Critère | Mesuré |
+|---|---|---|
+| 1 | QG appelé, retourne YAML parsable | ✅ verdict_qg=ACCEPT, 5 champs structurés |
+| 2 | Champs `qg_*` peuplés dans `UnifiedMissionResult` | ✅ qg_verdict / qg_final_score / qg_concerns / qg_rationale |
+| 3 | Verdict guilde non modifié | ✅ APPROVED 0.95 préservé (vs qg_final_score 0.92) |
+| 4 | Coût additionnel dans fourchette $0.10-0.20 | ✅ **$0.1033** (3784 in / 621 out tokens, 11.5s) |
+
+**Valeur observée — le QG délivre vraiment du méta** :
+
+Verdict guilde : `APPROVED 0.95` (code propre, 14 tests bien faits).
+
+Verdict QG : `ACCEPT 0.92` avec :
+- **alignment_check** : confirme l'alignement exact avec le brief (signature, pipeline NFKD, 2 tests minimum couverts).
+- **scope_check** : détecte l'over-delivery léger (14 tests vs 2 minimum) mais le qualifie de légitime.
+- **verdict_calibration** : *« Score 0.95 légèrement généreux mais défendable. Un 0.88-0.92 aurait été plus calibré (mission triviale ≠ excellence absolue). »*
+- **meta_concerns** : *« Score 0.95 sur une mission de complexité faible (~30 lignes) — tendance à l'auto-flatterie de la guilde sur missions simples, à surveiller sur tendance long terme. »*
+
+**Conclusion** : le QG n'est pas un rubber-stamp. Il apporte une perspective de calibration cross-mission que le reviewer interne d'une guilde ne peut pas avoir (le CodeReviewer ne sait pas si 0.95 est calibré vs d'autres missions Engineering). À surveiller sur N missions : si le QG flagge systématiquement la sur-notation, c'est un signal pour ajuster les prompts des reviewers internes.
 
 ## Pour la suite
 

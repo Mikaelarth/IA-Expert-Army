@@ -4,7 +4,7 @@
 > mémoire partagée vivante, évolution par expérience, autonomie sécurisée.
 
 [![CI](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml/badge.svg)](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-328%20passing-brightgreen)](tests/unit/)
+[![Tests](https://img.shields.io/badge/tests-343%20passing-brightgreen)](tests/unit/)
 [![Coverage](https://img.shields.io/badge/coverage-90%25-brightgreen)](#)
 [![Python](https://img.shields.io/badge/python-3.12+-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -53,7 +53,7 @@ Une commande. Code généré, écrit sur disque, validé en sandbox isolé, tout
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-Voir [docs/architecture.md](docs/architecture.md) (diagrammes mermaid + état d'implémentation) et [docs/adr/](docs/adr/) pour les **10 ADRs** documentant les décisions structurantes. En cas d'incident en mode autonome : [docs/runbook.md](docs/runbook.md).
+Voir [docs/architecture.md](docs/architecture.md) (diagrammes mermaid + état d'implémentation) et [docs/adr/](docs/adr/) pour les **11 ADRs** documentant les décisions structurantes. En cas d'incident en mode autonome : [docs/runbook.md](docs/runbook.md).
 
 ---
 

@@ -28,7 +28,7 @@ from src.orchestrator.quality_guardian import (
     QualityGuardian,
     review_mission,
 )
-from src.orchestrator.router import MissionRouter, UnifiedMissionResult
+from src.orchestrator.router import MissionRouter
 
 
 @pytest.fixture(autouse=True)
@@ -321,9 +321,7 @@ async def test_router_does_not_call_qg_when_disabled(
 
     workflow_mock = MagicMock()
     workflow_mock.run = AsyncMock(return_value=fake_workflow_result)
-    monkeypatch.setattr(
-        "src.orchestrator.router.Workflow", MagicMock(return_value=workflow_mock)
-    )
+    monkeypatch.setattr("src.orchestrator.router.Workflow", MagicMock(return_value=workflow_mock))
 
     # Spy sur _apply_quality_guardian pour confirmer qu'il n'est pas appelé
     apply_spy = MagicMock(wraps=router._apply_quality_guardian)
@@ -359,9 +357,7 @@ async def test_router_calls_qg_when_enabled(
 
     workflow_mock = MagicMock()
     workflow_mock.run = AsyncMock(return_value=fake_workflow_result)
-    monkeypatch.setattr(
-        "src.orchestrator.router.Workflow", MagicMock(return_value=workflow_mock)
-    )
+    monkeypatch.setattr("src.orchestrator.router.Workflow", MagicMock(return_value=workflow_mock))
 
     # Mock le QG via review_mission
     async def fake_review(**kwargs):
@@ -375,9 +371,7 @@ async def test_router_calls_qg_when_enabled(
     monkeypatch.setattr("src.orchestrator.quality_guardian.review_mission", fake_review)
 
     # On évite l'instantiation réelle de QualityGuardian qui tente d'ouvrir le prompt
-    monkeypatch.setattr(
-        "src.orchestrator.quality_guardian.QualityGuardian", MagicMock()
-    )
+    monkeypatch.setattr("src.orchestrator.quality_guardian.QualityGuardian", MagicMock())
 
     result = await router.run(title="X", description="y", force_guild="engineering")
 
@@ -413,9 +407,7 @@ async def test_router_preserves_guild_verdict_even_when_qg_needs_rework(
 
     workflow_mock = MagicMock()
     workflow_mock.run = AsyncMock(return_value=fake_workflow_result)
-    monkeypatch.setattr(
-        "src.orchestrator.router.Workflow", MagicMock(return_value=workflow_mock)
-    )
+    monkeypatch.setattr("src.orchestrator.router.Workflow", MagicMock(return_value=workflow_mock))
 
     async def fake_review(**kwargs):
         # Mais le QG dit NEEDS_REWORK (dérive de scope p.ex.)
@@ -427,9 +419,7 @@ async def test_router_preserves_guild_verdict_even_when_qg_needs_rework(
         )
 
     monkeypatch.setattr("src.orchestrator.quality_guardian.review_mission", fake_review)
-    monkeypatch.setattr(
-        "src.orchestrator.quality_guardian.QualityGuardian", MagicMock()
-    )
+    monkeypatch.setattr("src.orchestrator.quality_guardian.QualityGuardian", MagicMock())
 
     result = await router.run(title="X", description="y", force_guild="engineering")
 

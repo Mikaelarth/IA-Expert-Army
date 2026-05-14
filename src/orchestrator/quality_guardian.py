@@ -142,9 +142,7 @@ async def review_mission(
         return None
 
     final_score_raw = parsed.get("final_score")
-    final_score = (
-        float(final_score_raw) if isinstance(final_score_raw, (int, float)) else None
-    )
+    final_score = float(final_score_raw) if isinstance(final_score_raw, (int, float)) else None
     concerns_raw = parsed.get("meta_concerns") or []
     if not isinstance(concerns_raw, list):
         concerns_raw = []
