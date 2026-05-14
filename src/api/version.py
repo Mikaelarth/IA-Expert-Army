@@ -15,7 +15,7 @@ def _get_git_commit() -> str:
     """
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
+            ["git", "rev-parse", "--short", "HEAD"],  # noqa: S607 — `git` PATH-resolved volontairement (cross-platform Docker/CI)
             capture_output=True,
             text=True,
             timeout=2.0,

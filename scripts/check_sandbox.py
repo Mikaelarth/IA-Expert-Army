@@ -76,7 +76,7 @@ def check(
                 str(dockerfile),
                 str(dockerfile.parent),
             ]
-            r = subprocess.run(cmd, capture_output=True, text=True)
+            r = subprocess.run(cmd, capture_output=True, text=True, check=False)  # noqa: S603 — args entièrement contrôlés par le script, pas d'input externe
             if r.returncode != 0:
                 console.print(f"[red]Build échoué :[/red]\n{r.stderr}")
                 raise SystemExit(1)

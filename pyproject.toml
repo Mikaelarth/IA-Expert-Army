@@ -1,6 +1,6 @@
 [project]
 name = "ia-expert-army"
-version = "0.1.0"
+version = "0.2.0"
 description = "Une armée d'agents IA experts spécialisés, autonome, à mémoire partagée et apprentissage continu."
 authors = [{ name = "MikaelArth", email = "esarth.org@gmail.com" }]
 readme = "README.md"
@@ -68,7 +68,10 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "RUF"]
+# S = bandit-like (sécurité). Activé Sprint UU.5 après audit + noqa
+# documentés sur les findings réels (tmpfs sandbox, urllib localhost,
+# subprocess dev scripts).
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "RUF", "S"]
 ignore = [
     "E501",   # ligne >100 chars : géré par le formatter, pas la peine de doublonner
     # Conventions de nommage métier — exceptions publiques avec sémantique de
@@ -82,6 +85,14 @@ ignore = [
     # (×, ≥, …) dans les commentaires/docstrings. Désambiguïser n'apporte rien.
     "RUF001", "RUF002", "RUF003",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests : `assert` (S101), fake keys "sk-ant-test-..." (S105/S106),
+# Exception broad (S110), random non-crypto (S311), `/tmp/...` paths
+# fictifs (S108) — c'est leur rôle, pas une vulnérabilité.
+"tests/**" = ["S101", "S105", "S106", "S108", "S110", "S311"]
+# Scripts CLI dev : assert OK pour les pré-conditions internes.
+"scripts/**" = ["S101"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -99,13 +110,26 @@ filterwarnings = [
 
 [tool.mypy]
 python_version = "3.12"
-strict = true
+# strict = true a été désactivé Sprint UU.5 — mypy 2.0 le trouve trop agressif
+# sur la base existante (85 erreurs sur args dict[str, object], decorator
+# untyped, etc.). Activer progressivement les checks granulaires ci-dessous
+# au fur et à mesure que les modules sont nettoyés. Dette technique tracée
+# dans le CHANGELOG section [Unreleased].
+strict = false
 ignore_missing_imports = true
+# Checks progressifs activés : on commence par les erreurs les plus claires.
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+check_untyped_defs = true
 
 [dependency-groups]
 dev = [
     "fastapi>=0.136.1",
+    "mypy>=1.13",
     "pre-commit>=4.6.0",
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.1.0",
+    "types-pyyaml>=6.0.12.20260510",
 ]

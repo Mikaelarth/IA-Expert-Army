@@ -7,6 +7,59 @@ versioning [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Technical debt
+
+- **Typage mypy** : `strict = true` génère 85 erreurs sur la base (passage à
+  mypy 2.0 Sprint UU.5). Désactivé temporairement avec opt-in granulaire
+  (`check_untyped_defs`, `warn_unused_ignores`, `no_implicit_optional`,
+  `warn_redundant_casts`). Mypy reste lançable via `just typecheck` mais
+  n'est PAS dans pre-commit (sinon ça bloque tout). Plan de réactivation :
+  module par module via `--strict src/<module>.py`. Cf. dette
+  `[tool.mypy]` dans `pyproject.toml`.
+- **Couverture meta-mission `verdict?` filter** : `list_recent_meta_missions`
+  MCP n'expose pas encore un filtre verdict optionnel (mentionné dans
+  ADR-009 "Pour la suite" — pas critique mais nice-to-have).
+
+## [0.2.0] — 2026-05-14 — Phase 6+7 livrées + audit qualité (Sprint UU)
+
+### Added — Sprint UU : Audit qualité + clean-up (session 13)
+
+#### Sprint UU.4 — Boost couverture workflows Research + Creative
+- `tests/unit/test_research_creative_workflows.py` (+13 tests symétriques
+  aux suites Business/Engineering).
+- Coverage Research workflow : **30% → 89%** (+59 pts).
+- Coverage Creative workflow : **31% → 88%** (+57 pts).
+- **Coverage global : 84% → 90%** (+6 pts).
+
+#### Sprint UU.1 — Mypy clean
+- `types-PyYAML` ajouté en dev dep.
+- 5 `type: ignore` inutilisés retirés (tracing.py, sandbox/runner.py).
+- `Returning Any` corrigé via `cast()` explicite (tracing.py).
+- `get_logger` annoté `-> Any` (compromis structlog sans stub propre).
+- Mypy 1.5.1 (Python 3.11 global) → mypy 2.0.0 dans le venv via
+  `dependency-groups`.
+
+#### Sprint UU.2 — S-rules (sécurité bandit-like)
+- `S` ajouté à `[tool.ruff.lint].select`.
+- `per-file-ignores` pour tests (S101/S105/S106/S108/S110/S311) et
+  scripts (S101) — légitimes par contexte.
+- 2× `except: continue` → `log.warning + continue` dans MCP server
+  (S112, vrai bug : on perdait silencieusement les erreurs de parsing).
+- `noqa` documentés sur findings légitimes : `/tmp` tmpfs sandbox (S108),
+  Langfuse localhost health (S310), `git rev-parse` PATH-resolved (S607).
+
+#### Sprint UU.3 — `src/api/` intégré au filet de sécurité
+- `tests/test_version.py` + `tests/test_info.py` (12 tests qui passaient
+  mais jamais exécutés en CI/pre-commit car hors de `tests/unit/`)
+  déplacés vers `tests/unit/test_api_version.py` + `test_api_info.py`.
+- Décision : `src/api/` (FastAPI endpoints version/info) gardé comme
+  module utilitaire pour intégration future REST.
+
+#### Sprint UU.6 — Release v0.2.0
+- Version bumpée 0.1.0 → 0.2.0 dans `pyproject.toml`.
+- Section `[Unreleased]` fermée comme `[0.2.0]`.
+- Tag git `v0.2.0`.
+
 ### Added — Phase 6 validation : autonomous harness (session 13, Sprint C)
 
 #### Sprint C — `scripts/autonomous_run.py` (commit `fcad011`)

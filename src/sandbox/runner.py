@@ -33,9 +33,9 @@ try:
 
     _DOCKER_AVAILABLE = True
 except ImportError:
-    docker = None  # type: ignore[assignment]
+    docker = None
     _DOCKER_AVAILABLE = False
-    ContainerError = DockerException = ImageNotFound = NotFound = Exception  # type: ignore[misc,assignment]
+    ContainerError = DockerException = ImageNotFound = NotFound = Exception
 
 from src.core.logging import get_logger
 
@@ -148,7 +148,9 @@ class SandboxRunner:
                 pids_limit=self.pids_limit,
                 user=self.user,
                 read_only=False,
-                tmpfs={"/tmp": "size=64m,mode=1777"},
+                # /tmp ici = tmpfs RAM dans un container Docker éphémère + isolé
+                # (no-net, user=nobody, mem/cpu/pid limits) — pas un /tmp hôte.
+                tmpfs={"/tmp": "size=64m,mode=1777"},  # noqa: S108
                 detach=True,
                 working_dir="/workspace",
             )

@@ -51,9 +51,9 @@ def _try_import_langfuse() -> tuple[bool, Callable[..., Any] | None]:
     try:
         # Langfuse v4 a déplacé observe de langfuse.decorators vers langfuse
         try:
-            from langfuse import observe as lf_observe  # type: ignore[import]
+            from langfuse import observe as lf_observe
         except ImportError:
-            from langfuse.decorators import observe as lf_observe  # type: ignore[import]
+            from langfuse.decorators import observe as lf_observe
         return True, lf_observe
     except ImportError:
         return False, None
@@ -100,7 +100,7 @@ def init_tracing(force_disable: bool = False) -> bool:
     # Langfuse v4 : initialisation explicite via Langfuse(...)
     try:
         try:
-            from langfuse import Langfuse  # type: ignore[import]
+            from langfuse import Langfuse
 
             Langfuse(
                 public_key=public_key,
@@ -131,7 +131,9 @@ def _noop_observe(
     """
     # Cas usage sans parenthèses : @observe direct sur une fonction
     if len(decorator_args) == 1 and callable(decorator_args[0]) and not decorator_kwargs:
-        return decorator_args[0]  # type: ignore[return-value]
+        from typing import cast
+
+        return cast(Callable[[Callable[P, R]], Callable[P, R]], decorator_args[0])
 
     def decorator(func: Callable[P, R]) -> Callable[P, R]:
         @wraps(func)

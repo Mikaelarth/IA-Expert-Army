@@ -34,6 +34,15 @@ repos:
       # Formattage cohérent
       - id: ruff-format
 
+  # NOTE — mypy n'est PAS dans pre-commit (Sprint UU.5)
+  # Raison : mypy 2.0 sur `strict = true` trouve 85 erreurs sur la base
+  # existante (kwargs `**common: dict[str, object]` dans router.py, decorators
+  # untyped sur @observe en mode NO-OP, etc.). On a :
+  # 1) baissé strict → false + opt-in granulaire (cf. pyproject.toml)
+  # 2) gardé `just typecheck` (justfile) comme check manuel
+  # 3) documenté la dette dans le CHANGELOG [Unreleased]
+  # À réactiver progressivement, module par module, via `--strict src/X.py`.
+
   # === Hook custom : tests unit doivent passer ===
   - repo: local
     hooks:

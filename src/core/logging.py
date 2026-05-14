@@ -47,8 +47,12 @@ def setup_logging(level: str = "INFO", fmt: str = "console") -> None:
     _configured = True
 
 
-def get_logger(name: str | None = None):
-    """Retourne un logger structuré nommé (le nom est bind comme contexte 'logger')."""
+def get_logger(name: str | None = None) -> Any:
+    """Retourne un logger structuré nommé (le nom est bind comme contexte 'logger').
+
+    Le type de retour est `Any` car structlog renvoie un `BoundLoggerLazyProxy`
+    qui n'a pas de stub propre — on accepte le compromis plutôt que de wrapper.
+    """
     if not _configured:
         setup_logging()
     log = structlog.get_logger()

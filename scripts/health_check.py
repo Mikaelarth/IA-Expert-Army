@@ -237,7 +237,7 @@ def check_langfuse_http() -> tuple[str, str]:
 
     try:
         req = urllib.request.Request("http://localhost:3000")
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=5) as resp:  # noqa: S310 — localhost-only Langfuse health
             return _ok(f"HTTP {resp.status} sur :3000")
     except urllib.error.URLError:
         return _skipped("Langfuse pas démarré (docker compose --profile observability up -d)")

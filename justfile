@@ -116,6 +116,10 @@ lint-fix:
 fmt:
     uv run ruff format src/ scripts/ tests/
 
+# Typecheck (mypy non-strict, dette tracée dans CHANGELOG)
+typecheck:
+    uv run mypy src/
+
 # === Git ===
 
 # Statut + dernier commit

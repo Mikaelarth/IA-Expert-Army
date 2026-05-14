@@ -36,7 +36,7 @@ class BudgetController:
         if not self.state_path.exists():
             return {"date": _today_iso(), "spent_usd": 0.0, "history": []}
         try:
-            data = json.loads(self.state_path.read_text(encoding="utf-8"))
+            data: dict[str, Any] = json.loads(self.state_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return {"date": _today_iso(), "spent_usd": 0.0, "history": []}
         if data.get("date") != _today_iso():

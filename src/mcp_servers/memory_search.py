@@ -348,7 +348,10 @@ def _handle_list_recent_missions(
         for path in paths:
             try:
                 rec = file_memory.get_mission_summary(path.stem)
-            except Exception:
+            except Exception as exc:
+                # On continue sur erreur de parsing isolée (frontmatter corrompu) mais on
+                # le logue pour ne pas le perdre silencieusement (audit S112).
+                log.warning("mcp.list_recent_missions.skip", path=str(path), error=str(exc))
                 continue
             if rec is None:
                 continue
@@ -428,7 +431,9 @@ def _handle_list_recent_meta_missions(
         for path in paths:
             try:
                 rec = file_memory.get_meta_mission_summary(path.stem)
-            except Exception:
+            except Exception as exc:
+                # Idem que list_recent_missions : on continue mais on logue.
+                log.warning("mcp.list_recent_meta_missions.skip", path=str(path), error=str(exc))
                 continue
             if rec is None:
                 continue
