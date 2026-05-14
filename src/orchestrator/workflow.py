@@ -32,8 +32,10 @@ from src.orchestrator.agents import (
     BackendDeveloper,
     ChiefOrchestrator,
     CodeReviewer,
+    SecurityAuditor,
     SoftwareArchitect,
 )
+from src.orchestrator.agents.security_auditor import has_downgrade_findings
 from src.orchestrator.base_agent import AgentInput, AgentOutput
 
 log = get_logger("workflow")
@@ -170,51 +172,85 @@ class Workflow:
 
         verdict = (review_out.parsed or {}).get("verdict", VERDICT_REJECTED)
 
+        # Sprint AAA — SecurityAuditor (opt-in via Settings.enable_security_auditor)
+        # Lancé UNIQUEMENT sur missions APPROVED par le CodeReviewer — pas la peine
+        # d'auditer un code que la guilde a déjà refusé.
+        sec_out: AgentOutput | None = None
+        if self.settings.enable_security_auditor and verdict == VERDICT_APPROVED:
+            log.info("workflow.security_audit.start", mission=str(mission_id))
+            sec_auditor = SecurityAuditor(
+                memory=self.memory,
+                settings=self.settings,
+                vector_memory=self.vector_memory,
+                skills_library=self.skills_library,
+            )
+            sec_out = await sec_auditor.run(
+                AgentInput(
+                    mission_id=mission_id,
+                    task=first_task,
+                    context={
+                        "architecture_proposal_yaml": arch_out.raw_text,
+                        "developer_output_md": dev_out.raw_text,
+                        "code_review_verdict_yaml": review_out.raw_text,
+                    },
+                )
+            )
+            outputs.append(sec_out)
+            if sec_out.success and has_downgrade_findings(sec_out.parsed):
+                log.warning(
+                    "workflow.security_audit.downgrade",
+                    mission=str(mission_id),
+                    n_findings=len(sec_out.parsed.get("findings", [])) if sec_out.parsed else 0,
+                )
+                verdict = VERDICT_NEEDS_CHANGES
+
         # Optional repair loop (max once) — Architect → Developer → Reviewer
         # dans l'ordre, chacun voit les sorties amont mises à jour. Cf. docstring
         # du module pour la rationale (pattern méta-leçon Sprint PP).
         if verdict == VERDICT_NEEDS_CHANGES:
             log.info("workflow.repair_loop", mission=str(mission_id))
 
+            # Sprint AAA — si le SecurityAuditor a flaggué le downgrade, on injecte
+            # ses findings dans le contexte pour que Architect/Developer y répondent.
+            security_findings_yaml = sec_out.raw_text if sec_out is not None else ""
+
             # Step 1 (repair) — Architect révise éventuellement la proposition
+            arch_repair_context = {
+                "mission": description,
+                "decomposition_yaml": orch_out.raw_text,
+                "previous_architecture_yaml": arch_out.raw_text,
+                "previous_implementation_md": dev_out.raw_text,
+                "review_feedback_yaml": review_out.raw_text,
+                "instruction": (
+                    "Revoie la proposition d'architecture en intégrant les issues "
+                    "remontées par le Reviewer. Si l'archi initiale tient debout et "
+                    "que les issues sont purement code-level, re-produis la même "
+                    "structure ; sinon ajuste-la (séparation des couches, validation, "
+                    "etc.) avant que le Developer ne re-livre."
+                ),
+            }
+            if security_findings_yaml:
+                arch_repair_context["security_findings_yaml"] = security_findings_yaml
             arch_out2 = await self.architect.run(
-                AgentInput(
-                    mission_id=mission_id,
-                    task=first_task,
-                    context={
-                        "mission": description,
-                        "decomposition_yaml": orch_out.raw_text,
-                        "previous_architecture_yaml": arch_out.raw_text,
-                        "previous_implementation_md": dev_out.raw_text,
-                        "review_feedback_yaml": review_out.raw_text,
-                        "instruction": (
-                            "Revoie la proposition d'architecture en intégrant les issues "
-                            "remontées par le Reviewer. Si l'archi initiale tient debout et "
-                            "que les issues sont purement code-level, re-produis la même "
-                            "structure ; sinon ajuste-la (séparation des couches, validation, "
-                            "etc.) avant que le Developer ne re-livre."
-                        ),
-                    },
-                )
+                AgentInput(mission_id=mission_id, task=first_task, context=arch_repair_context)
             )
             outputs.append(arch_out2)
             current_arch = arch_out2 if arch_out2.success else arch_out
 
             # Step 2 (repair) — Developer code sur l'archi mise à jour
+            dev_repair_context = {
+                "architecture_proposal_yaml": current_arch.raw_text,
+                "previous_implementation_md": dev_out.raw_text,
+                "review_feedback_yaml": review_out.raw_text,
+                "instruction": (
+                    "Corrige les issues remontées par le Reviewer sur l'archi mise à "
+                    "jour puis re-livre la version complète."
+                ),
+            }
+            if security_findings_yaml:
+                dev_repair_context["security_findings_yaml"] = security_findings_yaml
             dev_out2 = await self.developer.run(
-                AgentInput(
-                    mission_id=mission_id,
-                    task=first_task,
-                    context={
-                        "architecture_proposal_yaml": current_arch.raw_text,
-                        "previous_implementation_md": dev_out.raw_text,
-                        "review_feedback_yaml": review_out.raw_text,
-                        "instruction": (
-                            "Corrige les issues remontées par le Reviewer sur l'archi mise à "
-                            "jour puis re-livre la version complète."
-                        ),
-                    },
-                )
+                AgentInput(mission_id=mission_id, task=first_task, context=dev_repair_context)
             )
             outputs.append(dev_out2)
 

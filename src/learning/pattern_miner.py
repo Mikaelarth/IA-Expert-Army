@@ -68,6 +68,7 @@ class PatternMiner:
         "software_architect",
         "backend_developer",
         "code_reviewer",
+        "security_auditor",  # Sprint AAA — audit OWASP/secrets/pratiques sécu
         # Guild Research (ajoutée Phase 4)
         "research_lead",
         "tech_watch",

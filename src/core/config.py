@@ -54,6 +54,14 @@ class Settings(BaseSettings):
         False,
         description="Active le QG après chaque mission guilde (alignement promesse↔livraison)",
     )
+    # Security Auditor (Sprint AAA) — audit OWASP / secrets / pratiques sécu
+    # défensives sur les missions Engineering APPROVED. Opt-in car ajoute
+    # ~$0.05-0.10/mission (1 appel Sonnet). À activer en mode autonome ou pour
+    # les missions touchant des endpoints publics / données sensibles.
+    enable_security_auditor: bool = Field(
+        False,
+        description="Active le SecurityAuditor après CodeReviewer pour les missions Engineering",
+    )
 
     # --- Logging ---
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"

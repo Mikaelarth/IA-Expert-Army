@@ -10,13 +10,11 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
 
 from src.memory.file_memory import FileMemory, MemoryRecord
-
 
 # ===== ZZ.0 — Persistence qg_* dans mission summary =====
 
@@ -124,14 +122,10 @@ def test_pattern_miner_filters_episodes_when_qg_needs_rework(
     _write_mission_and_episode(memory, mid_ok, "backend_developer", qg_verdict="ACCEPT")
     # Mission 2 : QG NEEDS_REWORK → épisode FILTRÉ
     mid_rework = str(uuid4())
-    _write_mission_and_episode(
-        memory, mid_rework, "backend_developer", qg_verdict="NEEDS_REWORK"
-    )
+    _write_mission_and_episode(memory, mid_rework, "backend_developer", qg_verdict="NEEDS_REWORK")
     # Mission 3 : QG ESCALATE → épisode FILTRÉ aussi
     mid_escalate = str(uuid4())
-    _write_mission_and_episode(
-        memory, mid_escalate, "backend_developer", qg_verdict="ESCALATE"
-    )
+    _write_mission_and_episode(memory, mid_escalate, "backend_developer", qg_verdict="ESCALATE")
     # Mission 4 : pas de QG (legacy) → mineable (no signal = no penalty)
     mid_legacy = str(uuid4())
     _write_mission_and_episode(memory, mid_legacy, "backend_developer", qg_verdict=None)
