@@ -299,6 +299,12 @@ class UnifiedMissionResult(BaseModel):
     summary: str
     raw_result: dict[str, Any]
 
+    # === Quality Guardian (Sprint YY, opt-in via Settings) ===
+    qg_verdict: str | None = None  # ACCEPT | NEEDS_REWORK | ESCALATE | None
+    qg_final_score: float | None = None
+    qg_concerns: list[str] = []
+    qg_rationale: str | None = None
+
 
 class MissionRouter:
     """Point d'entrée : reçoit (title, description), choisit la guilde, exécute,
@@ -352,7 +358,7 @@ class MissionRouter:
         if decision.guild == "research":
             wf = ResearchWorkflow(**common)
             result: ResearchMissionResult = await wf.run(title=title, description=description)
-            return UnifiedMissionResult(
+            unified = UnifiedMissionResult(
                 mission_id=str(result.mission_id),
                 title=result.title,
                 guild="research",
@@ -364,13 +370,12 @@ class MissionRouter:
                 summary=result.review_summary,
                 raw_result=result.model_dump(mode="json"),
             )
-
-        if decision.guild == "creative":
+        elif decision.guild == "creative":
             wf_cre = CreativeWorkflow(**common)
             cre_result: CreativeMissionResult = await wf_cre.run(
                 title=title, description=description
             )
-            return UnifiedMissionResult(
+            unified = UnifiedMissionResult(
                 mission_id=str(cre_result.mission_id),
                 title=cre_result.title,
                 guild="creative",
@@ -382,13 +387,12 @@ class MissionRouter:
                 summary=cre_result.review_summary,
                 raw_result=cre_result.model_dump(mode="json"),
             )
-
-        if decision.guild == "business":
+        elif decision.guild == "business":
             wf_biz = BusinessWorkflow(**common)
             biz_result: BusinessMissionResult = await wf_biz.run(
                 title=title, description=description
             )
-            return UnifiedMissionResult(
+            unified = UnifiedMissionResult(
                 mission_id=str(biz_result.mission_id),
                 title=biz_result.title,
                 guild="business",
@@ -400,19 +404,72 @@ class MissionRouter:
                 summary=biz_result.review_summary,
                 raw_result=biz_result.model_dump(mode="json"),
             )
+        else:
+            # Default = engineering
+            wf_eng = Workflow(**common)
+            eng_result: MissionResult = await wf_eng.run(title=title, description=description)
+            unified = UnifiedMissionResult(
+                mission_id=str(eng_result.mission_id),
+                title=eng_result.title,
+                guild="engineering",
+                success=eng_result.success,
+                final_verdict=eng_result.final_verdict,
+                quality_score=eng_result.quality_score,
+                total_cost_usd=eng_result.total_cost_usd,
+                total_duration_seconds=eng_result.total_duration_seconds,
+                summary=eng_result.review_summary,
+                raw_result=eng_result.model_dump(mode="json"),
+            )
 
-        # Default = engineering
-        wf_eng = Workflow(**common)
-        eng_result: MissionResult = await wf_eng.run(title=title, description=description)
-        return UnifiedMissionResult(
-            mission_id=str(eng_result.mission_id),
-            title=eng_result.title,
-            guild="engineering",
-            success=eng_result.success,
-            final_verdict=eng_result.final_verdict,
-            quality_score=eng_result.quality_score,
-            total_cost_usd=eng_result.total_cost_usd,
-            total_duration_seconds=eng_result.total_duration_seconds,
-            summary=eng_result.review_summary,
-            raw_result=eng_result.model_dump(mode="json"),
+        # Sprint YY — Quality Guardian peer review méta cross-guilde (opt-in)
+        if self.settings.enable_quality_guardian:
+            unified = await self._apply_quality_guardian(unified, title, description)
+        return unified
+
+    async def _apply_quality_guardian(
+        self, unified: UnifiedMissionResult, title: str, description: str
+    ) -> UnifiedMissionResult:
+        """Lance le QG sur le résultat de la guilde et enrichit le UnifiedMissionResult.
+
+        Politique : on n'override JAMAIS le verdict guilde. On ajoute juste les
+        champs `qg_*` informatifs. Le caller (run_mission.py, PatternMiner, etc.)
+        décide quoi faire avec un `qg_verdict == NEEDS_REWORK` (ne pas miner, etc.).
+        """
+        from src.orchestrator.quality_guardian import QualityGuardian, review_mission
+
+        try:
+            qg = QualityGuardian(memory=self.memory, settings=self.settings)
+            verdict = await review_mission(
+                qg=qg,
+                mission_title=title,
+                mission_description=description,
+                guild=unified.guild,
+                guild_verdict=unified.final_verdict,
+                guild_score=unified.quality_score,
+                guild_summary=unified.summary,
+                raw_result_excerpt=str(unified.raw_result)[:3000],
+            )
+        except Exception as exc:
+            log.warning("qg.run.failed", error=str(exc))
+            return unified
+
+        if verdict is None:
+            log.warning("qg.parsed_none")
+            return unified
+
+        log.info(
+            "qg.complete",
+            mission_id=unified.mission_id,
+            qg_verdict=verdict.verdict_qg,
+            qg_final_score=verdict.final_score,
+            qg_concerns_count=len(verdict.meta_concerns),
+        )
+        # Pydantic v2 immutable update
+        return unified.model_copy(
+            update={
+                "qg_verdict": verdict.verdict_qg,
+                "qg_final_score": verdict.final_score,
+                "qg_concerns": verdict.meta_concerns,
+                "qg_rationale": verdict.rationale,
+            }
         )

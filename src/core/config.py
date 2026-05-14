@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     circuit_breaker_error_rate: float = Field(
         0.3, ge=0, le=1, description="Seuil d'erreur déclenchant le circuit breaker"
     )
+    # Quality Guardian (Sprint YY) — peer review méta cross-guilde. Opt-in car
+    # ajoute ~$0.10-0.20/mission (1 appel Opus). À activer en mode autonome.
+    enable_quality_guardian: bool = Field(
+        False,
+        description="Active le QG après chaque mission guilde (alignement promesse↔livraison)",
+    )
 
     # --- Logging ---
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
