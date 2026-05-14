@@ -246,6 +246,65 @@ def test_detect_saturation_zero_max_tokens_handled() -> None:
     assert BaseAgent._detect_saturation(BaseAgent, 0, 0, "end_turn") is False
 
 
+# ===== Sprint VV.1 — Retry/backoff explicite =====
+
+
+def test_base_agent_default_client_uses_settings_retry_config(
+    settings: Settings, memory: FileMemory, prompt_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Quand on n'injecte pas de client, BaseAgent doit configurer AsyncAnthropic
+    avec max_retries et timeout depuis Settings (pas les défauts SDK silencieux)."""
+    captured: dict = {}
+
+    class _FakeAsyncAnthropic:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            self.messages = SimpleNamespace(create=AsyncMock())
+
+    monkeypatch.setattr("src.orchestrator.base_agent.AsyncAnthropic", _FakeAsyncAnthropic)
+
+    BaseAgent(
+        name="x",
+        prompt_path=prompt_file,
+        model="claude-sonnet-4-6",
+        memory=memory,
+        settings=settings,
+    )
+
+    assert "max_retries" in captured, "BaseAgent doit passer max_retries au client"
+    assert captured["max_retries"] == settings.anthropic_max_retries
+    assert "timeout" in captured
+    assert captured["timeout"] == settings.anthropic_timeout_seconds
+    assert captured["api_key"] == "sk-ant-test-12345"
+
+
+def test_settings_anthropic_retry_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Les défauts retry/timeout doivent être raisonnables (pas 0, pas 600)."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-12345")
+    s = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert s.anthropic_max_retries == 2
+    assert s.anthropic_timeout_seconds == 300.0
+
+
+def test_settings_anthropic_retry_overridable(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-12345")
+    monkeypatch.setenv("ANTHROPIC_MAX_RETRIES", "4")
+    monkeypatch.setenv("ANTHROPIC_TIMEOUT_SECONDS", "60")
+    s = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert s.anthropic_max_retries == 4
+    assert s.anthropic_timeout_seconds == 60.0
+
+
+def test_settings_anthropic_max_retries_clamped(monkeypatch: pytest.MonkeyPatch) -> None:
+    """max_retries doit être borné à [0, 5] (sinon retry storm en cas de 5xx persistant)."""
+    from pydantic import ValidationError
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-12345")
+    monkeypatch.setenv("ANTHROPIC_MAX_RETRIES", "99")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)  # type: ignore[call-arg]
+
+
 @pytest.mark.asyncio
 async def test_base_agent_rag_injects_precedents_and_indexes(
     settings: Settings, memory: FileMemory, prompt_file: Path, tmp_path: Path

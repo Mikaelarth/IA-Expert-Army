@@ -22,6 +22,15 @@ class Settings(BaseSettings):
 
     # --- Anthropic ---
     anthropic_api_key: SecretStr = Field(..., description="Clé API Anthropic")
+    # Retry/timeout du SDK AsyncAnthropic (Sprint VV.1). Exposés depuis le SDK
+    # mais implicites par défaut — on les rend explicites + configurables.
+    # Le SDK fait du backoff exponentiel automatique entre les retries.
+    anthropic_max_retries: int = Field(
+        2, ge=0, le=5, description="Retries auto sur 5xx/timeout/connection error"
+    )
+    anthropic_timeout_seconds: float = Field(
+        300.0, ge=10.0, description="Timeout par appel Claude (défaut SDK = 600s, on serre)"
+    )
 
     # --- Modèles par tier ---
     model_strategic: str = Field("claude-opus-4-7", description="Modèle pour rôles stratégiques")

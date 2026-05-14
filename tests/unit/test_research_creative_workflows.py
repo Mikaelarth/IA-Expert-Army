@@ -78,7 +78,9 @@ async def test_research_workflow_happy_path(settings: Settings, memory: FileMemo
     wf.watch = MagicMock()
     wf.watch.run = AsyncMock(return_value=_agent_output("tech_watch", raw_text="findings"))
     wf.synth = MagicMock()
-    wf.synth.run = AsyncMock(return_value=_agent_output("document_synthesizer", raw_text="synthèse"))
+    wf.synth.run = AsyncMock(
+        return_value=_agent_output("document_synthesizer", raw_text="synthèse")
+    )
     wf.reviewer = MagicMock()
     wf.reviewer.run = AsyncMock(
         return_value=_agent_output(
@@ -226,9 +228,7 @@ async def test_research_workflow_killswitch_engaged_fails_early(
 
 
 @pytest.mark.asyncio
-async def test_research_workflow_score_propagation(
-    settings: Settings, memory: FileMemory
-) -> None:
+async def test_research_workflow_score_propagation(settings: Settings, memory: FileMemory) -> None:
     """Après APPROVED, chaque épisode de la mission doit avoir quality_score
     et final_verdict dans son frontmatter (utile pour PatternMiner)."""
     wf = ResearchWorkflow(memory=memory, settings=settings)
@@ -270,7 +270,9 @@ async def test_creative_workflow_happy_path(settings: Settings, memory: FileMemo
     est propagé."""
     wf = CreativeWorkflow(memory=memory, settings=settings)
     wf.strategist = MagicMock()
-    wf.strategist.run = AsyncMock(return_value=_agent_output("content_strategist", raw_text="brief"))
+    wf.strategist.run = AsyncMock(
+        return_value=_agent_output("content_strategist", raw_text="brief")
+    )
     wf.copywriter = MagicMock()
     wf.copywriter.run = AsyncMock(return_value=_agent_output("copywriter", raw_text="texte"))
     wf.editor = MagicMock()
@@ -376,9 +378,7 @@ async def test_creative_workflow_killswitch_fails_early(
 
 
 @pytest.mark.asyncio
-async def test_creative_workflow_score_propagation(
-    settings: Settings, memory: FileMemory
-) -> None:
+async def test_creative_workflow_score_propagation(settings: Settings, memory: FileMemory) -> None:
     wf = CreativeWorkflow(memory=memory, settings=settings)
     mid = uuid4()
     for agent_name in ("content_strategist", "copywriter", "editor"):

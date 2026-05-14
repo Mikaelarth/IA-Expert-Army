@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
+import threading
 from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
 
-from src.core.budget import BudgetController, BudgetExceeded
+from src.core.budget import BudgetController, BudgetExceeded, _file_lock
 
 
 @pytest.fixture
@@ -101,3 +102,69 @@ def test_handles_corrupted_state(state_path: Path) -> None:
     bc = BudgetController(state_path=state_path, daily_budget_usd=10.0)
     # Doit résister gracieusement
     assert bc.spent_today == 0.0
+
+
+# ===== Sprint VV.2 — Lock portable / concurrence =====
+
+
+def test_file_lock_acquires_and_releases(tmp_path: Path) -> None:
+    """Le lock se prend, se libère, et le fichier .lock disparaît à la sortie."""
+    lock_path = tmp_path / "test.lock"
+    assert not lock_path.exists()
+    with _file_lock(lock_path):
+        assert lock_path.exists()
+    assert not lock_path.exists()
+
+
+def test_file_lock_serializes_concurrent_threads(tmp_path: Path) -> None:
+    """Deux threads qui essaient le lock en même temps : un attend l'autre."""
+    lock_path = tmp_path / "test.lock"
+    order: list[str] = []
+
+    def worker(tag: str, hold_ms: int = 50) -> None:
+        with _file_lock(lock_path, timeout=2.0):
+            order.append(f"{tag}-in")
+            # On simule du travail pour forcer la sérialisation
+            import time
+
+            time.sleep(hold_ms / 1000)
+            order.append(f"{tag}-out")
+
+    t1 = threading.Thread(target=worker, args=("A", 80))
+    t2 = threading.Thread(target=worker, args=("B", 80))
+    t1.start()
+    # Petit délai pour que t1 prenne le lock en premier
+    import time
+
+    time.sleep(0.01)
+    t2.start()
+    t1.join(timeout=5)
+    t2.join(timeout=5)
+
+    # Les 2 ont fini, et A est complet avant que B ne commence (ou inverse)
+    assert len(order) == 4
+    # Les "out" doivent venir avant le "in" du second
+    # Soit : A-in, A-out, B-in, B-out — soit l'inverse
+    assert order in (
+        ["A-in", "A-out", "B-in", "B-out"],
+        ["B-in", "B-out", "A-in", "A-out"],
+    ), f"Lock n'a pas sérialisé : {order}"
+
+
+def test_budget_record_serializes_under_concurrency(state_path: Path) -> None:
+    """10 threads font record(1.0) en parallèle → cumul final exactement 10.0,
+    aucun update perdu (le test prouve l'absence de race read-modify-write)."""
+    bc = BudgetController(state_path=state_path, daily_budget_usd=100.0)
+
+    def worker() -> None:
+        bc.record(1.0)
+
+    threads = [threading.Thread(target=worker) for _ in range(10)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=10)
+
+    assert bc.spent_today == pytest.approx(10.0, abs=0.001), (
+        f"Race condition : 10 × 1.0 = {bc.spent_today}, perte d'updates"
+    )

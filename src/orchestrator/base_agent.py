@@ -91,7 +91,19 @@ class BaseAgent:
         if client is not None:
             self.client = client
         else:
-            self.client = AsyncAnthropic(api_key=self.settings.anthropic_api_key.get_secret_value())
+            # Retries explicites + timeout configurables (Sprint VV.1). Le SDK
+            # Anthropic fait du backoff exponentiel automatique entre les retries
+            # sur les 5xx / timeout / connection errors. Loggué pour traçabilité.
+            self.client = AsyncAnthropic(
+                api_key=self.settings.anthropic_api_key.get_secret_value(),
+                max_retries=self.settings.anthropic_max_retries,
+                timeout=self.settings.anthropic_timeout_seconds,
+            )
+            self._log.debug(
+                "client.configured",
+                max_retries=self.settings.anthropic_max_retries,
+                timeout_s=self.settings.anthropic_timeout_seconds,
+            )
 
         self.system_prompt = self._load_system_prompt()
 

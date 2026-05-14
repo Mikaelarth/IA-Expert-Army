@@ -9,11 +9,19 @@ Politique :
 - record(amount) : ajoute amount au cumul du jour, persiste
 - Si une mission tente de démarrer alors que daily_budget est déjà atteint, on lève
   BudgetExceeded — le caller doit le catcher et retourner un MissionResult abort.
+
+Concurrence (Sprint VV.2) : `record()` est protégé par un lock fichier portable
+(`<state>.lock` via `O_CREAT | O_EXCL`). Permet à plusieurs sub-missions en
+parallèle (MetaWorkflow) de consommer leur budget sans race read-modify-write.
 """
 
 from __future__ import annotations
 
 import json
+import os
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
@@ -25,6 +33,44 @@ class BudgetExceeded(RuntimeError):
 
 def _today_iso() -> str:
     return date.today().isoformat()
+
+
+@contextmanager
+def _file_lock(lock_path: Path, timeout: float = 5.0) -> Iterator[None]:
+    """Lock fichier portable via `O_CREAT | O_EXCL` (atomique sur tous les OS).
+
+    Busy-wait avec sleep 50ms entre les tentatives. Si un lock semble bloqué
+    > 2× timeout, on le considère stale et on force la prise (pour ne pas
+    geler le système après un crash de process).
+    """
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + timeout
+    fd: int | None = None
+    while True:
+        try:
+            fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            break
+        except FileExistsError:
+            if time.monotonic() >= deadline:
+                # Stale lock detection : un fichier vieux > 2× timeout est probablement
+                # orphelin (process crashé sans cleanup).
+                try:
+                    age = time.time() - lock_path.stat().st_mtime
+                    if age > timeout * 2:
+                        lock_path.unlink(missing_ok=True)
+                        continue
+                except OSError:
+                    pass
+                raise TimeoutError(
+                    f"Impossible d'acquérir le lock {lock_path} en {timeout}s"
+                ) from None
+            time.sleep(0.05)
+    try:
+        yield
+    finally:
+        if fd is not None:
+            os.close(fd)
+        lock_path.unlink(missing_ok=True)
 
 
 class BudgetController:
@@ -83,13 +129,23 @@ class BudgetController:
                 f"déjà dépensés, estimation +{estimated_cost:.4f} non couverte."
             )
 
+    @property
+    def _lock_path(self) -> Path:
+        return self.state_path.with_suffix(self.state_path.suffix + ".lock")
+
     def record(self, amount: float) -> dict[str, Any]:
+        """Ajoute `amount` au cumul du jour avec verrou portable (Sprint VV.2).
+
+        Le lock fichier élimine la race read-modify-write quand plusieurs
+        sub-missions de la même meta-mission consomment leur budget en parallèle.
+        """
         if amount < 0:
             raise ValueError("amount doit être >= 0")
-        data = self._load()
-        data["spent_usd"] = round(float(data.get("spent_usd", 0.0)) + float(amount), 6)
-        data["last_recorded_at"] = datetime.now(UTC).isoformat()
-        self._save(data)
+        with _file_lock(self._lock_path):
+            data = self._load()
+            data["spent_usd"] = round(float(data.get("spent_usd", 0.0)) + float(amount), 6)
+            data["last_recorded_at"] = datetime.now(UTC).isoformat()
+            self._save(data)
         return data
 
     def status(self) -> dict[str, Any]:
