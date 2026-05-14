@@ -1,7 +1,15 @@
 """Workflow MVP — chaîne linéaire Orchestrator → Architect → Developer → Reviewer.
 
 Phase 1 : pas de parallélisme, pas de multi-subtasks, pas de Quality Guardian séparé.
-Boucle de réparation maximum 1 fois si Reviewer demande des changements.
+
+Le repair loop (max 1×) ré-exécute **Architect + Developer + Reviewer** sur
+NEEDS_CHANGES, pas seulement le Developer comme la v1 (avant Sprint SS).
+
+Pourquoi inclure l'Architect : un verdict NEEDS_CHANGES du Reviewer peut
+porter sur l'architecture (mauvaise abstraction, séparation manquante,
+faille design) — dans ce cas, le Developer seul ne peut pas corriger car
+sa proposition d'architecture amont est figée. Pattern méta-leçon
+Sprint PP (BusinessWorkflow) appliqué ici symétriquement.
 
 Phase 3+ : ce module sera remplacé par un graphe LangGraph stateful.
 """
@@ -162,29 +170,62 @@ class Workflow:
 
         verdict = (review_out.parsed or {}).get("verdict", VERDICT_REJECTED)
 
-        # Optional repair loop (max once)
+        # Optional repair loop (max once) — Architect → Developer → Reviewer
+        # dans l'ordre, chacun voit les sorties amont mises à jour. Cf. docstring
+        # du module pour la rationale (pattern méta-leçon Sprint PP).
         if verdict == VERDICT_NEEDS_CHANGES:
             log.info("workflow.repair_loop", mission=str(mission_id))
+
+            # Step 1 (repair) — Architect révise éventuellement la proposition
+            arch_out2 = await self.architect.run(
+                AgentInput(
+                    mission_id=mission_id,
+                    task=first_task,
+                    context={
+                        "mission": description,
+                        "decomposition_yaml": orch_out.raw_text,
+                        "previous_architecture_yaml": arch_out.raw_text,
+                        "previous_implementation_md": dev_out.raw_text,
+                        "review_feedback_yaml": review_out.raw_text,
+                        "instruction": (
+                            "Revoie la proposition d'architecture en intégrant les issues "
+                            "remontées par le Reviewer. Si l'archi initiale tient debout et "
+                            "que les issues sont purement code-level, re-produis la même "
+                            "structure ; sinon ajuste-la (séparation des couches, validation, "
+                            "etc.) avant que le Developer ne re-livre."
+                        ),
+                    },
+                )
+            )
+            outputs.append(arch_out2)
+            current_arch = arch_out2 if arch_out2.success else arch_out
+
+            # Step 2 (repair) — Developer code sur l'archi mise à jour
             dev_out2 = await self.developer.run(
                 AgentInput(
                     mission_id=mission_id,
                     task=first_task,
                     context={
-                        "architecture_proposal_yaml": arch_out.raw_text,
+                        "architecture_proposal_yaml": current_arch.raw_text,
                         "previous_implementation_md": dev_out.raw_text,
                         "review_feedback_yaml": review_out.raw_text,
-                        "instruction": "Corrige les issues remontées par le Reviewer puis re-livre la version complète.",
+                        "instruction": (
+                            "Corrige les issues remontées par le Reviewer sur l'archi mise à "
+                            "jour puis re-livre la version complète."
+                        ),
                     },
                 )
             )
             outputs.append(dev_out2)
+
+            # Step 3 (repair) — Reviewer juge l'ensemble v2
             if dev_out2.success:
                 review_out2 = await self.reviewer.run(
                     AgentInput(
                         mission_id=mission_id,
                         task=first_task,
                         context={
-                            "architecture_proposal_yaml": arch_out.raw_text,
+                            "architecture_proposal_yaml": current_arch.raw_text,
                             "developer_output_md": dev_out2.raw_text,
                             "previous_review_yaml": review_out.raw_text,
                         },
@@ -194,6 +235,7 @@ class Workflow:
                 if review_out2.success:
                     review_out = review_out2
                     dev_out = dev_out2
+                    arch_out = current_arch
                     verdict = (review_out2.parsed or {}).get("verdict", VERDICT_REJECTED)
 
         review_data = review_out.parsed or {}
