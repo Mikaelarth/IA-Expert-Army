@@ -7,6 +7,45 @@ versioning [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added — Phase 7 : MetaWorkflow cross-guildes + DevX (session 13)
+
+#### Phase 7 — MetaWorkflow (commits `239ada6`, `bb29a6d`, `f0ccb60`)
+- `MetaWorkflow` orchestrant 2–4 sous-missions cross-guildes via
+  `MetaDecomposer` (Opus) → `MissionRouter.run(force_guild=...)` →
+  agrégation `MetaMissionResult`.
+- v1 séquentielle puis v2 parallélisée par niveaux DAG
+  (`_level_order` + `asyncio.gather`, -37% durée mesurée sur
+  water-tracker).
+- Flag `--meta` dans `scripts/run_mission.py` (incompatible avec
+  `--apply`/`--validate`/`--guild`).
+- **3 missions réelles cross-guildes** validées (water-tracker v1/v2/v3),
+  convergence APPROVED après les fixes en cascade.
+- Repair loop business élargi : PM + BA + Legal au lieu de BA seul
+  (résout les NEEDS_CHANGES éternels où le verdict portait sur le plan
+  PM, pas l'analyse BA).
+- ADR-009 documentant tous les choix, trade-offs et apprentissages.
+
+#### Sprint OO.bis — Fix saturation (commit `e46c275`)
+- `BusinessAnalyst.DEFAULT_MAX_TOKENS` : 6144 → 8192 (incident 7
+  référencé dans ADR-005). Première saturation observée sur un repair
+  loop, première sur la Business Guild.
+
+#### Sprint QQ — MCP meta-tools (commit `7977516`)
+- `list_recent_meta_missions(limit)` et `get_meta_mission_summary(id)`
+  exposés via le serveur MCP — symétrie complète avec les outils
+  mission single-guild. Le serveur expose désormais **6 outils**.
+- Helpers `FileMemory.list_meta_missions()` /
+  `write_meta_mission_summary()` / `get_meta_mission_summary()`.
+
+#### DevX (commits `82223cd`, `cd60c45`, `e695924`, `bfc84bd`)
+- Pre-commit hooks (`ruff` + `check-yaml/toml` + pytest unit +
+  health-check), aligné `ruff-pre-commit v0.15.12` avec le venv.
+- Migration `class X(str, Enum)` → `StrEnum` (UP042, Python 3.11+).
+- GitHub Actions CI : workflow lint + tests + health-check sur push/PR
+  vers `main`. Stratégie DRY (délègue à `.pre-commit-config.yaml`).
+- 2 nouveaux outils MCP : `list_recent_missions(limit, guild?)` et
+  `get_mission_summary(mission_id)`.
+
 ### Added — Polish marathon (sessions 11–12)
 - `CHANGELOG.md` (ce fichier).
 - ADR-008 : trade-off `read_only=False` du sandbox formalisé.
@@ -16,6 +55,19 @@ versioning [SemVer](https://semver.org/spec/v2.0.0.html).
   (`just test`, `just health`, `just mine`, etc.).
 - Filtre du `DeprecationWarning` chromadb dans `pyproject.toml` pour
   garder les runs de tests propres.
+
+### Fixed
+- `BaseAgent.run` effectivement décoré avec `@observe` (la promesse était
+  faite mais l'Edit avait silencieusement échoué — régression test
+  `test_base_agent_observe.py` lit le fichier source pour vérifier).
+- 12 erreurs ruff résiduelles (raise-from, ternary, contextlib.suppress,
+  ValidationError typé pour pytest.raises, conventions de naming).
+
+### Stats
+- **Tests** : 212 → 261 (+49) en passant Phase 7 + DevX.
+- **Skills auto-générées** : 16.
+- **ADRs** : 8 → 9.
+- **MCP tools** : 2 → 6.
 
 ## [0.1.0-rc1] — 2026-05-10 — Open-source ready
 

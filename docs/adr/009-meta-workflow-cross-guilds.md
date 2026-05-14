@@ -1,7 +1,7 @@
 # ADR-009 — MetaWorkflow cross-guildes (Phase 7)
 
 **Statut :** Accepted
-**Date :** 2026-05-11 (introduit commits `239ada6` séquentiel + `bb29a6d` parallélisation)
+**Date :** 2026-05-11 (introduit commits `239ada6` séquentiel + `bb29a6d` parallélisation + `f0ccb60` repair loop business + `7977516` MCP meta-tools)
 
 ## Contexte
 
@@ -41,6 +41,37 @@ La v1 du MetaWorkflow utilisait `_topological_order` et exécutait séquentielle
 
 `asyncio.gather(*coros, return_exceptions=True)` : l'échec d'une sub-mission **ne tue pas les autres** du même niveau. Elles finissent leur travail, leurs épisodes sont archivés, et le `MetaWorkflow` lève après coup avec un message agrégé listant les échecs. Rationale : ne pas perdre du travail déjà payé en API.
 
+### Apprentissages des 3 missions réelles water-tracker (mai 2026)
+
+La même mission canonique (« water-tracker : API + landing + roadmap ») a été exécutée 3 fois pour mesurer empiriquement les choix d'archi. Le tableau ci-dessous trace l'évolution :
+
+| Run | Date | Mode | Verdict global | Score moyen | Coût | Durée | Mission ID |
+|---|---|---|---|---|---|---|---|
+| v1 séquentiel | 00:11 | `_topological_order` strict | NEEDS_CHANGES | 0.89 | $2.39 | 625s | `2180093b…` |
+| v2 parallèle | 09:33 | `_level_order` + `asyncio.gather` | NEEDS_CHANGES | 0.88 | $2.22 | 394s | `b5ec68ee…` |
+| v3 + repair PM | 10:10 | v2 + business repair loop élargi | **APPROVED** | **0.92** | $2.51 | 555s | `a558a026…` |
+
+**Trois observations qui ont guidé les fixes en cascade :**
+
+1. **Saturation BA en repair loop** (v1 → fix `e46c275`) : `BusinessAnalyst.DEFAULT_MAX_TOKENS = 6144` saturait systématiquement quand l'input du repair contenait le verdict legal complet (5919 tokens out) + analyse v1 + tâche orig = 21k tokens IN. Bumpé à 8192, plus jamais saturé en v2/v3. Cf. ADR-005 incident 7.
+
+2. **Speedup parallélisation -37%** (v1 → v2, commit `bb29a6d`) : le décomposeur a choisi `depends_on=[]` pour les 3 sub-missions (toutes indépendantes pour cette mission). Sans parallélisation, série forcée. Avec `asyncio.gather`, durée = max(eng, creative, business) au lieu de leur somme.
+
+3. **Bug structurel du repair loop business** (v2 → fix `f0ccb60`) : le verdict business restait figé à NEEDS_CHANGES malgré 2 passes du repair loop. Cause : la v1 du repair ne ré-exécutait QUE le `BusinessAnalyst`. Or le `LegalReviewer` flaggait *« CGU/Privacy/DPA recommandés dans BA mais pas gravés dans les Definition of Done du plan PM »*. Comme le PM n'était jamais ré-exécuté, son plan restait identique → Legal v2 voyait le même plan vide → NEEDS_CHANGES éternel. Fix : repair loop = `PM v2 → BA v2 → Legal v2` séquentiel, chacun voit les sorties amont mises à jour. Coût additionnel : ~$0.05 (PM Sonnet), à comparer aux ~$0.78 gaspillés en v1/v2 sur un repair qui ne réglait rien. Vérifié : v3 produit un plan avec les conformity items en DoD → Legal v2 APPROVED 0.91 (vs 0.84/0.81 en v1/v2).
+
+**Pattern méta-leçon** : un repair loop qui ne touche qu'**un sous-ensemble** des agents en amont d'un reviewer crée des conditions d'oscillation où l'output « bouge mais pas là où il faut ». Tout reviewer doit pouvoir déclencher la re-exécution de **tous les producteurs upstream**, pas juste l'un d'eux. À garder en tête si on ajoute des workflows similaires (Engineering avec Quality Guardian, p.ex.).
+
+### Exposition MCP des meta-missions (Sprint QQ, commit `7977516`)
+
+Pour permettre à un LLM tiers (Claude Desktop, Workbench) d'explorer ce nouveau type d'objet sans re-implémenter notre logique :
+
+- `list_recent_meta_missions(limit=10)` — tri chronologique inverse, expose id/titre/verdict/score/coût/durée/n_sub_missions/guilds/`sub_mission_ids`. Le `sub_mission_ids` permet le drill-down vers `get_mission_summary` pour zoomer sur chaque sous-mission individuelle.
+- `get_meta_mission_summary(meta_mission_id)` — frontmatter complet + corps markdown (rationale décomposition + détail par sous-mission).
+
+Symétrie exacte avec `list_recent_missions` / `get_mission_summary` (single-guild). Le serveur MCP expose désormais **6 outils**.
+
+Refactor `FileMemory` au passage : ajout de `list_meta_missions()`, `write_meta_mission_summary()`, `get_meta_mission_summary()` — `MetaWorkflow._persist` utilise ces helpers, plus de `mkdir` manuel inline.
+
 ## Conséquences
 
 **Positives :**
@@ -48,6 +79,8 @@ La v1 du MetaWorkflow utilisait `_topological_order` et exécutait séquentielle
 - Le `MetaDecomposer` adapte sa stratégie selon le contexte (diamond vs all-parallel vs chaîne) — pas de schéma figé.
 - Coût additionnel limité : ~$0.11 pour la décomposition Opus, négligeable face aux ~$0.50–1.50 d'une sub-mission.
 - Pas de duplication de code : le `MissionRouter` reste l'unique point d'entrée vers les guildes.
+- **Repair loop business solidifié** : la fix Sprint PP empêche les boucles infinies NEEDS_CHANGES quand le verdict Legal porte sur le plan PM, pas sur l'analyse BA.
+- **Exploration externe** : Claude Desktop peut désormais naviguer dans les meta-missions sans avoir besoin d'embarquer notre code Python.
 
 **Négatives / à surveiller :**
 - **Budget non strictement précis en mode parallèle** : si plusieurs sub-missions chargent le `BudgetController` simultanément, le read-modify-write sur `data/budget_state.json` n'est pas verrouillé. Imprécision typique = quelques cents. Le hard-cap reste robuste car le killswitch bloque le **prochain** appel (pas le courant). Mitigation future : verrou fichier `fcntl`/portable.
@@ -63,7 +96,10 @@ La v1 du MetaWorkflow utilisait `_topological_order` et exécutait séquentielle
 
 ## Pour la suite
 
-- **v3 (Phase 8)** : conversation continue entre sub-missions (LangGraph) — si certaines missions nécessitent un dialogue itératif inter-guildes (ex. engineering qui demande clarification à business en cours de route).
-- **Métriques** : ajouter au daily_digest un compteur « meta-missions exécutées aujourd'hui » + coût moyen + durée moyenne par pattern (all-parallel/diamond/chain).
-- **MCP** : exposer un tool `list_recent_meta_missions(limit, verdict?)` similaire à `list_recent_missions`, pour la consommation par Claude Desktop.
-- **CI** : ajouter un test d'intégration optionnel `pytest -m meta` qui lance le MetaDecomposer avec une mock fixture YAML (sans coût API) pour valider que le wiring `_decompose → _level_order → router.run → _aggregate` reste cohérent.
+- **Conversation continue inter-guildes (LangGraph)** — si certaines missions nécessitent un dialogue itératif (ex. engineering qui demande clarification à business en cours de route). Reporté à Phase 8.
+- **Métriques** : ajouter au `daily_digest` un compteur « meta-missions exécutées aujourd'hui » + coût moyen + durée moyenne par pattern (all-parallel/diamond/chain).
+- ~~**MCP** : exposer un tool `list_recent_meta_missions(limit, verdict?)` similaire à `list_recent_missions`, pour la consommation par Claude Desktop.~~ → **fait** (Sprint QQ, commit `7977516`). Le filtre `verdict?` reste optionnel et peut être ajouté si l'usage le réclame.
+- **CI** : ajouter un test d'intégration optionnel `pytest -m meta` qui lance le `MetaDecomposer` avec une mock fixture YAML (sans coût API) pour valider que le wiring `_decompose → _level_order → router.run → _aggregate` reste cohérent.
+- **Repair loop pattern dans les autres workflows** : appliquer la leçon Sprint PP — un reviewer doit pouvoir déclencher la re-exécution de **tous** les producteurs upstream, pas juste l'un d'eux. À considérer pour `Workflow` (Engineering : Architect → Developer → Reviewer ; le repair actuel ne réagrège que côté Developer, peut-être que l'Architect devrait aussi pouvoir réagir).
+- **Verrouillage du `BudgetController` en parallèle** : `fcntl` / lock fichier portable pour éliminer la fenêtre de race read-modify-write quand 3 sub-missions consomment leur budget simultanément. Imprécision actuelle = quelques cents, à mesurer si elle devient significative.
+- **Skill « patterns de décomposition »** : laisser le PatternMiner extraire des skills sur les décompositions ayant convergé APPROVED, à injecter dans le prompt du MetaDecomposer (boucle d'auto-amélioration).
