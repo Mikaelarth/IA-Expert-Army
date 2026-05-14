@@ -117,9 +117,46 @@ Limites : ne résout pas les missions vraiment grosses (qui demanderaient 32k+ t
 - **Refuser les missions estimées > N lignes** : rejeté. Trop pessimiste — le système peut livrer 400-500 lignes après le fix. Mieux : laisser passer, observer, calibrer.
 - **Implémenter décomposition tout de suite** : rejeté pour DDD. Trop gros pour un sprint de fix. Cf. décision 4 différée.
 
+## Validation empirique — Sprint DDD.bis + DDD.ter (2026-05-14)
+
+### Sprint DDD.bis — Bug parser découvert
+
+Le 2ᵉ run avec `max_tokens=16384` a révélé un **bug parser critique** :
+- Developer NE saturait plus (`tokens_out=8957` puis `9589` au lieu de 4096).
+- 15 fichiers produits (vs 10 incomplets en v1).
+- Reviewer v2 a effectivement produit `verdict: APPROVED quality_score: 0.93` (visible dans la sortie brute persistée).
+- **MAIS** mission archivée REJECTED, car le YAML contenait un item de liste multi-ligne avec ` : ` au milieu, faisait échouer le strict parse, et le fallback regex exigeait un champ `title` (skill-specific). → `parsed=None` → `workflow.py` tombe sur `VERDICT_REJECTED` par défaut.
+
+Fix surgical (commit `b4fd1e3`) : `_RECOGNIZED_TOP_LEVEL_FIELDS = ("title", "verdict", "verdict_qg", "verdict_sec", ...)`. Le fallback accepte si AU MOINS UN champ signature est présent. 3 tests régression couvrent reviewer/QG/SecurityAuditor.
+
+### Sprint DDD.ter — Convergence APPROVED 0.93
+
+Le 3ᵉ run avec **les 3 fixes empilés** (max_tokens 16384, parser fallback élargi, SecurityAuditor actif) :
+
+| Métrique | Valeur |
+|---|---|
+| Verdict guilde | **APPROVED 0.93** ✅ |
+| Verdict QG | **ACCEPT 0.91** (calibration cohérente, −0.02) |
+| Verdict SecurityAuditor | NEEDS_CHANGES (4 findings actionables) → repair → résolus |
+| Files produits | 13 (livraison complète) |
+| Developer saturation | aucune (tokens_out 8676 puis 10447) |
+| Coût | $1.74 |
+| Durée | 754s (~12.5 min) |
+
+**Tous les composants livrés cette session ont travaillé en synergie sur une vraie mission complexe** :
+1. `max_tokens=16384` → permet la livraison complète sans troncature
+2. Fallback parser élargi → permet la lecture correcte du verdict
+3. SecurityAuditor → détecte 2 MAJOR (sensitive_data_exposure, authentication_broken) + downgrade APPROVED→NEEDS_CHANGES → trigger repair
+4. Repair loop élargi (Sprint SS : Architect + Developer + Reviewer) → corrige les 4 findings security + 7 issues reviewer
+5. Quality Guardian → audite, accepte avec calibration cohérente, 2 nits mineures honnêtement documentées
+
+**Conclusion empirique** : le système est désormais **mature pour les missions Engineering 400-500 lignes en un shot** (avec QG + SecurityAuditor activés en autonome). La promesse "delivery enterprise-grade" est défendable sur ce périmètre.
+
+**Coût total exploration DDD** : ~$5 ($1.45 v1 + $0.20 v2 overload + $1.61 v3 + $1.74 v4). Acceptable pour valider la maturité technique.
+
 ## Pour la suite
 
-- **Sprint DDD.bis** : relancer la même mission étalon avec les fixes. Mesurer empiriquement si on atteint APPROVED ou si on reste NEEDS_CHANGES.
+- ~~**Sprint DDD.bis** : relancer la même mission étalon avec les fixes. Mesurer empiriquement si on atteint APPROVED ou si on reste NEEDS_CHANGES.~~ → **Fait. Bug parser corrigé. DDD.ter APPROVED 0.93.**
 - **Sprint EEE** : auto-bump max_tokens sur saturation détectée (décision 5). Quick win.
 - **Sprint FFF** : décomposition de livraison Architect → N×Developer (décision 4). Plus gros, mais débloque les missions > 500 lignes.
 - **Documenter dans README** la zone de confort actuelle du système : *« IA-Expert-Army v0.2.0 livre confortablement des missions Engineering de 50-300 lignes en un shot. Pour > 300 lignes, prévoir une décomposition manuelle ou attendre Sprint FFF. »*

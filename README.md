@@ -32,6 +32,16 @@ uv run python scripts/run_mission.py \
 
 Une commande. Code généré, écrit sur disque, validé en sandbox isolé, tout en 100s.
 
+### Zone de confort empiriquement validée (v0.2.0)
+
+| Type de mission | État | Preuve |
+|---|---|---|
+| Engineering simple (50-200 lignes) | ✅ converge confortablement | slugify, /ping, /version, /info — APPROVED 0.91-0.97 |
+| Research / Creative / Business (synthèse, copy, plan) | ✅ converge | Pydantic v1 vs v2, water-tracker landing, roadmap |
+| Cross-guildes meta-missions | ✅ converge | water-tracker APPROVED 0.92 (3 sous-missions) |
+| **Engineering 400-500 lignes multi-fichiers** | ✅ converge (avec QG + SecurityAuditor) | **mini-API FastAPI complète (JWT + CRUD + tests + Docker) — APPROVED 0.93 en 12 min / $1.74** ([Sprint DDD.ter](docs/adr/015-etalon-mission-findings.md)) |
+| Engineering > 1000 lignes | ⏳ Sprint FFF (décomposition livraison) | non testé, dette tracée |
+
 ---
 
 ## Architecture en 4 couches
