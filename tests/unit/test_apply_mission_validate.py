@@ -226,6 +226,65 @@ def test_validate_in_sandbox_preserves_user_conftest(
     assert captured["text"] == user_conftest
 
 
+# Sprint GGG.1 — kill-switch enable_sandbox
+
+
+def test_validate_in_sandbox_skipped_when_enable_sandbox_false(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Sprint GGG.1 : si enable_sandbox=False (cas VPS sans Docker ou skip dev),
+    le helper court-circuite immédiatement sans tenter d'instancier SandboxRunner."""
+    # Si ce mock était appelé, il lèverait — preuve que le court-circuit
+    # est bien antérieur à toute interaction Docker.
+    def _should_not_be_called(**kwargs):
+        raise AssertionError(
+            "SandboxRunner ne doit JAMAIS être instancié quand enable_sandbox=False"
+        )
+
+    monkeypatch.setattr(sv_module, "SandboxRunner", _should_not_be_called)
+
+    result = validate_files_in_sandbox(
+        files=[_file("src/foo.py")],
+        sandbox_image="iaa-sandbox:latest",
+        sandbox_timeout=10,
+        enable_sandbox=False,
+    )
+    assert result is None
+
+
+def test_validate_in_sandbox_enable_sandbox_param_overrides_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Sprint GGG.1 : le param explicite gagne sur Settings.enable_sandbox.
+    Permet aux callers de forcer le comportement sans toucher à .env."""
+    # On simule un Settings avec enable_sandbox=True. Le param explicit False
+    # doit gagner et court-circuiter.
+    from src.core.config import Settings
+
+    fake_settings = Settings(  # type: ignore[call-arg]
+        _env_file=None, anthropic_api_key="sk-ant-test"
+    )
+    fake_settings.enable_sandbox = True
+
+    def _fake_get_settings():
+        return fake_settings
+
+    monkeypatch.setattr("src.core.config.get_settings", _fake_get_settings)
+
+    def _should_not_be_called(**kwargs):
+        raise AssertionError("court-circuit doit être fait par le param explicit")
+
+    monkeypatch.setattr(sv_module, "SandboxRunner", _should_not_be_called)
+
+    result = validate_files_in_sandbox(
+        files=[_file("src/foo.py")],
+        sandbox_image="iaa-sandbox:latest",
+        sandbox_timeout=10,
+        enable_sandbox=False,  # ← explicit override
+    )
+    assert result is None
+
+
 # Régression : apply_mission.py expose toujours les helpers en alias pour la
 # compatibilité ascendante (les anciens scripts ou notebooks externes).
 def test_apply_mission_exposes_legacy_aliases() -> None:

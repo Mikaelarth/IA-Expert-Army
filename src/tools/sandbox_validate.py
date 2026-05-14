@@ -27,6 +27,7 @@ def validate_files_in_sandbox(
     sandbox_image: str = "iaa-sandbox:latest",
     sandbox_timeout: int = 60,
     console: Console | None = None,
+    enable_sandbox: bool | None = None,
 ) -> SandboxResult | None:
     """Lance pytest dans le sandbox sur la liste de fichiers donnée.
 
@@ -35,11 +36,24 @@ def validate_files_in_sandbox(
     - Si l'utilisateur fournit son propre `conftest.py` dans la liste, il est
       préservé. Sinon, un conftest minimal est créé pour permettre les imports
       `from src.x import y` sans installation package.
-    - Renvoie None si Docker est indisponible ou l'image absente — un message
-      yellow est affiché sur la console fournie (ou stdout par défaut).
+    - Renvoie None si Docker est indisponible, l'image absente, ou si
+      `enable_sandbox=False` (kill-switch GGG.1).
+    - Si `enable_sandbox` est None (défaut), lit `Settings.enable_sandbox`.
     - Le workspace temp est nettoyé automatiquement après le run.
     """
     cons = console or Console()
+
+    # Sprint GGG.1 : kill-switch explicite (utile sur VPS sans Docker).
+    if enable_sandbox is None:
+        from src.core.config import get_settings
+
+        enable_sandbox = get_settings().enable_sandbox
+    if not enable_sandbox:
+        cons.print(
+            "[yellow]Sandbox désactivé (Settings.enable_sandbox=False) — "
+            "validation skippée.[/yellow]"
+        )
+        return None
 
     try:
         runner = SandboxRunner(image=sandbox_image, timeout_seconds=sandbox_timeout)

@@ -82,6 +82,28 @@ class Settings(BaseSettings):
     sandbox_network: str = Field("none")
     sandbox_timeout_seconds: int = Field(30, ge=1)
     sandbox_memory_limit: str = Field("512m")
+    # Sprint GGG.1 — kill-switch explicite pour environnements sans Docker
+    # ou volontairement minimaux (VPS-1 phase démarrage). Quand False, les
+    # appels validate_files_in_sandbox court-circuitent : aucun build d'image
+    # demandé, aucune tentative de connexion daemon, simple log warning. Sûr
+    # à laisser à True si Docker n'est pas installé : SandboxRunner détecte
+    # déjà SandboxUnavailable gracieusement, mais ce flag évite même la
+    # tentative (utile pour CI rapide ou diagnostic).
+    enable_sandbox: bool = Field(
+        True,
+        description="False = skip validation sandbox (run_mission --validate devient no-op silencieux)",
+    )
+
+    # --- VPS profile (Sprint GGG) ---
+    # Champ informatif pour adapter les warnings/comportements selon la
+    # capacité hardware. Valeurs reconnues : "vps1" (8Go), "vps2" (12Go),
+    # "vps3" (24Go), "local" (poste dev), "" (auto/inconnu).
+    # N'affecte pas la logique métier — pur indicateur de diagnostic dans
+    # les digests et le runbook.
+    vps_profile: Literal["", "vps1", "vps2", "vps3", "local"] = Field(
+        "",
+        description="Indicateur du profil hardware (vps1/vps2/vps3/local) pour diagnostic",
+    )
 
     @property
     def project_root(self) -> Path:

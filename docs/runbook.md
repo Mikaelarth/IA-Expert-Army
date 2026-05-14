@@ -419,6 +419,119 @@ Puis relancer le script. Pour les sessions Claude Code spécifiquement, le bash 
 
 ---
 
+## 13. Migration VPS échouée (snapshot corrompu, désynchro après import)
+
+**Symptômes :**
+- `migrate_vps.sh import` lève "Checksums divergent — archive altérée"
+- OU import OK mais `health_check.py` rouge / `daily_digest.py` ne montre plus les missions attendues
+- OU `chroma` retourne 0 résultats sur un RAG qui devait matcher
+
+**Diagnostic rapide :**
+
+```bash
+# 1. Vérifie l'archive avant import
+sudo -u iaa-army bash scripts/migrate_vps.sh verify /tmp/iaa-snapshot.tar.gz
+
+# 2. Compare les manifests source vs destination
+sudo -u iaa-army bash scripts/migrate_vps.sh list-content /tmp/iaa-snapshot.tar.gz | head -50
+
+# 3. Si import déjà fait, retrouve le backup pré-migration
+ls -1d /opt/ia-expert-army/data/.pre-migrate-backup-* | tail -3
+```
+
+**Action :**
+
+**Cas A — archive corrompue à la verify** : refaire l'export depuis source, retransférer, retry.
+```bash
+# Sur source
+sudo -u iaa-army bash scripts/migrate_vps.sh export /tmp/iaa-snapshot-v2.tar.gz
+# Transfert
+rsync -avz --progress source-vps:/tmp/iaa-snapshot-v2.tar.gz dest-vps:/tmp/
+# Sur dest
+sudo -u iaa-army bash scripts/migrate_vps.sh import /tmp/iaa-snapshot-v2.tar.gz
+```
+
+**Cas B — import OK mais comportement anormal** : rollback vers le backup pré-migration.
+```bash
+# Stop tout
+sudo -u iaa-army touch /opt/ia-expert-army/data/.killswitch_engaged
+
+# Identifie le backup
+BACKUP_DIR=$(ls -1d /opt/ia-expert-army/data/.pre-migrate-backup-* | tail -1)
+echo "Rollback depuis : $BACKUP_DIR"
+
+# Restore
+for p in data/memory data/chroma data/budget.json data/error_log.json data/approvals skills prompts; do
+    rm -rf "/opt/ia-expert-army/$p"
+    cp -a "$BACKUP_DIR/$p" "/opt/ia-expert-army/$p" 2>/dev/null && echo "  ✓ $p"
+done
+
+# Lève le killswitch
+sudo -u iaa-army rm -f /opt/ia-expert-army/data/.killswitch_engaged
+
+# Health check
+sudo -u iaa-army bash -lc "cd /opt/ia-expert-army && uv run python scripts/health_check.py"
+```
+
+**Cas C — chroma vide après import** : le snapshot incluait `data/chroma/` mais l'index Chroma utilise des chemins absolus dans certaines versions. Recoursable :
+```bash
+# Réindexation depuis les épisodes markdown (lent mais déterministe)
+sudo -u iaa-army bash -lc "cd /opt/ia-expert-army && uv run python scripts/reindex_episodes.py"
+```
+
+**Prévention :**
+- Tester `verify` avant de transférer : `bash scripts/migrate_vps.sh verify <archive>` sur le VPS source juste après export.
+- Ne jamais éditer manuellement les fichiers dans `data/` entre l'export et l'import.
+- Garder les `data/.pre-migrate-backup-*` au moins 30 jours (rotation manuelle ou cron).
+
+Voir [docs/deploy.md](deploy.md) section 5 et [ADR-017](adr/017-vps-deployment.md).
+
+---
+
+## 14. Sandbox désactivé sur VPS sans Docker
+
+**Symptômes :**
+- `run_mission --validate` affiche `Sandbox désactivé (Settings.enable_sandbox=False)`
+- OU `Sandbox indisponible — validation skippée : docker daemon down`
+- Les missions APPROVED par la guilde ne sont pas validées en pytest
+
+**Diagnostic rapide :**
+
+```bash
+# Settings actuel
+sudo -u iaa-army bash -lc "cd /opt/ia-expert-army && uv run python -c 'from src.core.config import get_settings; s = get_settings(); print(f\"enable_sandbox={s.enable_sandbox}, profile={s.vps_profile}\")'"
+
+# Docker daemon
+systemctl status docker
+docker info 2>&1 | head -5
+```
+
+**Action — 3 cas :**
+
+**Cas A — `ENABLE_SANDBOX=false` dans `.env` (volontaire)** :
+- Comportement attendu sur VPS minimal. Le verdict guilde reste fiable, mais sans test runtime.
+- Pour réactiver : `ENABLE_SANDBOX=true` dans `.env` + redémarre le worker.
+
+**Cas B — Docker installé mais daemon arrêté** :
+```bash
+sudo systemctl start docker
+sudo systemctl enable docker  # auto-start au boot
+sudo -u iaa-army bash -lc "cd /opt/ia-expert-army && uv run python scripts/check_sandbox.py"
+```
+
+**Cas C — Image `iaa-sandbox:latest` absente** :
+```bash
+sudo -u iaa-army bash -lc "cd /opt/ia-expert-army && uv run python scripts/check_sandbox.py --build"
+```
+
+**Prévention :**
+- Sur VPS-1 démarrage, laisser `ENABLE_SANDBOX=true` mais accepter les skips si Docker manque (échoue gracieusement, pas de crash).
+- Sur VPS-2/VPS-3, garantir `systemctl enable docker` pour auto-start.
+
+Voir [ADR-017](adr/017-vps-deployment.md) section "Settings adaptables".
+
+---
+
 ## Procédure de crise globale
 
 Si **3 incidents simultanés** ou un comportement inexpliqué :
