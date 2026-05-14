@@ -25,10 +25,13 @@ Liste des incidents :
 | 5 | mining bis | skill_extractor | 2048 | $0.63 |
 | 6 | 5e1e3cc7 (×2) | document_synthesizer | 4096 | (mission OK mais episodes filtrés) |
 | 7 | cc670899 (water-tracker meta) | business_analyst | 6144 (repair loop) | ~$0.78 |
+| 8 | 70652f89 (mission étalon DDD) | backend_developer | 4096 (×2 itérations) | ~$0.18 |
 
-**Total dépenses brûlées en saturation : ~$3.46.**
+**Total dépenses brûlées en saturation : ~$3.64.**
 
 **Note incident 7 (2026-05-11)** : première saturation observée sur un **repair loop**, et sur la **Business Guild**. Contexte : la mission cross-guildes water-tracker (cf. ADR-009 si créé pour le MetaWorkflow) a fait passer la business à 1 boucle de repair. À la 2ᵉ passe, le `business_analyst` reçoit en input le verdict legal complet (~5919 tokens out, riche en `required_actions`) + son analyse v1 + tâche originale = 21404 tokens IN. Output capé à 6144 → analyse tronquée → blockers de conformité (CGU, Privacy Policy, DPA) recommandés en BA mais non gravés dans les Definition of Done des milestones — exactement le détail qu'aurait précisé la fin tronquée. Verdict figé NEEDS_CHANGES, coût gaspillé du repair ~$0.78. Fix : bump à 8192 (aligné avec les reviewers). Leçon : **les agents Business saturent aussi sur missions multi-passes** — la liste historique focalisée Research/Creative était incomplète.
+
+**Note incident 8 (2026-05-14)** : première saturation observée sur le `backend_developer` (Engineering), et premier cas où la saturation se reproduit **identiquement** sur les 2 itérations du repair loop. Contexte : mission étalon DDD (FastAPI todo-list complet avec JWT + CRUD + tests + Dockerfile, ~10 fichiers attendus). À la 1ʳᵉ passe Developer = `tokens_out=4096`, `stop_reason=max_tokens` → conftest.py tronqué + tests/test_*.py manquants + Dockerfile absent. À la 2ᵉ passe (repair) = exactement la même saturation. Le QG a correctement détecté le pattern : *« troncature systématique sur 2 itérations consécutives — signal d'un problème de génération non résolu, qui devrait être adressé par décomposition de livraison plutôt qu'en re-tentant le même format »*. Fix immédiat : bump `BackendDeveloper.DEFAULT_MAX_TOKENS` 4096 → 16384. Fix architectural plus large (décomposition de livraison) tracé dans ADR-015. Leçon : **les développeurs de code multi-fichiers ont besoin d'au moins 16k tokens**, et **le repair loop ne suffit pas pour les saturations** — il faut une stratégie de découpe explicite.
 
 ## Décision
 
@@ -42,6 +45,7 @@ Valeurs actuelles (mai 2026) :
 
 | Agent | max_tokens | Justification |
 |---|---|---|
+| Backend Developer | **16384** | Code multi-fichiers (jusqu'à ~10 modules + tests + Dockerfile) — incident 8 |
 | Tous les Reviewers | 8192 | YAML avec 6+ issues détaillées + suggestions + analyse repair-loop |
 | Tous les Synthesizers (DocSynth, Copywriter) | 8192 | Markdown long (TL;DR + N sections + sources/notes) |
 | Tech Watch | 8192 | Findings YAML pour 3-6 sous-questions × 5-7 findings |

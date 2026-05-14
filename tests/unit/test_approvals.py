@@ -179,9 +179,7 @@ def test_request_approval_pending_when_no_policy(store: ApprovalStore) -> None:
 
 
 def test_request_approval_auto_approve_via_policy(store: ApprovalStore) -> None:
-    policy = Policy(
-        auto_approve=[PolicyRule(event_type="evt", rationale="auto OK")]
-    )
+    policy = Policy(auto_approve=[PolicyRule(event_type="evt", rationale="auto OK")])
     req = request_approval(store, "evt", {}, policy=policy)
     assert req.status == STATUS_APPROVED
     assert req.decided_by is not None and "policy" in req.decided_by
@@ -269,9 +267,7 @@ def test_wait_for_decision_blocks_until_decided(store: ApprovalStore) -> None:
 def test_wait_for_decision_times_out_and_marks_expired(store: ApprovalStore) -> None:
     req = request_approval(store, "evt", {})
     with pytest.raises(TimeoutError):
-        wait_for_decision(
-            store, req.approval_id, timeout_seconds=0.2, poll_interval_seconds=0.05
-        )
+        wait_for_decision(store, req.approval_id, timeout_seconds=0.2, poll_interval_seconds=0.05)
     # Après timeout, la requête est marquée EXPIRED dans decided/
     fetched = store.read(req.approval_id)
     assert fetched is not None

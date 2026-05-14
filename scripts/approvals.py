@@ -138,8 +138,7 @@ def approve(
     result = decide(store, approval_id, approved=True, decided_by=user, reason=reason)
     if result is None:
         console.print(
-            f"[red]Décision impossible :[/red] {approval_id} n'existe pas "
-            f"ou est déjà décidée."
+            f"[red]Décision impossible :[/red] {approval_id} n'existe pas ou est déjà décidée."
         )
         raise SystemExit(1)
     console.print(f"[green]✓ APPROUVÉ[/green] : {approval_id} par {user}")
@@ -163,8 +162,7 @@ def reject(
     result = decide(store, approval_id, approved=False, decided_by=user, reason=reason)
     if result is None:
         console.print(
-            f"[red]Décision impossible :[/red] {approval_id} n'existe pas "
-            f"ou est déjà décidée."
+            f"[red]Décision impossible :[/red] {approval_id} n'existe pas ou est déjà décidée."
         )
         raise SystemExit(1)
     console.print(f"[red]✗ REJETÉ[/red] : {approval_id} par {user}")

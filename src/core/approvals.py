@@ -188,7 +188,9 @@ def policy_matches(rule: PolicyRule, event_type: str, context: dict[str, Any]) -
     return True
 
 
-def find_matching_rule(policy: Policy, event_type: str, context: dict[str, Any]) -> PolicyRule | None:
+def find_matching_rule(
+    policy: Policy, event_type: str, context: dict[str, Any]
+) -> PolicyRule | None:
     for rule in policy.auto_approve:
         if policy_matches(rule, event_type, context):
             return rule
@@ -254,7 +256,7 @@ def request_approval(
         raise ApprovalRequired(
             f"Action '{event_type}' nécessite approbation humaine (id={approval_id}). "
             f"Voir `just approvals` puis `just approve {approval_id}` ou "
-            f"`just reject {approval_id} --reason \"...\"`."
+            f'`just reject {approval_id} --reason "..."`.'
         )
     return request
 
