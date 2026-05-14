@@ -60,6 +60,76 @@ def _missions_for_date(memory: FileMemory, target: date) -> list:
     return out
 
 
+def _meta_missions_for_date(memory: FileMemory, target: date) -> list:
+    """Meta-missions cross-guildes (Phase 7) commencées le jour donné."""
+    out = []
+    for path in memory.list_meta_missions():
+        record = memory.get_meta_mission_summary(path.stem)
+        if record is None:
+            continue
+        meta = record.metadata
+        started = meta.get("started_at")
+        if not isinstance(started, str):
+            continue
+        try:
+            d = datetime.fromisoformat(started.replace("Z", "+00:00")).date()
+        except ValueError:
+            continue
+        if d == target:
+            out.append((path, record))
+    return out
+
+
+def _compute_meta_stats(meta_missions: list) -> dict:
+    """Agrège les métriques d'un lot de meta-missions du jour.
+
+    Retourne : count, total_cost, total_duration, verdict_counts, guilds_counts,
+    avg_score, avg_n_sub. Aucun calcul si liste vide (tout à 0 / vide).
+    """
+    if not meta_missions:
+        return {
+            "count": 0,
+            "total_cost": 0.0,
+            "total_duration": 0.0,
+            "verdict_counts": Counter(),
+            "guilds_counts": Counter(),
+            "avg_score": None,
+            "avg_n_sub": 0.0,
+        }
+    total_cost = 0.0
+    total_duration = 0.0
+    scores: list[float] = []
+    n_subs: list[int] = []
+    verdict_counts: Counter[str] = Counter()
+    guilds_counts: Counter[str] = Counter()
+    for _, rec in meta_missions:
+        m = rec.metadata
+        c = m.get("total_cost_usd")
+        if isinstance(c, (int, float)):
+            total_cost += float(c)
+        d = m.get("total_duration_seconds")
+        if isinstance(d, (int, float)):
+            total_duration += float(d)
+        s = m.get("overall_quality_score")
+        if isinstance(s, (int, float)):
+            scores.append(float(s))
+        n = m.get("n_sub_missions")
+        if isinstance(n, int):
+            n_subs.append(n)
+        verdict_counts[str(m.get("final_verdict", "?"))] += 1
+        for g in m.get("guilds") or []:
+            guilds_counts[str(g)] += 1
+    return {
+        "count": len(meta_missions),
+        "total_cost": total_cost,
+        "total_duration": total_duration,
+        "verdict_counts": verdict_counts,
+        "guilds_counts": guilds_counts,
+        "avg_score": sum(scores) / len(scores) if scores else None,
+        "avg_n_sub": sum(n_subs) / len(n_subs) if n_subs else 0.0,
+    }
+
+
 def _skills_created_on(skills: SkillsLibrary, target: date) -> int:
     n = 0
     for agent_dir in skills.root.iterdir():
@@ -96,6 +166,9 @@ def _build_digest(target: date) -> str:
     )
     verdict_counts = Counter(r.metadata.get("final_verdict", "?") for _, r in missions)
 
+    meta_missions = _meta_missions_for_date(memory, target)
+    meta_stats = _compute_meta_stats(meta_missions)
+
     skills_count = _skills_created_on(skills, target)
     budget_status = budget.status()
 
@@ -119,6 +192,46 @@ def _build_digest(target: date) -> str:
         lines.append("")
         for v, n in verdict_counts.most_common():
             lines.append(f"- {v} : {n}")
+        lines.append("")
+
+    if meta_stats["count"]:
+        lines.append("## Meta-missions cross-guildes (Phase 7)")
+        lines.append("")
+        lines.append(
+            f"- **Exécutées aujourd'hui :** {meta_stats['count']} "
+            f"({meta_stats['avg_n_sub']:.1f} sous-missions en moyenne)"
+        )
+        if meta_stats["avg_score"] is not None:
+            lines.append(f"- **Score global moyen :** {meta_stats['avg_score']:.2f}")
+        lines.append(f"- **Coût cumulé :** ${meta_stats['total_cost']:.4f}")
+        lines.append(f"- **Durée cumulée :** {meta_stats['total_duration']:.1f}s")
+        if meta_stats["verdict_counts"]:
+            verdicts_str = " · ".join(
+                f"{v}={n}" for v, n in meta_stats["verdict_counts"].most_common()
+            )
+            lines.append(f"- **Verdicts globaux :** {verdicts_str}")
+        if meta_stats["guilds_counts"]:
+            guilds_str = " · ".join(
+                f"{g}={n}" for g, n in meta_stats["guilds_counts"].most_common()
+            )
+            lines.append(f"- **Guildes traversées :** {guilds_str}")
+        lines.append("")
+        lines.append("| Heure | Titre | Verdict | Score | Coût | Sous-missions |")
+        lines.append("|-------|-------|---------|-------|------|---------------|")
+        for _, rec in sorted(meta_missions, key=lambda x: x[1].metadata.get("started_at", "")):
+            m = rec.metadata
+            ts = (m.get("started_at") or "")[11:16]
+            title = m.get("title", "?")
+            verdict = m.get("final_verdict", "?")
+            score = m.get("overall_quality_score")
+            score_str = f"{score:.2f}" if isinstance(score, (int, float)) else "—"
+            cost = m.get("total_cost_usd")
+            cost_str = f"${cost:.4f}" if isinstance(cost, (int, float)) else "—"
+            n_sub = m.get("n_sub_missions", "?")
+            guilds_list = ", ".join(m.get("guilds") or [])
+            lines.append(
+                f"| {ts} | {title} | {verdict} | {score_str} | {cost_str} | {n_sub} ({guilds_list}) |"
+            )
         lines.append("")
 
     if missions:

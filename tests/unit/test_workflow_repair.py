@@ -166,16 +166,16 @@ async def test_repair_architect_receives_review_feedback_in_context(
                 raw_text="REVIEW_FLAGS_BAD_ABSTRACTION",
                 parsed={"verdict": "NEEDS_CHANGES"},
             ),
-            _agent_output(
-                "code_reviewer", parsed={"verdict": "APPROVED", "quality_score": 0.9}
-            ),
+            _agent_output("code_reviewer", parsed={"verdict": "APPROVED", "quality_score": 0.9}),
         ]
     )
 
     await wf.run(title="X", description="y")
 
     arch_v2_call = arch_mock.run.call_args_list[1]
-    arch_v2_input = arch_v2_call.args[0] if arch_v2_call.args else arch_v2_call.kwargs.get("agent_input")
+    arch_v2_input = (
+        arch_v2_call.args[0] if arch_v2_call.args else arch_v2_call.kwargs.get("agent_input")
+    )
     ctx = arch_v2_input.context
     assert "REVIEW_FLAGS_BAD_ABSTRACTION" in ctx.get("review_feedback_yaml", ""), (
         "Architect v2 doit recevoir le feedback Reviewer pour pouvoir réviser"
@@ -227,7 +227,9 @@ async def test_repair_developer_v2_uses_updated_architecture(
     await wf.run(title="X", description="y")
 
     dev_v2_call = dev_mock.run.call_args_list[1]
-    dev_v2_input = dev_v2_call.args[0] if dev_v2_call.args else dev_v2_call.kwargs.get("agent_input")
+    dev_v2_input = (
+        dev_v2_call.args[0] if dev_v2_call.args else dev_v2_call.kwargs.get("agent_input")
+    )
     assert dev_v2_input.context["architecture_proposal_yaml"] == "ARCH_V2_REVISED", (
         "Developer v2 doit lire l'archi v2, pas l'initiale — sinon le repair architect ne sert à rien"
     )
@@ -262,7 +264,9 @@ async def test_no_repair_when_initial_reviewer_approved(
 
     result = await wf.run(title="X", description="y")
 
-    assert arch_mock.run.call_count == 1, "Architect ne doit PAS être ré-exécuté si Reviewer APPROUVE direct"
+    assert arch_mock.run.call_count == 1, (
+        "Architect ne doit PAS être ré-exécuté si Reviewer APPROUVE direct"
+    )
     assert dev_mock.run.call_count == 1
     assert reviewer_mock.run.call_count == 1
     assert result.final_verdict == "APPROVED"
@@ -313,5 +317,7 @@ async def test_repair_handles_architect_v2_failure_gracefully(
     assert result.final_verdict in ("APPROVED", "NEEDS_CHANGES", "REJECTED")
     # Developer v2 doit recevoir l'archi v1 (fallback) puisque arch v2 a fail
     dev_v2_call = dev_mock.run.call_args_list[1]
-    dev_v2_input = dev_v2_call.args[0] if dev_v2_call.args else dev_v2_call.kwargs.get("agent_input")
+    dev_v2_input = (
+        dev_v2_call.args[0] if dev_v2_call.args else dev_v2_call.kwargs.get("agent_input")
+    )
     assert dev_v2_input.context["architecture_proposal_yaml"] == "ARCH_V1_OK"
