@@ -37,7 +37,13 @@ class SkillExtractor(BaseAgent):
         super().__init__(
             name="skill_extractor",
             prompt_path=_PROMPT,
-            model=s.model_strategic,  # Opus : besoin de discernement
+            # Sprint EEE (2026-05-14) : Opus → Sonnet. Tâche = synthèse d'épisodes
+            # déjà structurés vers un template YAML strict (title + tags + summary +
+            # key_patterns + techniques + pitfalls + example). Sonnet gère cette
+            # synthèse template-guidée à qualité équivalente. Le miner tourne en
+            # nightly (pas en path mission live) → rollback trivial si dégradation
+            # détectée. Économie ~5x sur ce poste (~$0.05-0.15 par mining nightly).
+            model=s.model_operational,
             memory=memory,
             settings=s,
             client=client,

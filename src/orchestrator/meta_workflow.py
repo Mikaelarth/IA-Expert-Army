@@ -81,7 +81,13 @@ class MetaMissionResult(BaseModel):
 
 
 class MetaDecomposer(BaseAgent):
-    """Agent stratégique (Opus) qui découpe une mission cross-domaine."""
+    """Agent qui découpe une mission cross-domaine en sous-missions par guilde.
+
+    Sprint EEE (2026-05-14) : Opus → Sonnet. La décomposition est très contrainte
+    par le template (4 guildes valides max, 4 sous-missions max, depends_on borné).
+    Sonnet gère ce planning contraint sans perte de qualité observable. Économie
+    ~5x sur ce poste, qui s'applique à CHAQUE mission cross-guildes.
+    """
 
     DEFAULT_MAX_TOKENS = 4096
 
@@ -95,7 +101,7 @@ class MetaDecomposer(BaseAgent):
         super().__init__(
             name="meta_decomposer",
             prompt_path=_PROMPT,
-            model=s.model_strategic,
+            model=s.model_operational,
             memory=memory,
             settings=s,
             client=client,
