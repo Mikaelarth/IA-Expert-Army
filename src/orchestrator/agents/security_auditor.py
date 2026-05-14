@@ -22,12 +22,7 @@ from src.memory.vector_memory import VectorMemory
 from src.orchestrator.agents._parsers import extract_yaml
 from src.orchestrator.base_agent import AgentInput, BaseAgent
 
-_PROMPT = (
-    Path(__file__).resolve().parents[3]
-    / "prompts"
-    / "orchestrator"
-    / "security_auditor.md"
-)
+_PROMPT = Path(__file__).resolve().parents[3] / "prompts" / "orchestrator" / "security_auditor.md"
 
 
 class SecurityAuditor(BaseAgent):

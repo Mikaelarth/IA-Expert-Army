@@ -121,9 +121,7 @@ def test_has_downgrade_findings_tolerates_malformed_findings() -> None:
 # ===== SecurityAuditor agent class =====
 
 
-def test_security_auditor_uses_operational_tier(
-    settings: Settings, memory: FileMemory
-) -> None:
+def test_security_auditor_uses_operational_tier(settings: Settings, memory: FileMemory) -> None:
     """Sonnet (operational) — pas Opus, pour économie."""
     agent = SecurityAuditor(memory=memory, settings=settings)
     assert "sonnet" in agent.model.lower()
@@ -317,7 +315,9 @@ async def test_workflow_security_auditor_downgrade_on_blocker(
     assert result.final_verdict == "APPROVED"
     # L'architect v2 doit avoir reçu les findings security dans son contexte
     arch_v2_call = arch.run.call_args_list[1]
-    arch_v2_input = arch_v2_call.args[0] if arch_v2_call.args else arch_v2_call.kwargs.get("agent_input")
+    arch_v2_input = (
+        arch_v2_call.args[0] if arch_v2_call.args else arch_v2_call.kwargs.get("agent_input")
+    )
     assert "security_findings_yaml" in arch_v2_input.context
 
 

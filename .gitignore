@@ -22,6 +22,8 @@ data/.killswitch
 # committé pour la posterité ; les nouveaux rapports sont locaux.
 data/autonomous_runs/*.md
 !data/autonomous_runs/20260514T131532.md
+# Backups (Sprint BBB) — archives locales, jamais committées (volume + secrets potentiels)
+data/backups/
 *.log
 logs/
 

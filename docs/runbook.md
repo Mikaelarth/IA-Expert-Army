@@ -234,6 +234,7 @@ just reindex
 **Prévention :**
 - Chroma in-process (pas server) → moins de surface d'attaque, mais besoin de reindex si on corromp le dossier.
 - Les épisodes markdown sont sous Git (sauf gitignore actuel — à reconsidérer si on veut du backup automatique).
+- **Backup quotidien** (Sprint BBB) : `just backup` capture skills + memory + prompts. Cf. section 11 ci-dessous.
 
 ---
 
@@ -299,7 +300,56 @@ rm data/budget_state.json.lock
 
 ---
 
-## 10. Variables d'env shell qui shadowent `.env` (récurrent sur cette machine)
+## 10. Perte totale skills/ ou data/memory/ — restoration depuis backup
+
+**Symptômes :**
+- `skills/` vide ou corrompu (suppression accidentelle, disque mort)
+- `data/memory/episodes/` ou `missions/` perdu
+- Le système boot mais a perdu tout son apprentissage
+
+**Diagnostic :**
+
+```powershell
+just backup-list                  # liste les backups disponibles
+# Vérifier qu'il existe au moins 1 backup récent (< 7 jours idéalement)
+```
+
+**Action — procédure de restoration :**
+
+```powershell
+# 1. ARRÊTER toute exécution (mode autonome inclus)
+just killswitch engage
+
+# 2. Sauvegarder l'état CORROMPU (au cas où on aurait besoin d'investiguer)
+just backup
+# (Le ZIP du dossier vide / corrompu sera utile pour comprendre le sinistre)
+
+# 3. Restore depuis le dernier backup sain
+just restore-latest               # interactive, demande confirmation
+# Ou pour un backup spécifique :
+just restore-from data/backups/iaa-backup-20260514T120000.zip
+
+# 4. Si l'état actuel est partiel/incohérent, écraser avec --overwrite
+uv run python scripts/restore.py --latest --overwrite
+
+# 5. Reconstruire l'index Chroma (qui n'est PAS dans le backup)
+uv run python scripts/reindex_episodes.py
+
+# 6. Sanity check
+just health
+
+# 7. Si tout est OK, relâcher le killswitch
+just killswitch release
+```
+
+**Prévention :**
+- **`just backup` quotidien** via cron / Task Scheduler. Rotation auto sur 7 jours.
+- Le backup exclut explicitement les `.env` (secrets) et `data/chroma/` (recalculable). Sauvegarder le `.env` séparément (password manager).
+- **Tester la restoration** au moins 1× par trimestre — un backup non-testé est un backup mort. Procédure : `just backup` → restore vers `/tmp/recovery_test/` → `diff -r` avec project root.
+
+---
+
+## 11. Variables d'env shell qui shadowent `.env` (récurrent sur cette machine)
 
 **Symptômes :**
 - `health_check` : `ANTHROPIC_API_KEY absent ou invalide` alors que `.env` contient la clé.

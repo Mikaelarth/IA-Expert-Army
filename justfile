@@ -120,6 +120,25 @@ fmt:
 typecheck:
     uv run mypy src/
 
+# === Backup & Disaster Recovery (Sprint BBB) ===
+
+# Backup atomique de skills/ + data/memory/ + prompts/ + ADRs + configs
+# Rotation auto : garde les 7 derniers
+backup:
+    uv run python scripts/backup.py
+
+# Liste les backups existants
+backup-list:
+    uv run python scripts/backup.py --list
+
+# Restore le DERNIER backup (refuse écrasement par défaut, demande confirmation)
+restore-latest:
+    uv run python scripts/restore.py --latest
+
+# Restore un backup spécifique (usage: just restore-from data/backups/iaa-backup-XXX.zip)
+restore-from BACKUP:
+    uv run python scripts/restore.py --backup {{BACKUP}}
+
 # === Git ===
 
 # Statut + dernier commit
