@@ -221,3 +221,74 @@ def b():
     assert "def b" in files[0]["content"]
     # La ligne vide entre a et b doit être préservée
     assert "\n\n\n" in files[0]["content"]
+
+
+# ===== Sprint DDD.bis — Fallback regex accepte les YAML reviewers =====
+
+
+def test_extract_yaml_reviewer_with_multiline_list_item_containing_colon() -> None:
+    """Régression DDD.bis (2026-05-14, mission ea8999b0) : un reviewer YAML
+    avec un item de liste multi-ligne contenant ` : ` au milieu faisait échouer
+    le strict parse YAML (token confusion clé/valeur). Le fallback regex
+    rejetait ensuite par défaut car le critère exigeait `title` (skill-specific).
+    Conséquence : verdict APPROVED 0.93 → interprété REJECTED par défaut →
+    mission archivée comme échouée alors que le code livré était bon.
+
+    Fix : étendre _RECOGNIZED_TOP_LEVEL_FIELDS pour accepter verdict, verdict_qg,
+    etc. Ce test garantit qu'on récupère au moins le verdict + quality_score
+    même quand le strict parse échoue."""
+    yaml_text = """```yaml
+verdict: APPROVED
+quality_score: 0.93
+summary: |
+  Le développeur a corrigé les 4 issues bloquantes.
+  Code idiomatique, modulaire, prêt pour production.
+
+strengths:
+  - Correction complète des 4 blockers/majors : chaque point de la required_actions
+    précédente est traité et traçable ligne à ligne dans le diff.
+  - `config.py` applique un fail-fast au boot si SECRET_KEY est absent
+    ou vide — vulnérabilité silencieuse éliminée.
+
+issues: []
+required_actions: []
+```"""
+    parsed = extract_yaml(yaml_text)
+    assert parsed is not None, "Le fallback regex doit récupérer le YAML reviewer"
+    assert parsed["verdict"] == "APPROVED"
+    assert parsed["quality_score"] == "0.93"  # regex extract = string
+    assert "summary" in parsed
+
+
+def test_extract_yaml_qg_verdict_with_problematic_yaml() -> None:
+    """Sprint DDD.bis : les YAML du Quality Guardian (verdict_qg) doivent aussi
+    être récupérables par fallback même quand le strict parse échoue."""
+    yaml_text = """```yaml
+verdict_qg: NEEDS_REWORK
+final_score: 0.55
+rationale: |
+  Score guilde trop indulgent : 4 livrables manquants alors que demandés
+  explicitement dans le brief.
+meta_concerns:
+  - Troncature systématique : signal d'un problème de génération
+    non résolu, qui devrait être adressé par décomposition.
+```"""
+    parsed = extract_yaml(yaml_text)
+    assert parsed is not None
+    assert parsed["verdict_qg"] == "NEEDS_REWORK"
+
+
+def test_extract_yaml_security_findings_with_problematic_yaml() -> None:
+    """Sprint DDD.bis : pareil pour SecurityAuditor (champ findings ou verdict_sec)."""
+    yaml_text = """```yaml
+verdict_sec: NEEDS_CHANGES
+risk_level: high
+findings:
+  - severity: BLOCKER
+    category: injection_sql
+    issue: |
+      Concatenation user input dans la query : exploitable.
+```"""
+    parsed = extract_yaml(yaml_text)
+    assert parsed is not None
+    assert parsed["verdict_sec"] == "NEEDS_CHANGES"

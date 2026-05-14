@@ -97,11 +97,29 @@ def _strip_outer_quotes(text: str) -> str:
     return text
 
 
+# Champs qui, s'ils sont présents dans le résultat regex, indiquent qu'on a
+# bien extrait un YAML d'agent connu (skill, reviewer, QG, security audit, etc.).
+# Sprint DDD.bis : le critère initial `result.get("title")` était trop restrictif
+# (les reviewers n'ont pas de title). Sans cette extension, un reviewer YAML
+# avec un item de liste multi-ligne contenant ` : ` faisait échouer strict
+# parse → fallback retournait None → workflow tombait sur le default REJECTED
+# alors que le verdict réel était APPROVED (cf. mission ea8999b0 du 2026-05-14).
+_RECOGNIZED_TOP_LEVEL_FIELDS = (
+    "title",  # skill, decomposition
+    "verdict",  # reviewer (engineering, research, creative)
+    "verdict_qg",  # quality guardian
+    "verdict_sec",  # security auditor
+    "verdict_lead",  # research lead (futur)
+    "sub_missions",  # meta decomposer
+    "findings",  # security auditor (alternative)
+)
+
+
 def _regex_fallback_extract(text: str) -> dict[str, Any] | None:
     """Extraction de last-resort par regex des champs scalaires + listes + blocks.
 
-    Ne récupère pas de structures imbriquées complexes. Suffisant pour les YAML
-    "skill" qui ont un schéma plat connu.
+    Ne récupère pas de structures imbriquées complexes. Accepte le résultat s'il
+    contient au moins un champ "signature" connu (cf. _RECOGNIZED_TOP_LEVEL_FIELDS).
     """
     result: dict[str, Any] = {}
 
@@ -131,7 +149,11 @@ def _regex_fallback_extract(text: str) -> dict[str, Any] | None:
         if items:
             result[key] = items
 
-    return result if result.get("title") else None
+    # On accepte si au moins un champ "signature" est présent (extension du
+    # critère initial trop-skill-spécifique).
+    if any(field in result for field in _RECOGNIZED_TOP_LEVEL_FIELDS):
+        return result
+    return None
 
 
 def extract_yaml(text: str) -> dict[str, Any] | None:
