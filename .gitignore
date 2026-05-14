@@ -63,6 +63,11 @@ ENV/
 *~
 .DS_Store
 
+# Claude Code — settings locaux par machine/utilisateur (permissions, etc.)
+# Le fichier `settings.local.json` capture les autorisations propres à
+# chaque session/dev — il ne doit PAS être partagé.
+.claude/settings.local.json
+
 # Tests & coverage
 .pytest_cache/
 .coverage
