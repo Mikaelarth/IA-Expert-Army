@@ -1,6 +1,16 @@
 """CreativeWorkflow — pipeline linéaire Strategist → Copywriter → Editor.
 
-Phase 4 MVP — 3 agents séquentiels avec repair loop 1× sur NEEDS_CHANGES.
+Phase 4 MVP — 3 agents séquentiels.
+
+Le repair loop (max 1×) ré-exécute **les 3 agents** dans l'ordre sur
+NEEDS_CHANGES, pas seulement Copywriter + Editor comme la v1 (avant
+Sprint WW). Si l'Editor flagge un problème de cadrage stratégique
+(« le brief ciblait mal l'audience » ou « le ton demandé est incohérent »),
+le Copywriter seul ne peut pas remédier — son brief amont est figé.
+
+Pattern méta-leçon appliqué symétriquement après Sprint PP (Business)
+et SS (Engineering).
+
 Phase 4+ : ajouter Marketing Specialist (CTA + SEO) et Visual Designer
 (prompts d'images) en parallèle entre Strategist et Editor.
 """
@@ -140,30 +150,56 @@ class CreativeWorkflow:
 
         verdict = (editor_out.parsed or {}).get("verdict", VERDICT_REJECTED)
 
-        # Repair loop 1×
+        # Repair loop 1× — Strategist → Copywriter → Editor dans l'ordre.
+        # Pattern méta-leçon Sprint PP/SS : le brief stratégique amont doit
+        # pouvoir être révisé si l'Editor flagge un problème de cadrage.
         if verdict == VERDICT_NEEDS_CHANGES:
             log.info("creative.workflow.repair_loop", mission=str(mission_id))
+
+            # Step 1 (repair) — Strategist révise éventuellement le brief
+            strat_out2 = await self.strategist.run(
+                AgentInput(
+                    mission_id=mission_id,
+                    task=f"Mission créative : {title}\n\n{description}\n\n"
+                    "Revoie le brief stratégique en intégrant le feedback de l'Editor. "
+                    "Si le brief initial est cohérent (audience, ton, angle), "
+                    "re-produis-le inchangé ; sinon ajuste (ex. raffiner l'audience, "
+                    "préciser un anti-pattern, corriger l'angle).",
+                    context={
+                        "previous_brief_yaml": strat_out.raw_text,
+                        "previous_text_markdown": copy_out.raw_text,
+                        "editor_feedback_yaml": editor_out.raw_text,
+                    },
+                )
+            )
+            outputs.append(strat_out2)
+            current_strat = strat_out2 if strat_out2.success else strat_out
+
+            # Step 2 (repair) — Copywriter réécrit sur le brief mis à jour
             copy_out2 = await self.copywriter.run(
                 AgentInput(
                     mission_id=mission_id,
-                    task="Réécris le texte en intégrant le feedback de l'Editor.",
+                    task="Réécris le texte en intégrant le feedback de l'Editor "
+                    "et le brief stratégique mis à jour.",
                     context={
                         "mission_description": description,
-                        "strategy_brief_yaml": strat_out.raw_text,
+                        "strategy_brief_yaml": current_strat.raw_text,
                         "previous_text_markdown": copy_out.raw_text,
                         "editor_feedback_yaml": editor_out.raw_text,
                     },
                 )
             )
             outputs.append(copy_out2)
+
+            # Step 3 (repair) — Editor juge l'ensemble v2
             if copy_out2.success:
                 editor_out2 = await self.editor.run(
                     AgentInput(
                         mission_id=mission_id,
-                        task="Juge le nouveau texte.",
+                        task="Juge le nouveau texte et le brief révisé.",
                         context={
                             "mission_description": description,
-                            "strategy_brief_yaml": strat_out.raw_text,
+                            "strategy_brief_yaml": current_strat.raw_text,
                             "final_text_markdown": copy_out2.raw_text,
                             "previous_review_yaml": editor_out.raw_text,
                         },
@@ -173,6 +209,7 @@ class CreativeWorkflow:
                 if editor_out2.success:
                     editor_out = editor_out2
                     copy_out = copy_out2
+                    strat_out = current_strat
                     verdict = (editor_out2.parsed or {}).get("verdict", VERDICT_REJECTED)
 
         review_data = editor_out.parsed or {}

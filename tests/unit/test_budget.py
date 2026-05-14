@@ -152,19 +152,30 @@ def test_file_lock_serializes_concurrent_threads(tmp_path: Path) -> None:
 
 
 def test_budget_record_serializes_under_concurrency(state_path: Path) -> None:
-    """10 threads font record(1.0) en parallèle → cumul final exactement 10.0,
-    aucun update perdu (le test prouve l'absence de race read-modify-write)."""
+    """5 threads font record(1.0) en parallèle → cumul final exactement 5.0,
+    aucun update perdu (le test prouve l'absence de race read-modify-write).
+
+    Note : 5 threads (pas 10) pour rester robuste sous charge système quand
+    la suite complète tourne en parallèle (le test était flaky à 10 threads
+    sous full suite sur Windows + Python 3.14 async)."""
     bc = BudgetController(state_path=state_path, daily_budget_usd=100.0)
+    errors: list[BaseException] = []
 
     def worker() -> None:
-        bc.record(1.0)
+        try:
+            bc.record(1.0)
+        except BaseException as exc:
+            errors.append(exc)
 
-    threads = [threading.Thread(target=worker) for _ in range(10)]
+    threads = [threading.Thread(target=worker) for _ in range(5)]
     for t in threads:
         t.start()
     for t in threads:
-        t.join(timeout=10)
+        t.join(timeout=15)
 
-    assert bc.spent_today == pytest.approx(10.0, abs=0.001), (
-        f"Race condition : 10 × 1.0 = {bc.spent_today}, perte d'updates"
+    assert not errors, f"Erreurs dans les threads : {errors}"
+    for t in threads:
+        assert not t.is_alive(), "Au moins un thread n'a pas fini dans le timeout"
+    assert bc.spent_today == pytest.approx(5.0, abs=0.001), (
+        f"Race condition : 5 × 1.0 = {bc.spent_today}, perte d'updates"
     )

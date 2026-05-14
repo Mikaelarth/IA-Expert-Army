@@ -177,15 +177,26 @@ async def test_research_workflow_fails_when_watch_fails(
 
 
 @pytest.mark.asyncio
-async def test_research_workflow_repair_loop_reruns_synth_and_reviewer(
+async def test_research_workflow_repair_loop_reruns_all_four_agents(
     settings: Settings, memory: FileMemory
 ) -> None:
-    """Le repair loop sur NEEDS_CHANGES doit ré-exécuter le Synthesizer puis le Reviewer."""
+    """Sprint WW : le repair loop sur NEEDS_CHANGES doit ré-exécuter
+    Lead + Watch + Synth + Reviewer (pattern méta-leçon PP/SS appliqué)."""
     wf = ResearchWorkflow(memory=memory, settings=settings)
     wf.lead = MagicMock()
-    wf.lead.run = AsyncMock(return_value=_agent_output("research_lead"))
+    wf.lead.run = AsyncMock(
+        side_effect=[
+            _agent_output("research_lead", raw_text="plan v1"),
+            _agent_output("research_lead", raw_text="plan v2"),
+        ]
+    )
     wf.watch = MagicMock()
-    wf.watch.run = AsyncMock(return_value=_agent_output("tech_watch"))
+    wf.watch.run = AsyncMock(
+        side_effect=[
+            _agent_output("tech_watch", raw_text="findings v1"),
+            _agent_output("tech_watch", raw_text="findings v2"),
+        ]
+    )
     wf.synth = MagicMock()
     wf.synth.run = AsyncMock(
         side_effect=[
@@ -207,9 +218,56 @@ async def test_research_workflow_repair_loop_reruns_synth_and_reviewer(
     result = await wf.run(title="X", description="y")
 
     assert result.final_verdict == "APPROVED"
+    # Chacun appelé exactement 2× (1 initial + 1 repair)
+    assert wf.lead.run.call_count == 2, "Lead doit être ré-exécuté dans le repair (Sprint WW)"
+    assert wf.watch.run.call_count == 2, "Watch doit être ré-exécuté dans le repair (Sprint WW)"
     assert wf.synth.run.call_count == 2
     assert wf.reviewer.run.call_count == 2
     assert result.synthesis_markdown == "synthèse v2"
+
+
+@pytest.mark.asyncio
+async def test_research_repair_lead_receives_review_feedback(
+    settings: Settings, memory: FileMemory
+) -> None:
+    """Le Lead v2 doit voir le feedback Reviewer + l'historique amont
+    pour décider s'il révise son plan ou non."""
+    wf = ResearchWorkflow(memory=memory, settings=settings)
+    lead_mock = MagicMock()
+    lead_mock.run = AsyncMock(
+        side_effect=[
+            _agent_output("research_lead", raw_text="PLAN_V1"),
+            _agent_output("research_lead", raw_text="plan v2"),
+        ]
+    )
+    wf.lead = lead_mock
+    wf.watch = MagicMock()
+    wf.watch.run = AsyncMock(return_value=_agent_output("tech_watch"))
+    wf.synth = MagicMock()
+    wf.synth.run = AsyncMock(return_value=_agent_output("document_synthesizer"))
+    wf.reviewer = MagicMock()
+    wf.reviewer.run = AsyncMock(
+        side_effect=[
+            _agent_output(
+                "research_reviewer",
+                raw_text="REVIEW_FLAGS_MISSING_SUBQUESTION",
+                parsed={"verdict": "NEEDS_CHANGES"},
+            ),
+            _agent_output(
+                "research_reviewer", parsed={"verdict": "APPROVED", "quality_score": 0.9}
+            ),
+        ]
+    )
+
+    await wf.run(title="X", description="y")
+
+    lead_v2_call = lead_mock.run.call_args_list[1]
+    lead_v2_input = (
+        lead_v2_call.args[0] if lead_v2_call.args else lead_v2_call.kwargs.get("agent_input")
+    )
+    ctx = lead_v2_input.context
+    assert "REVIEW_FLAGS_MISSING_SUBQUESTION" in ctx.get("review_feedback_yaml", "")
+    assert ctx.get("previous_plan_yaml") == "PLAN_V1"
 
 
 @pytest.mark.asyncio
@@ -334,12 +392,18 @@ async def test_creative_workflow_fails_when_strategist_fails(
 
 
 @pytest.mark.asyncio
-async def test_creative_workflow_repair_loop_reruns_copywriter_and_editor(
+async def test_creative_workflow_repair_loop_reruns_all_three_agents(
     settings: Settings, memory: FileMemory
 ) -> None:
+    """Sprint WW : le repair loop doit ré-exécuter Strategist + Copywriter + Editor."""
     wf = CreativeWorkflow(memory=memory, settings=settings)
     wf.strategist = MagicMock()
-    wf.strategist.run = AsyncMock(return_value=_agent_output("content_strategist"))
+    wf.strategist.run = AsyncMock(
+        side_effect=[
+            _agent_output("content_strategist", raw_text="brief v1"),
+            _agent_output("content_strategist", raw_text="brief v2"),
+        ]
+    )
     wf.copywriter = MagicMock()
     wf.copywriter.run = AsyncMock(
         side_effect=[
@@ -358,8 +422,49 @@ async def test_creative_workflow_repair_loop_reruns_copywriter_and_editor(
     result = await wf.run(title="X", description="y")
 
     assert result.final_verdict == "APPROVED"
+    assert wf.strategist.run.call_count == 2, "Strategist doit être ré-exécuté (Sprint WW)"
     assert wf.copywriter.run.call_count == 2
     assert wf.editor.run.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_creative_repair_copywriter_v2_uses_updated_brief(
+    settings: Settings, memory: FileMemory
+) -> None:
+    """Copywriter v2 doit recevoir le brief Strategist MIS À JOUR, pas l'initial."""
+    wf = CreativeWorkflow(memory=memory, settings=settings)
+    wf.strategist = MagicMock()
+    wf.strategist.run = AsyncMock(
+        side_effect=[
+            _agent_output("content_strategist", raw_text="BRIEF_V1"),
+            _agent_output("content_strategist", raw_text="BRIEF_V2_REVISED"),
+        ]
+    )
+    copy_mock = MagicMock()
+    copy_mock.run = AsyncMock(
+        side_effect=[
+            _agent_output("copywriter", raw_text="t v1"),
+            _agent_output("copywriter", raw_text="t v2"),
+        ]
+    )
+    wf.copywriter = copy_mock
+    wf.editor = MagicMock()
+    wf.editor.run = AsyncMock(
+        side_effect=[
+            _agent_output("editor", parsed={"verdict": "NEEDS_CHANGES"}),
+            _agent_output("editor", parsed={"verdict": "APPROVED", "quality_score": 0.9}),
+        ]
+    )
+
+    await wf.run(title="X", description="y")
+
+    copy_v2_call = copy_mock.run.call_args_list[1]
+    copy_v2_input = (
+        copy_v2_call.args[0] if copy_v2_call.args else copy_v2_call.kwargs.get("agent_input")
+    )
+    assert copy_v2_input.context["strategy_brief_yaml"] == "BRIEF_V2_REVISED", (
+        "Copywriter v2 doit lire le brief v2, pas l'initial"
+    )
 
 
 @pytest.mark.asyncio

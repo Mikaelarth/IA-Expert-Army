@@ -1,8 +1,15 @@
 """ResearchWorkflow — pipeline linéaire de la Guild Research (Phase 4 MVP).
 
 Pattern : Research Lead → Tech Watch → Document Synthesizer → Research Reviewer.
-Boucle de réparation 1× si le Reviewer demande des changements (le Synthesizer
-re-rédige avec le feedback).
+
+Le repair loop (max 1×) ré-exécute **les 4 agents** dans l'ordre sur
+NEEDS_CHANGES, pas seulement Synth + Reviewer comme la v1 (avant Sprint WW).
+
+Pourquoi inclure Lead + Watch : si le Reviewer flagge un problème de
+cadrage (« le plan initial n'a pas couvert la sous-question X » ou
+« les findings sont biaisés/superficiels »), le Synthesizer seul ne peut
+pas remédier — sa matière première amont est figée. Pattern méta-leçon
+appliqué symétriquement après Sprint PP (Business) et SS (Engineering).
 
 Phase 4+ : parallélisme Tech Watch / sources, web MCP, Knowledge Curator.
 """
@@ -173,32 +180,77 @@ class ResearchWorkflow:
 
         verdict = (review_out.parsed or {}).get("verdict", VERDICT_REJECTED)
 
-        # Repair loop (max 1×)
+        # Repair loop (max 1×) — Lead → Watch → Synth → Reviewer dans l'ordre.
+        # Pattern méta-leçon Sprint PP/SS : chaque producteur upstream doit
+        # pouvoir réagir au feedback du reviewer, sinon oscillation possible.
         if verdict == VERDICT_NEEDS_CHANGES:
             log.info("research.workflow.repair_loop", mission=str(mission_id))
+
+            # Step 1 (repair) — Lead révise éventuellement le plan
+            lead_out2 = await self.lead.run(
+                AgentInput(
+                    mission_id=mission_id,
+                    task=f"Mission de recherche : {title}\n\n{description}\n\n"
+                    "Revoie le plan de recherche en intégrant le feedback Reviewer. "
+                    "Si le plan initial cadre déjà bien les sous-questions, "
+                    "re-produis-le inchangé ; sinon ajuste (ex. ajouter une "
+                    "sous-question manquée, reformuler une zone floue).",
+                    context={
+                        "previous_plan_yaml": lead_out.raw_text,
+                        "previous_findings_yaml": watch_out.raw_text,
+                        "previous_synthesis_md": synth_out.raw_text,
+                        "review_feedback_yaml": review_out.raw_text,
+                    },
+                )
+            )
+            outputs.append(lead_out2)
+            current_lead = lead_out2 if lead_out2.success else lead_out
+
+            # Step 2 (repair) — Watch étend/corrige les findings sur le plan mis à jour
+            watch_out2 = await self.watch.run(
+                AgentInput(
+                    mission_id=mission_id,
+                    task="Pour chaque sous-question du plan ci-dessous, "
+                    "produis tes findings YAML en intégrant le feedback "
+                    "Reviewer (sources insuffisantes, biais à corriger, etc.).\n\n"
+                    f"Plan de recherche :\n{current_lead.raw_text}",
+                    context={
+                        "mission_description": description,
+                        "previous_findings_yaml": watch_out.raw_text,
+                        "review_feedback_yaml": review_out.raw_text,
+                    },
+                )
+            )
+            outputs.append(watch_out2)
+            current_watch = watch_out2 if watch_out2.success else watch_out
+
+            # Step 3 (repair) — Synth re-rédige avec les inputs amont mis à jour
             synth_out2 = await self.synth.run(
                 AgentInput(
                     mission_id=mission_id,
-                    task="Re-rédige la synthèse en intégrant le feedback du Reviewer.",
+                    task="Re-rédige la synthèse en intégrant le feedback du Reviewer "
+                    "et les findings mis à jour.",
                     context={
                         "mission_description": description,
-                        "research_plan_yaml": lead_out.raw_text,
-                        "findings_yaml": watch_out.raw_text,
+                        "research_plan_yaml": current_lead.raw_text,
+                        "findings_yaml": current_watch.raw_text,
                         "previous_synthesis_md": synth_out.raw_text,
                         "review_feedback_yaml": review_out.raw_text,
                     },
                 )
             )
             outputs.append(synth_out2)
+
+            # Step 4 (repair) — Reviewer juge l'ensemble v2
             if synth_out2.success:
                 review_out2 = await self.reviewer.run(
                     AgentInput(
                         mission_id=mission_id,
-                        task="Juge la nouvelle synthèse.",
+                        task="Juge la nouvelle synthèse, le plan révisé et les findings mis à jour.",
                         context={
                             "mission_description": description,
-                            "research_plan_yaml": lead_out.raw_text,
-                            "findings_yaml": watch_out.raw_text,
+                            "research_plan_yaml": current_lead.raw_text,
+                            "findings_yaml": current_watch.raw_text,
                             "synthesis_markdown": synth_out2.raw_text,
                             "previous_review_yaml": review_out.raw_text,
                         },
@@ -208,6 +260,8 @@ class ResearchWorkflow:
                 if review_out2.success:
                     review_out = review_out2
                     synth_out = synth_out2
+                    watch_out = current_watch
+                    lead_out = current_lead
                     verdict = (review_out2.parsed or {}).get("verdict", VERDICT_REJECTED)
 
         review_data = review_out.parsed or {}
