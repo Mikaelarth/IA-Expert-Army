@@ -53,7 +53,7 @@ Une commande. Code généré, écrit sur disque, validé en sandbox isolé, tout
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-Voir [docs/architecture.md](docs/architecture.md) pour le détail, et [docs/adr/](docs/adr/) pour les 7 ADRs documentant les décisions structurantes.
+Voir [docs/architecture.md](docs/architecture.md) (diagrammes mermaid + état d'implémentation) et [docs/adr/](docs/adr/) pour les **10 ADRs** documentant les décisions structurantes. En cas d'incident en mode autonome : [docs/runbook.md](docs/runbook.md).
 
 ---
 

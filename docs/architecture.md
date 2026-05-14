@@ -1,11 +1,53 @@
 # Architecture — IA Expert Army
 
 > Document vivant — mis à jour à chaque phase.
-> Dernière révision : 2026-05-10 (Phase 0)
+> Dernière révision : 2026-05-14 (v0.2.0, Phases 0–7 livrées, Sprint XX docs)
 
 ---
 
 ## Vue d'ensemble — 4 couches
+
+```mermaid
+graph BT
+    subgraph C4["Couche 4 — Apprentissage & Évolution"]
+        PM[PatternMiner nightly]
+        SE[SkillExtractor Opus]
+        SL[SkillsLibrary]
+        RAG[RAG Episodes injection]
+        PM --> SE --> SL
+        SL --> RAG
+    end
+
+    subgraph C3["Couche 3 — Infrastructure partagée"]
+        FM[FileMemory<br/>episodes + missions + meta_missions]
+        VM[VectorMemory Chroma<br/>agent_episodes + agent_skills]
+        SAND[SandboxRunner Docker<br/>no-net + non-root + tmpfs]
+        MCP[MCP Server 6 tools<br/>search_episodes/skills, list/get missions/meta]
+        OBS[Tracing Langfuse v3<br/>via @observe]
+    end
+
+    subgraph C2["Couche 2 — Les 4 guildes"]
+        ENG[Engineering<br/>Architect + Developer + Reviewer]
+        RES[Research<br/>Lead + Watch + Synth + Reviewer]
+        CRE[Creative<br/>Strategist + Copywriter + Editor]
+        BIZ[Business<br/>PM + BA + Legal]
+    end
+
+    subgraph C1["Couche 1 — Direction"]
+        CO[Chief Orchestrator Opus]
+        ROUT[MissionRouter<br/>heuristique mots-clés]
+        META[MetaWorkflow Phase 7<br/>cross-guildes parallel]
+        BC[BudgetController + lock portable]
+        KS[Killswitch]
+    end
+
+    C1 --> C2
+    C2 --> C3
+    C3 --> C4
+    C4 -.injection RAG.-> C2
+```
+
+### ASCII fallback (pour `git log` / terminaux sans mermaid)
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -29,6 +71,113 @@
 │  Chief Orchestrator · Chief of Staff · Quality Guardian · Budget │
 └──────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Flow — Mission single-guild (avec repair loop)
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant R as MissionRouter
+    participant W as Workflow (e.g. Engineering)
+    participant A1 as Agent amont (Architect)
+    participant A2 as Agent intermédiaire (Developer)
+    participant A3 as Agent reviewer
+
+    U->>R: run(title, description, force_guild?)
+    R->>R: classify (heuristique) ou force_guild
+    R->>W: run(title, description)
+    W->>A1: produce<br/>plan/brief/archi
+    A1-->>W: artifact v1
+    W->>A2: produce livrable<br/>sur artifact v1
+    A2-->>W: output v1
+    W->>A3: judge artifact + output
+    A3-->>W: verdict v1
+    alt verdict = NEEDS_CHANGES
+        Note over W,A3: Repair loop (max 1×, pattern Sprint PP/SS/WW)
+        W->>A1: revise(artifact v1, feedback)
+        A1-->>W: artifact v2
+        W->>A2: produce sur v2
+        A2-->>W: output v2
+        W->>A3: judge v2
+        A3-->>W: verdict v2
+    end
+    W-->>R: MissionResult (verdict, score, cost)
+    R-->>U: UnifiedMissionResult
+```
+
+**Repair loop : pourquoi tous les agents amont sont ré-exécutés** (et pas juste l'agent intermédiaire) — cf. **Sprint PP** (Business) / **SS** (Engineering) / **WW** (Research+Creative). Un reviewer peut flagger une issue à n'importe quel niveau ; l'agent intermédiaire seul ne peut pas remédier à une faille amont (plan, brief, archi). Pattern uniformé sur les 4 workflows.
+
+---
+
+## Flow — Meta-mission cross-guildes (Phase 7)
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant MW as MetaWorkflow
+    participant MD as MetaDecomposer Opus
+    participant R as MissionRouter
+    participant G1 as Guild A (e.g. Business)
+    participant G2 as Guild B (e.g. Engineering)
+    participant G3 as Guild C (e.g. Creative)
+
+    U->>MW: run(title, description) --meta
+    MW->>MD: decompose
+    MD-->>MW: 2-4 sub_missions + DAG depends_on
+    MW->>MW: _level_order (Kahn topologique)
+
+    Note over MW,G3: Niveau 0 (no deps) — parallel via asyncio.gather
+    par
+        MW->>R: run(sub1, force_guild=A)
+        R->>G1: dispatch
+        G1-->>R: result A
+        R-->>MW: UnifiedMissionResult
+    and
+        MW->>R: run(sub2, force_guild=B)
+        R->>G2: dispatch
+        G2-->>R: result B
+        R-->>MW: UnifiedMissionResult
+    end
+
+    Note over MW,G3: Niveau 1 — contexte amont injecté en description
+    MW->>R: run(sub3 enrichi, force_guild=C)
+    R->>G3: dispatch
+    G3-->>R: result C
+    R-->>MW: UnifiedMissionResult
+
+    MW->>MW: aggregate (verdict global + score moyen)
+    MW->>MW: persist data/memory/meta_missions/<uuid>.md
+    MW-->>U: MetaMissionResult
+```
+
+**Stratégie de décomposition** : 100 % LLM (Opus), pas d'heuristique. Le décomposeur adapte selon le contexte (diamond, all-parallel, chain). Cf. [ADR-009](adr/009-meta-workflow-cross-guilds.md).
+
+---
+
+## État d'implémentation (v0.2.0) vs Plan stratégique
+
+| Couche | Composant | Statut | Détail |
+|---|---|---|---|
+| **C1** | Chief Orchestrator | ✅ Livré | `src/orchestrator/agents/orchestrator.py` |
+| C1 | Chief of Staff | ⏳ Planifié | Phase 4+ |
+| C1 | Quality Guardian | ⏳ Planifié | P2 audit Sprint UU |
+| C1 | Budget Controller | ✅ Livré | `src/core/budget.py` + lock portable (Sprint VV) |
+| **C2** | 4 guildes opérationnelles | ✅ Livré | 14/25 agents (cf. tableau ci-dessous) |
+| C2 | Repair loop uniformé | ✅ Livré | Sprint PP/SS/WW — 4 workflows |
+| C2 | MetaWorkflow Phase 7 | ✅ Livré | `src/orchestrator/meta_workflow.py` |
+| **C3** | FileMemory (4 niveaux : working/episodes/missions/meta_missions) | ✅ Livré | `src/memory/file_memory.py` |
+| C3 | VectorMemory Chroma (in-process) | ✅ Livré | `src/memory/vector_memory.py` |
+| C3 | SQLite knowledge graph | ⏳ Planifié | Phase 2+ — actuellement frontmatter YAML suffit |
+| C3 | MCP server unifié (6 tools) | ✅ Livré | `src/mcp_servers/memory_search.py` |
+| C3 | Redis pubsub bus | ⏳ Planifié | Phase 8+ — pas indispensable v1 |
+| C3 | SandboxRunner Docker | ✅ Livré | `src/sandbox/runner.py` (ADR-008) |
+| C3 | Langfuse self-hosted + `@observe` | ✅ Livré | Stack docker-compose + tracing opt-in |
+| **C4** | PatternMiner + SkillExtractor | ✅ Livré | `src/learning/` (Phase 5) |
+| C4 | SkillsLibrary + RAG injection | ✅ Livré | 16 skills auto-générées |
+| C4 | Prompt A/B testing | ⏳ Planifié | ADR-007 décrit la stratégie |
+| C4 | Fine-tuning périodique | ⏳ Future | Phase 7+ optionnel |
 
 ---
 
