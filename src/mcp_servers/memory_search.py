@@ -4,7 +4,7 @@ Permet à un LLM tiers (Anthropic Workbench, Claude Desktop, Cursor, …) de
 chercher dans nos épisodes et nos skills sans qu'on ait à embarquer tout
 notre code Python dans son environnement.
 
-4 tools exposés :
+6 tools exposés :
   - search_episodes(query, agent=None, n=3) : recherche sémantique dans la
     VectorMemory des épisodes (collection "agent_episodes")
   - search_skills(agent, query=None, n=2) : recherche sémantique dans la
@@ -14,6 +14,10 @@ notre code Python dans son environnement.
     dans les missions terminées (sans recherche), filtrable par guilde
   - get_mission_summary(mission_id) : récupère le récap complet d'une
     mission (frontmatter + corps markdown) à partir de son UUID
+  - list_recent_meta_missions(limit=10) : navigation chronologique dans
+    les meta-missions cross-guildes (Phase 7), avec leurs sub_mission_ids
+  - get_meta_mission_summary(meta_mission_id) : zoom sur une meta-mission
+    (rationale + résultats des sous-missions + cumul coût/durée)
 
 Le serveur communique via stdio (standard MCP). Lancement :
     uv run python scripts/run_memory_search_mcp.py
@@ -185,6 +189,50 @@ def _build_server(
                     "required": ["mission_id"],
                 },
             ),
+            Tool(
+                name="list_recent_meta_missions",
+                description=(
+                    "Liste les meta-missions cross-guildes (Phase 7) par ordre "
+                    "chronologique inverse. Une meta-mission décompose une "
+                    "mission complexe en 2-4 sous-missions routées vers "
+                    "différentes guildes. Retourne pour chacune : id, titre, "
+                    "verdict global, score moyen, coût total cumulé, liste "
+                    "des guildes traversées et IDs des sous-missions."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "limit": {
+                            "type": "integer",
+                            "description": "Nombre max retourné (défaut 10, max 50)",
+                            "default": 10,
+                            "minimum": 1,
+                            "maximum": 50,
+                        },
+                    },
+                    "required": [],
+                },
+            ),
+            Tool(
+                name="get_meta_mission_summary",
+                description=(
+                    "Récupère le récap complet d'une meta-mission cross-guildes "
+                    "à partir de son meta_mission_id. Retourne le frontmatter "
+                    "(verdict global, score moyen, cumul coût/durée, liste des "
+                    "sous-missions) ET le corps markdown (rationale de "
+                    "décomposition, détail par sous-mission)."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "meta_mission_id": {
+                            "type": "string",
+                            "description": "UUID de la meta-mission (format complet 36 chars)",
+                        },
+                    },
+                    "required": ["meta_mission_id"],
+                },
+            ),
         ]
 
     @server.call_tool()
@@ -197,6 +245,10 @@ def _build_server(
             return _handle_list_recent_missions(file_memory, arguments)
         if name == "get_mission_summary":
             return _handle_get_mission_summary(file_memory, arguments)
+        if name == "list_recent_meta_missions":
+            return _handle_list_recent_meta_missions(file_memory, arguments)
+        if name == "get_meta_mission_summary":
+            return _handle_get_meta_mission_summary(file_memory, arguments)
         return [TextContent(type="text", text=json.dumps({"error": f"unknown tool: {name}"}))]
 
     return server
@@ -358,6 +410,87 @@ def _handle_get_mission_summary(
 
     payload = {
         "mission_id": mission_id,
+        "metadata": record.metadata,
+        "body": record.body,
+    }
+    return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+
+
+def _handle_list_recent_meta_missions(
+    file_memory: FileMemory, arguments: dict[str, Any]
+) -> list[TextContent]:
+    limit = int(arguments.get("limit", 10))
+    limit = max(1, min(limit, 50))
+
+    try:
+        paths = file_memory.list_meta_missions()
+        records = []
+        for path in paths:
+            try:
+                rec = file_memory.get_meta_mission_summary(path.stem)
+            except Exception:
+                continue
+            if rec is None:
+                continue
+            meta = rec.metadata
+            records.append((meta.get("started_at", ""), meta, path))
+        records.sort(key=lambda r: r[0], reverse=True)
+        records = records[:limit]
+    except Exception as exc:
+        log.warning("mcp.list_recent_meta_missions.failed", error=str(exc))
+        return [TextContent(type="text", text=json.dumps({"error": str(exc)}))]
+
+    payload = {
+        "limit": limit,
+        "n_results": len(records),
+        "results": [
+            {
+                "meta_mission_id": str(meta.get("meta_mission_id", path.stem)),
+                "title": meta.get("title"),
+                "started_at": meta.get("started_at"),
+                "ended_at": meta.get("ended_at"),
+                "final_verdict": meta.get("final_verdict"),
+                "overall_quality_score": meta.get("overall_quality_score"),
+                "total_cost_usd": meta.get("total_cost_usd"),
+                "total_duration_seconds": meta.get("total_duration_seconds"),
+                "n_sub_missions": meta.get("n_sub_missions"),
+                "guilds": meta.get("guilds"),
+                "sub_mission_ids": meta.get("sub_mission_ids"),
+            }
+            for _started, meta, path in records
+        ],
+    }
+    return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+
+
+def _handle_get_meta_mission_summary(
+    file_memory: FileMemory, arguments: dict[str, Any]
+) -> list[TextContent]:
+    meta_mission_id = str(arguments.get("meta_mission_id", "")).strip()
+    if not meta_mission_id:
+        return [TextContent(type="text", text=json.dumps({"error": "meta_mission_id is required"}))]
+
+    try:
+        record = file_memory.get_meta_mission_summary(meta_mission_id)
+    except Exception as exc:
+        log.warning("mcp.get_meta_mission_summary.failed", error=str(exc))
+        return [TextContent(type="text", text=json.dumps({"error": str(exc)}))]
+
+    if record is None:
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps(
+                    {
+                        "error": f"meta-mission not found: {meta_mission_id}",
+                        "meta_mission_id": meta_mission_id,
+                    }
+                ),
+            )
+        ]
+
+    payload = {
+        "meta_mission_id": meta_mission_id,
         "metadata": record.metadata,
         "body": record.body,
     }

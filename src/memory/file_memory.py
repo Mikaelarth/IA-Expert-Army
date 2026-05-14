@@ -48,8 +48,9 @@ class FileMemory:
         self.root = Path(root)
         self.episodes_dir = self.root / "episodes"
         self.missions_dir = self.root / "missions"
+        self.meta_missions_dir = self.root / "meta_missions"
         self.working_dir = self.root / "working"
-        for d in (self.episodes_dir, self.missions_dir, self.working_dir):
+        for d in (self.episodes_dir, self.missions_dir, self.meta_missions_dir, self.working_dir):
             d.mkdir(parents=True, exist_ok=True)
 
     # ----- working memory (volatile) -----
@@ -125,6 +126,22 @@ class FileMemory:
 
     def list_missions(self) -> list[Path]:
         return sorted(self.missions_dir.glob("*.md"))
+
+    # ----- meta-mission summaries (Phase 7, cross-guildes) -----
+
+    def write_meta_mission_summary(self, meta_mission_id: UUID | str, record: MemoryRecord) -> Path:
+        path = self.meta_missions_dir / f"{meta_mission_id}.md"
+        path.write_text(record.to_markdown(), encoding="utf-8")
+        return path
+
+    def get_meta_mission_summary(self, meta_mission_id: UUID | str) -> MemoryRecord | None:
+        path = self.meta_missions_dir / f"{meta_mission_id}.md"
+        if not path.exists():
+            return None
+        return MemoryRecord.from_markdown(path.read_text(encoding="utf-8"))
+
+    def list_meta_missions(self) -> list[Path]:
+        return sorted(self.meta_missions_dir.glob("*.md"))
 
     # ----- search (basique Phase 1, vector DB en Phase 2) -----
 

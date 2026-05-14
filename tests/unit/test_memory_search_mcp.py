@@ -15,7 +15,9 @@ import pytest
 from src.learning.skills_library import Skill, SkillsLibrary
 from src.mcp_servers.memory_search import (
     _build_server,
+    _handle_get_meta_mission_summary,
     _handle_get_mission_summary,
+    _handle_list_recent_meta_missions,
     _handle_list_recent_missions,
     _handle_search_episodes,
     _handle_search_skills,
@@ -320,6 +322,123 @@ def test_get_mission_summary_returns_error_when_not_found(file_memory: FileMemor
 
 def test_get_mission_summary_empty_id_returns_error(file_memory: FileMemory) -> None:
     result = _handle_get_mission_summary(file_memory, {"mission_id": "  "})
+    payload = json.loads(result[0].text)
+    assert "error" in payload
+    assert "required" in payload["error"]
+
+
+# ===== list_recent_meta_missions / get_meta_mission_summary (Phase 7) =====
+
+
+def _write_meta_mission(memory: FileMemory, meta_id: str, **meta: object) -> None:
+    """Helper : écrit un meta-mission summary minimal."""
+    base_meta = {
+        "meta_mission_id": meta_id,
+        "title": meta.get("title", f"Meta {meta_id[:8]}"),
+        "started_at": meta.get("started_at", "2026-05-11T10:00:00+00:00"),
+        "ended_at": meta.get("ended_at", "2026-05-11T10:10:00+00:00"),
+        "final_verdict": meta.get("final_verdict", "APPROVED"),
+        "overall_quality_score": meta.get("overall_quality_score", 0.91),
+        "total_cost_usd": meta.get("total_cost_usd", 2.5),
+        "total_duration_seconds": meta.get("total_duration_seconds", 555.0),
+        "n_sub_missions": meta.get("n_sub_missions", 3),
+        "guilds": meta.get("guilds", ["business", "engineering", "creative"]),
+        "sub_mission_ids": meta.get("sub_mission_ids", ["sub-1", "sub-2", "sub-3"]),
+    }
+    memory.write_meta_mission_summary(
+        meta_id, MemoryRecord(metadata=base_meta, body=f"# {base_meta['title']}\n\nbody")
+    )
+
+
+def test_list_recent_meta_missions_chronological_order(file_memory: FileMemory) -> None:
+    """Tri par started_at décroissant, comme list_recent_missions."""
+    _write_meta_mission(
+        file_memory,
+        "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        started_at="2026-05-09T10:00:00+00:00",
+        title="Old",
+    )
+    _write_meta_mission(
+        file_memory,
+        "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        started_at="2026-05-11T10:00:00+00:00",
+        title="Recent",
+    )
+    _write_meta_mission(
+        file_memory,
+        "cccccccc-cccc-cccc-cccc-cccccccccccc",
+        started_at="2026-05-10T10:00:00+00:00",
+        title="Middle",
+    )
+
+    result = _handle_list_recent_meta_missions(file_memory, {"limit": 10})
+    payload = json.loads(result[0].text)
+
+    assert payload["n_results"] == 3
+    titles = [r["title"] for r in payload["results"]]
+    assert titles == ["Recent", "Middle", "Old"]
+
+
+def test_list_recent_meta_missions_returns_sub_mission_ids(file_memory: FileMemory) -> None:
+    """Le payload doit exposer les IDs des sous-missions pour le drill-down."""
+    _write_meta_mission(
+        file_memory,
+        "11111111-2222-3333-4444-555555555555",
+        sub_mission_ids=["sm-eng", "sm-cre", "sm-biz"],
+        guilds=["engineering", "creative", "business"],
+    )
+    result = _handle_list_recent_meta_missions(file_memory, {})
+    payload = json.loads(result[0].text)
+    r = payload["results"][0]
+    assert r["sub_mission_ids"] == ["sm-eng", "sm-cre", "sm-biz"]
+    assert r["guilds"] == ["engineering", "creative", "business"]
+    assert r["n_sub_missions"] == 3
+
+
+def test_list_recent_meta_missions_clamps_limit(file_memory: FileMemory) -> None:
+    for i in range(5):
+        _write_meta_mission(file_memory, f"{i:08d}-0000-0000-0000-000000000000")
+
+    result = _handle_list_recent_meta_missions(file_memory, {"limit": 200})
+    payload = json.loads(result[0].text)
+    assert payload["limit"] == 50
+
+    result = _handle_list_recent_meta_missions(file_memory, {"limit": 0})
+    payload = json.loads(result[0].text)
+    assert payload["limit"] == 1
+
+
+def test_list_recent_meta_missions_empty(file_memory: FileMemory) -> None:
+    result = _handle_list_recent_meta_missions(file_memory, {})
+    payload = json.loads(result[0].text)
+    assert payload["n_results"] == 0
+    assert payload["results"] == []
+
+
+def test_get_meta_mission_summary_returns_full_record(file_memory: FileMemory) -> None:
+    mid = "98765432-1234-5678-9abc-def012345678"
+    _write_meta_mission(file_memory, mid, title="Mini SaaS TVA", final_verdict="APPROVED")
+
+    result = _handle_get_meta_mission_summary(file_memory, {"meta_mission_id": mid})
+    payload = json.loads(result[0].text)
+
+    assert payload["meta_mission_id"] == mid
+    assert payload["metadata"]["title"] == "Mini SaaS TVA"
+    assert payload["metadata"]["final_verdict"] == "APPROVED"
+    assert "Mini SaaS TVA" in payload["body"]
+
+
+def test_get_meta_mission_summary_not_found(file_memory: FileMemory) -> None:
+    result = _handle_get_meta_mission_summary(
+        file_memory, {"meta_mission_id": "ffffffff-ffff-ffff-ffff-ffffffffffff"}
+    )
+    payload = json.loads(result[0].text)
+    assert "error" in payload
+    assert "not found" in payload["error"]
+
+
+def test_get_meta_mission_summary_empty_id_returns_error(file_memory: FileMemory) -> None:
+    result = _handle_get_meta_mission_summary(file_memory, {"meta_mission_id": ""})
     payload = json.loads(result[0].text)
     assert "error" in payload
     assert "required" in payload["error"]

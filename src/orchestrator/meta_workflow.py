@@ -289,9 +289,6 @@ class MetaWorkflow:
         )
 
     def _persist(self, result: MetaMissionResult) -> None:
-        meta_dir = self.memory.root / "meta_missions"
-        meta_dir.mkdir(parents=True, exist_ok=True)
-        path = meta_dir / f"{result.meta_mission_id}.md"
         record = MemoryRecord(
             metadata={
                 "meta_mission_id": str(result.meta_mission_id),
@@ -308,7 +305,7 @@ class MetaWorkflow:
             },
             body=result.summary,
         )
-        path.write_text(record.to_markdown(), encoding="utf-8")
+        path = self.memory.write_meta_mission_summary(result.meta_mission_id, record)
         log.info("meta.persisted", meta_id=str(result.meta_mission_id), path=str(path))
 
 

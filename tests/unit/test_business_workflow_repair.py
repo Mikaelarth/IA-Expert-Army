@@ -104,7 +104,9 @@ async def test_repair_loop_reruns_pm_and_ba_and_legal(
     result = await wf.run(title="Test repair", description="x")
 
     # Chaque agent appelé exactement 2× (1 initial + 1 repair)
-    assert pm_mock.run.call_count == 2, "PM doit être ré-exécuté dans le repair loop (fix Sprint PP)"
+    assert pm_mock.run.call_count == 2, (
+        "PM doit être ré-exécuté dans le repair loop (fix Sprint PP)"
+    )
     assert analyst_mock.run.call_count == 2
     assert legal_mock.run.call_count == 2
 
