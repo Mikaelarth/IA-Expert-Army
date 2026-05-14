@@ -7,6 +7,38 @@ versioning [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added — Phase 6 validation : autonomous harness (session 13, Sprint C)
+
+#### Sprint C — `scripts/autonomous_run.py` (commit `fcad011`)
+- Harness exécutable concrétisant le critère Phase 6 « mission longue
+  24h sans dérive, dans budget » du master plan.
+- Queue YAML de missions (`data/autonomous_queue_smoke.yml` fourni) +
+  loop séquentiel via `MissionRouter`.
+- **5 garde-fous** évalués entre chaque mission (pure function testée) :
+  1. Budget floor (par défaut $5)
+  2. Killswitch clear
+  3. Error rate < 30% sur fenêtre glissante N=5
+  4. Saturation rate < 20% sur fenêtre glissante N=5
+  5. Quality moving average ≥ 0.70 (anti-dérive sémantique)
+- Stop gracieux : rapport markdown produit dans `data/autonomous_runs/`,
+  exit code 0 (queue épuisée) ou 3 (garde-fou déclenché).
+- ADR-010 documente le protocole + alternatives rejetées + procédure
+  pour un vrai run 24h.
+- **Smoke run validé 3/3 APPROVED** ($1.00, 5 min, quality 0.94 avg).
+
+#### Sprint TT — Daily digest enrichi (commit `bed80fc`)
+- Section « Meta-missions cross-guildes (Phase 7) » ajoutée au rapport
+  quotidien (count, score moyen, coût/durée cumulés, verdicts, guildes
+  traversées + table par meta-mission).
+- Helpers `_meta_missions_for_date`, `_compute_meta_stats`.
+
+#### Sprint SS — Engineering repair loop élargi (commit `dde4529`)
+- Pattern méta-leçon de Sprint PP appliqué au `Workflow` Engineering.
+- Repair loop = Architect v2 → Developer v2 → Reviewer v2 (au lieu de
+  Developer seul). Évite les oscillations NEEDS_CHANGES quand le verdict
+  porte sur l'architecture.
+- +5 tests symétriques de ceux de `BusinessWorkflow`.
+
 ### Added — Phase 7 : MetaWorkflow cross-guildes + DevX (session 13)
 
 #### Phase 7 — MetaWorkflow (commits `239ada6`, `bb29a6d`, `f0ccb60`)
@@ -64,10 +96,14 @@ versioning [SemVer](https://semver.org/spec/v2.0.0.html).
   ValidationError typé pour pytest.raises, conventions de naming).
 
 ### Stats
-- **Tests** : 212 → 261 (+49) en passant Phase 7 + DevX.
+- **Tests** : 212 → 294 (+82) en passant Phase 7 + Sprint C + DevX.
 - **Skills auto-générées** : 16.
-- **ADRs** : 8 → 9.
+- **ADRs** : 8 → 10.
 - **MCP tools** : 2 → 6.
+- **Phases couvertes** : 0–7 livrées, **Phase 6 validable** via
+  `scripts/autonomous_run.py`.
+- **Budget API session 13** : ~$10 (3 missions cross-guildes + 1 smoke
+  decomposer + 1 smoke autonomous).
 
 ## [0.1.0-rc1] — 2026-05-10 — Open-source ready
 

@@ -18,6 +18,10 @@ data/memory/
 data/budget_state.json
 # Killswitch sentinel (Phase 6)
 data/.killswitch
+# Autonomous run reports (Sprint C / Phase 6) — un témoin historique reste
+# committé pour la posterité ; les nouveaux rapports sont locaux.
+data/autonomous_runs/*.md
+!data/autonomous_runs/20260514T131532.md
 *.log
 logs/
 

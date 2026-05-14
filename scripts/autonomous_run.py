@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import asyncio
 import sys
-from collections import deque
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -73,7 +72,7 @@ DEFAULTS = {
 class QueueItem:
     """Une mission à exécuter."""
 
-    __slots__ = ("title", "description", "force_guild")
+    __slots__ = ("description", "force_guild", "title")
 
     def __init__(self, title: str, description: str, force_guild: str | None = None) -> None:
         self.title = title
@@ -85,16 +84,16 @@ class RunRecord:
     """Une entrée dans la timeline du run autonome."""
 
     __slots__ = (
-        "started_at",
-        "ended_at",
-        "title",
-        "guild",
-        "verdict",
-        "quality",
         "cost",
         "duration",
-        "saturated",
+        "ended_at",
         "error",
+        "guild",
+        "quality",
+        "saturated",
+        "started_at",
+        "title",
+        "verdict",
     )
 
     def __init__(
@@ -141,7 +140,10 @@ def evaluate_guardrails(
 ) -> tuple[bool, str | None]:
     """Retourne (ok, raison_d_arret_si_pas_ok). Pure function — testable."""
     if budget_remaining < cfg["budget_floor_usd"]:
-        return False, f"budget restant ${budget_remaining:.4f} < seuil ${cfg['budget_floor_usd']:.2f}"
+        return (
+            False,
+            f"budget restant ${budget_remaining:.4f} < seuil ${cfg['budget_floor_usd']:.2f}",
+        )
 
     try:
         killswitch.assert_clear()
@@ -243,7 +245,9 @@ def render_report(
         f"- **Succès (APPROVED) :** {success_n} ({(success_n / n * 100) if n else 0:.0f}%)",
         f"- **Erreurs / FAILED :** {errored_n}",
         f"- **Saturations :** {saturated_n}",
-        f"- **Quality moyen :** {avg_quality:.2f}" if avg_quality is not None else "- **Quality moyen :** n/a",
+        f"- **Quality moyen :** {avg_quality:.2f}"
+        if avg_quality is not None
+        else "- **Quality moyen :** n/a",
         f"- **Coût total :** ${total_cost:.4f}",
         f"- **Budget : début=${budget_start:.4f}, fin=${budget_end:.4f}** (consommé : ${budget_start - budget_end:.4f})",
         f"- **Durée totale :** {duration_total:.1f}s ({duration_total / 60:.1f} min)",
@@ -352,7 +356,7 @@ async def run_autonomous(
             stop_reason = f"hard guardrail levé pendant exécution : {type(exc).__name__}: {exc}"
             console.print(f"\n[bold red]STOP pendant mission #{i}[/bold red] — {stop_reason}")
             break
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             ended_at = datetime.now(UTC)
             history.append(
                 RunRecord(

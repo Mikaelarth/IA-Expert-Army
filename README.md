@@ -4,7 +4,7 @@
 > mémoire partagée vivante, évolution par expérience, autonomie sécurisée.
 
 [![CI](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml/badge.svg)](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-261%20passing-brightgreen)](tests/unit/)
+[![Tests](https://img.shields.io/badge/tests-294%20passing-brightgreen)](tests/unit/)
 [![Python](https://img.shields.io/badge/python-3.12+-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Guildes](https://img.shields.io/badge/guildes-4%20+%20cross--guildes-blueviolet)](#les-4-guildes)

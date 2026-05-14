@@ -11,24 +11,24 @@ from __future__ import annotations
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 
+from src.core.killswitch import Killswitch
+
+# scripts/ n'est pas un package — on l'injecte dans sys.path pour pouvoir
+# importer autonomous_run directement (cf. test_apply_mission_validate.py
+# pour le même pattern).
 _SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(_SCRIPTS))
 
 from autonomous_run import (  # type: ignore[import-not-found]  # noqa: E402
     DEFAULTS,
-    QueueItem,
     RunRecord,
     evaluate_guardrails,
     parse_queue,
     render_report,
 )
-
-from src.core.killswitch import Killswitch, KillswitchEngaged
-
 
 # ===== Fixtures =====
 
@@ -57,7 +57,9 @@ def _record(
         ended_at=now + timedelta(seconds=10),
         title="t",
         guild="engineering",
-        verdict="APPROVED" if success and not errored else ("FAILED:x" if errored else "NEEDS_CHANGES"),
+        verdict="APPROVED"
+        if success and not errored
+        else ("FAILED:x" if errored else "NEEDS_CHANGES"),
         quality=quality,
         cost=0.1,
         duration=10.0,
@@ -205,7 +207,9 @@ def test_render_report_empty_history() -> None:
 def test_render_report_includes_timeline_rows() -> None:
     started = datetime(2026, 5, 11, 10, 0, tzinfo=UTC)
     hist = [_record(), _record(success=False)]
-    report = render_report(started, started + timedelta(minutes=2), hist, "queue épuisée", 50.0, 49.8)
+    report = render_report(
+        started, started + timedelta(minutes=2), hist, "queue épuisée", 50.0, 49.8
+    )
     assert "APPROVED" in report
     assert "NEEDS_CHANGES" in report
     assert "50%" in report  # 1 success / 2
@@ -222,7 +226,9 @@ def test_render_report_shows_stop_reason() -> None:
 def test_render_report_marks_saturation() -> None:
     started = datetime(2026, 5, 11, 10, 0, tzinfo=UTC)
     hist = [_record(saturated=True)]
-    report = render_report(started, started + timedelta(minutes=1), hist, "queue épuisée", 50.0, 49.9)
+    report = render_report(
+        started, started + timedelta(minutes=1), hist, "queue épuisée", 50.0, 49.9
+    )
     assert "⚠" in report  # marker saturation dans la table
 
 
