@@ -1,0 +1,33 @@
+# Queue de smoke test pour valider scripts/autonomous_run.py
+# 3 missions courtes et hétérogènes pour exercer le loop + les garde-fous.
+# Coût attendu : ~$1.50 total ($0.40-$0.60 par mission engineering).
+#
+# Usage :
+#   uv run python scripts/autonomous_run.py --queue data/autonomous_queue_smoke.yml
+#
+# Pour une vraie validation Phase 6 (24h), créer une queue plus longue
+# et lancer en arrière-plan avec un cron / Task Scheduler.
+
+missions:
+  - title: "Hello health endpoint"
+    description: |
+      Crée un endpoint FastAPI GET /ping qui retourne {"status": "ok"}.
+      Inclus 1 test pytest qui vérifie le status 200 et le body.
+      Code minimal, prêt à lancer avec `uvicorn main:app`.
+    guild: engineering
+
+  - title: "Slugify utility"
+    description: |
+      Crée une fonction Python `slugify(text: str) -> str` qui transforme
+      une chaîne en slug URL-friendly (lowercase, accents retirés, espaces
+      remplacés par '-'). 2 tests pytest minimum couvrant cas normal +
+      caractères accentués.
+    guild: engineering
+
+  - title: "Comparatif court Pydantic v1 vs v2"
+    description: |
+      Produis un comparatif synthétique (150-300 mots) Pydantic v1 vs v2 :
+      3 différences clés en API publique, 1 piège de migration courant.
+      Audience : développeurs Python qui considèrent l'upgrade. Format
+      markdown structuré.
+    guild: research
