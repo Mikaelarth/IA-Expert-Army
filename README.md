@@ -4,8 +4,8 @@
 > mémoire partagée vivante, évolution par expérience, autonomie sécurisée.
 
 [![CI](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml/badge.svg)](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-415%20passing-brightgreen)](tests/unit/)
-[![Coverage](https://img.shields.io/badge/coverage-90%25-brightgreen)](#)
+[![Tests](https://img.shields.io/badge/tests-517%20passing-brightgreen)](tests/unit/)
+[![Coverage](https://img.shields.io/badge/coverage-93%25-brightgreen)](#)
 [![Python](https://img.shields.io/badge/python-3.12+-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Guildes](https://img.shields.io/badge/guildes-4%20+%20cross--guildes-blueviolet)](#les-4-guildes)
@@ -208,8 +208,8 @@ IA-Expert-Army/
 | BudgetController prouvé en condition réelle | ✅ | Refus mission en cap atteint |
 | Langfuse v3 self-hosted | ✅ | Stack démarrable, instrumentation `@observe` opt-in |
 | MCP server `memory_search` | ✅ | Exposable à Claude Desktop / Cursor |
-| Tests régression | ✅ | 212 verts, jamais de régression silencieuse |
-| ADRs documentés | ✅ | 7 ADRs structurants |
+| Tests régression | ✅ | 517 verts (93% coverage mesurée), jamais de régression silencieuse |
+| ADRs documentés | ✅ | 19 ADRs structurants |
 
 **~$19 d'API consommés** sur 16 missions APPROVED (score moyen 0.89). Le système est opérationnel pour de l'usage réel, pas juste de la démo.
 

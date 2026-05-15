@@ -197,3 +197,82 @@ def test_runner_image_exists_false_when_not_found() -> None:
     client.images.get.side_effect = ImageNotFound("not here")
     runner = SandboxRunner(client=client)
     assert runner.image_exists() is False
+
+
+# ============================================================================
+# Sprint JJJ.3c — couverture des error paths Docker
+# ============================================================================
+
+
+def test_runner_init_raises_sandbox_unavailable_when_docker_daemon_down(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Sprint JJJ.3c : couvre 85-88. Si docker.from_env() lève DockerException
+    (daemon arrêté, socket inaccessible, etc.), on doit lever SandboxUnavailable
+    avec un message clair."""
+    import src.sandbox.runner as runner_mod
+    from src.sandbox.runner import DockerException, SandboxUnavailable
+
+    fake_docker = MagicMock()
+    fake_docker.from_env.side_effect = DockerException("docker daemon down")
+
+    monkeypatch.setattr(runner_mod, "docker", fake_docker)
+    monkeypatch.setattr(runner_mod, "_DOCKER_AVAILABLE", True)
+
+    with pytest.raises(SandboxUnavailable) as exc_info:
+        SandboxRunner()
+    assert "Docker non joignable" in str(exc_info.value)
+
+
+def test_runner_image_exists_false_on_docker_exception() -> None:
+    """Sprint JJJ.3c : couvre 108-109. Toute autre DockerException
+    (réseau, perm) → False, pas de propagation."""
+    from src.sandbox.runner import DockerException
+
+    client = MagicMock()
+    client.ping.return_value = True
+    client.images.get.side_effect = DockerException("api error")
+    runner = SandboxRunner(client=client)
+    assert runner.image_exists() is False
+
+
+def test_runner_image_exists_custom_target(workspace: Path) -> None:
+    """Sprint JJJ.3c : image_exists doit accepter un override 'image=' (line 102)."""
+    client = MagicMock()
+    client.ping.return_value = True
+    client.images.get.return_value = MagicMock()
+    runner = SandboxRunner(client=client)
+    # Override le target par défaut
+    assert runner.image_exists(image="autre-image:tag") is True
+    client.images.get.assert_called_with("autre-image:tag")
+
+
+def test_runner_cleanup_handles_notfound_silently(workspace: Path) -> None:
+    """Sprint JJJ.3c : couvre 197-198. Si le container a déjà disparu au
+    cleanup (race condition), on swallow NotFound."""
+    from src.sandbox.runner import NotFound
+
+    container = _fake_container()
+    container.remove.side_effect = NotFound("already gone")
+    client = _fake_client(container)
+    runner = SandboxRunner(client=client)
+    # Le run doit compléter normalement malgré le cleanup raté
+    result = runner.run(workspace=workspace, command=["pytest"])
+    assert isinstance(result, SandboxResult)
+    container.remove.assert_called_once()
+
+
+def test_runner_cleanup_logs_warning_on_docker_exception(
+    workspace: Path,
+) -> None:
+    """Sprint JJJ.3c : couvre 199-200. Si remove() lève autre chose qu'un
+    NotFound (e.g. permission denied), on log warning et on continue."""
+    from src.sandbox.runner import DockerException
+
+    container = _fake_container()
+    container.remove.side_effect = DockerException("perm denied")
+    client = _fake_client(container)
+    runner = SandboxRunner(client=client)
+    # Pas de crash, résultat normal
+    result = runner.run(workspace=workspace, command=["pytest"])
+    assert isinstance(result, SandboxResult)

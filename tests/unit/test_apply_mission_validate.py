@@ -285,6 +285,173 @@ def test_validate_in_sandbox_enable_sandbox_param_overrides_settings(
     assert result is None
 
 
+# ============================================================================
+# Sprint JJJ.3d — couverture de print_sandbox_result
+# ============================================================================
+
+
+def test_print_sandbox_result_green_panel_on_success() -> None:
+    """Sprint JJJ.3d : couvre 95-104 du chemin success (exit_code=0)."""
+    from io import StringIO
+
+    from rich.console import Console
+
+    from src.sandbox.runner import SandboxResult
+    from src.tools.sandbox_validate import print_sandbox_result
+
+    result = SandboxResult(
+        exit_code=0,
+        stdout="5 passed in 0.3s",
+        stderr="",
+        duration_seconds=0.45,
+        timed_out=False,
+        image="test:latest",
+        command=["pytest"],
+    )
+    # Console non-terminale pour capture testable
+    buf = StringIO()
+    console = Console(file=buf, force_terminal=False, width=120)
+    print_sandbox_result(result, console=console)
+    output = buf.getvalue()
+    assert "exit_code=0" in output
+    assert "STDOUT" in output
+    assert "5 passed" in output
+    # Pas de STDERR (vide)
+    assert "STDERR" not in output
+
+
+def test_print_sandbox_result_red_panel_on_failure() -> None:
+    """Sprint JJJ.3d : couvre 95-104 du chemin failure (exit_code != 0)."""
+    from io import StringIO
+
+    from rich.console import Console
+
+    from src.sandbox.runner import SandboxResult
+    from src.tools.sandbox_validate import print_sandbox_result
+
+    result = SandboxResult(
+        exit_code=1,
+        stdout="2 failed, 3 passed",
+        stderr="AssertionError: expected X got Y",
+        duration_seconds=1.2,
+        timed_out=False,
+        image="test:latest",
+        command=["pytest"],
+    )
+    buf = StringIO()
+    console = Console(file=buf, force_terminal=False, width=120)
+    print_sandbox_result(result, console=console)
+    output = buf.getvalue()
+    assert "exit_code=1" in output
+    assert "STDOUT" in output
+    assert "STDERR" in output
+    assert "AssertionError" in output
+
+
+def test_print_sandbox_result_no_stdout_section_when_empty() -> None:
+    """Sprint JJJ.3d : pas de section STDOUT si result.stdout est vide."""
+    from io import StringIO
+
+    from rich.console import Console
+
+    from src.sandbox.runner import SandboxResult
+    from src.tools.sandbox_validate import print_sandbox_result
+
+    result = SandboxResult(
+        exit_code=0,
+        stdout="",
+        stderr="",
+        duration_seconds=0.1,
+        timed_out=False,
+        image="x:latest",
+        command=[],
+    )
+    buf = StringIO()
+    console = Console(file=buf, force_terminal=False, width=120)
+    print_sandbox_result(result, console=console)
+    output = buf.getvalue()
+    assert "exit_code=0" in output
+    assert "STDOUT" not in output
+    assert "STDERR" not in output
+
+
+def test_print_sandbox_result_truncates_long_stdout() -> None:
+    """Sprint JJJ.3d : couvre 107-109 — stdout > 80 lignes tronqué à 80 dernières."""
+    from io import StringIO
+
+    from rich.console import Console
+
+    from src.sandbox.runner import SandboxResult
+    from src.tools.sandbox_validate import print_sandbox_result
+
+    long_stdout = "\n".join(f"line {i}" for i in range(200))
+    result = SandboxResult(
+        exit_code=0,
+        stdout=long_stdout,
+        stderr="",
+        duration_seconds=0.5,
+        timed_out=False,
+        image="x:latest",
+        command=[],
+    )
+    buf = StringIO()
+    console = Console(file=buf, force_terminal=False, width=120)
+    print_sandbox_result(result, console=console)
+    output = buf.getvalue()
+    # Les dernières lignes doivent être présentes
+    assert "line 199" in output
+    assert "line 198" in output
+    # Les premières lignes (avant -80) ne doivent PAS être présentes
+    assert "line 0\n" not in output
+    assert "line 50\n" not in output
+
+
+def test_print_sandbox_result_truncates_long_stderr() -> None:
+    """Sprint JJJ.3d : couvre 112 — stderr tronqué à 2000 derniers chars."""
+    from io import StringIO
+
+    from rich.console import Console
+
+    from src.sandbox.runner import SandboxResult
+    from src.tools.sandbox_validate import print_sandbox_result
+
+    long_stderr = "X" * 5000 + "FINAL_MARKER"
+    result = SandboxResult(
+        exit_code=1,
+        stdout="",
+        stderr=long_stderr,
+        duration_seconds=0.1,
+        timed_out=False,
+        image="x:latest",
+        command=[],
+    )
+    buf = StringIO()
+    console = Console(file=buf, force_terminal=False, width=120)
+    print_sandbox_result(result, console=console)
+    output = buf.getvalue()
+    # Le marker final (dans les 2000 derniers chars) doit être présent
+    assert "FINAL_MARKER" in output
+
+
+def test_print_sandbox_result_uses_default_console_when_none() -> None:
+    """Sprint JJJ.3d : si console=None, on instancie une Console par défaut.
+    Ne doit pas crash même si stdout est non-interactif."""
+    from src.sandbox.runner import SandboxResult
+    from src.tools.sandbox_validate import print_sandbox_result
+
+    result = SandboxResult(
+        exit_code=0,
+        stdout="ok",
+        stderr="",
+        duration_seconds=0.1,
+        timed_out=False,
+        image="x:latest",
+        command=[],
+    )
+    # Ne lève rien — la fonction crée une Console par défaut en interne
+    print_sandbox_result(result, console=None)
+
+
 # Régression : apply_mission.py expose toujours les helpers en alias pour la
 # compatibilité ascendante (les anciens scripts ou notebooks externes).
 def test_apply_mission_exposes_legacy_aliases() -> None:

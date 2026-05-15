@@ -43,3 +43,4 @@ Format minimal :
 - [ADR-016 — Stratégie de tier mixing (Opus / Sonnet / Haiku)](016-tier-mixing-strategy.md)
 - [ADR-017 — Déploiement VPS multi-profile (vps1/vps2/vps3)](017-vps-deployment.md)
 - [ADR-018 — Notifications mobiles via webhook (Discord/Slack/Telegram/generic)](018-mobile-notifications.md)
+- [ADR-019 — Politique de couverture de tests (audit honnête + seuils par module)](019-coverage-audit-policy.md)
