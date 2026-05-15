@@ -245,12 +245,133 @@ def check_langfuse_http() -> tuple[str, str]:
         return _warn(f"{type(exc).__name__}: {exc}")
 
 
+# ===== Sprint NNN — checks des briques récentes =====
+
+
+def check_notifier_config() -> tuple[str, str]:
+    """Sprint HHH : webhook notifications. Vérifie la config sans envoyer."""
+    from src.core.notifier import get_notifier_from_settings
+
+    notifier = get_notifier_from_settings()
+    if not notifier.is_enabled:
+        return _skipped("NOTIFY_WEBHOOK_URL absent dans .env (notifier en NO-OP)")
+    return _ok(
+        f"backend détecté : {notifier.backend} "
+        f"(URL : {notifier.webhook_url[:40]}…)"
+    )
+
+
+def check_notifier_send_test() -> tuple[str, str]:
+    """Sprint NNN : envoie une notification de test. Utile pour valider que
+    le webhook configuré dans .env fonctionne réellement (pas juste la config).
+    Activé via `--full` ou `--notify-test`."""
+    from src.core.notifier import NotifyLevel, get_notifier_from_settings
+
+    notifier = get_notifier_from_settings()
+    if not notifier.is_enabled:
+        return _skipped("NOTIFY_WEBHOOK_URL absent — pas d'envoi possible")
+    sent = notifier.send(
+        NotifyLevel.INFO,
+        "IA-Expert-Army — Health check",
+        "Test d'envoi depuis `health_check.py --notify-test`. "
+        "Si tu vois ce message, le webhook fonctionne.",
+    )
+    if sent:
+        return _ok(f"Notification envoyée via {notifier.backend} (vérifie ton mobile)")
+    return _fail("Envoi échoué — cf. logs (URL invalide ou réseau down)")
+
+
+def check_vps_config() -> tuple[str, str]:
+    """Sprint GGG : affiche le profil VPS détecté + état sandbox kill-switch."""
+    from src.core.config import get_settings
+
+    s = get_settings()
+    profile = s.vps_profile or "auto/inconnu"
+    sandbox_state = "ON" if s.enable_sandbox else "OFF (skip silencieux)"
+    return _ok(f"profile={profile} · enable_sandbox={sandbox_state}")
+
+
+def check_deploy_scripts() -> tuple[str, str]:
+    """Sprint GGG : les 2 scripts shell de déploiement existent + syntaxe valide."""
+    import shutil
+    import subprocess
+
+    project_root = Path(__file__).resolve().parents[1]
+    scripts = [
+        project_root / "scripts" / "deploy_vps.sh",
+        project_root / "scripts" / "migrate_vps.sh",
+    ]
+    missing = [s.name for s in scripts if not s.exists()]
+    if missing:
+        return _fail(f"Scripts manquants : {missing}")
+
+    # Syntaxe bash si bash disponible — sur Windows pur sans Git Bash, on skip
+    bash = shutil.which("bash")
+    if bash is None:
+        return _warn("Scripts présents mais bash absent — syntaxe non vérifiée")
+
+    for script in scripts:
+        result = subprocess.run(  # noqa: S603 — args contrôlés (paths du repo)
+            [bash, "-n", str(script)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            return _fail(f"{script.name} : syntaxe invalide ({result.stderr[:100]})")
+    return _ok(f"{len(scripts)} scripts syntaxe OK (deploy + migrate)")
+
+
+def check_coverage_config() -> tuple[str, str]:
+    """Sprint KKK : vérifie que la config coverage gate (fail_under) est présente
+    dans pyproject.toml. Garantit que personne ne l'a supprimé silencieusement."""
+    pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    text = pyproject.read_text(encoding="utf-8")
+    if "fail_under" not in text:
+        return _fail("[tool.coverage.report] fail_under absent — politique JJJ/KKK perdue !")
+    # Extraction simple de la valeur
+    for line in text.split("\n"):
+        line = line.strip()
+        if line.startswith("fail_under"):
+            value = line.split("=")[1].strip()
+            return _ok(f"fail_under={value} dans pyproject.toml (CI gate actif)")
+    return _warn("fail_under présent mais format inattendu")
+
+
+def check_adrs_index() -> tuple[str, str]:
+    """Sprint NNN : compte les ADRs indexés dans docs/adr/README.md vs présents
+    sur le disque. Détecte les ADRs non-indexés (oublis)."""
+    adr_dir = Path(__file__).resolve().parents[1] / "docs" / "adr"
+    index = adr_dir / "README.md"
+    if not index.exists():
+        return _warn("docs/adr/README.md absent")
+    index_content = index.read_text(encoding="utf-8")
+    # Compte les fichiers ADR sur disque (NNN-*.md)
+    on_disk = sorted(
+        f.name for f in adr_dir.glob("[0-9][0-9][0-9]-*.md") if f.name != "README.md"
+    )
+    not_indexed = [name for name in on_disk if name not in index_content]
+    if not_indexed:
+        return _warn(f"{len(not_indexed)} ADR(s) non indexé(s) : {not_indexed[:3]}")
+    return _ok(f"{len(on_disk)} ADRs indexés (cohérent disque ↔ index)")
+
+
 # ===== Main CLI =====
 
 
 @app.command()
 def check(
     quick: bool = typer.Option(False, "--quick", help="Skip les checks Docker (rapide)"),
+    full: bool = typer.Option(
+        False,
+        "--full",
+        help="Sprint NNN : active aussi les checks externes (envoi notification de test)",
+    ),
+    notify_test: bool = typer.Option(
+        False,
+        "--notify-test",
+        help="Sprint NNN : envoie une notification de test si webhook configuré",
+    ),
 ) -> None:
     table = Table(title="IA-Expert-Army — Health Check Global", show_lines=True)
     table.add_column("Couche", style="cyan", width=14)
@@ -261,6 +382,9 @@ def check(
     checks: list[tuple[str, str, Callable[[], tuple[str, str]]]] = [
         ("Setup", "Python 3.12+", check_python),
         ("Setup", "Settings + clé API", check_settings),
+        # Sprint NNN : checks de config rapides toujours actifs
+        ("Setup", "VPS profile + sandbox", check_vps_config),
+        ("Setup", "Coverage gate config", check_coverage_config),
         ("Couche 2", "4 workflows importables", check_workflows_importable),
         ("Couche 2", "MissionRouter classifier", check_router),
         ("Couche 3", "FileMemory", check_file_memory),
@@ -269,6 +393,10 @@ def check(
         ("Couche 4", "PatternMiner whitelist", check_pattern_miner_whitelist),
         ("Garde-fou", "BudgetController", check_budget),
         ("Garde-fou", "Killswitch", check_killswitch),
+        # Sprint NNN : nouveaux composants Sprint EEE→KKK
+        ("Notification", "Notifier config", check_notifier_config),
+        ("Déploiement", "Scripts deploy/migrate VPS", check_deploy_scripts),
+        ("Documentation", "ADRs index cohérent", check_adrs_index),
         ("Observabilité", "Tracing Langfuse", check_tracing),
     ]
     if not quick:
@@ -278,6 +406,13 @@ def check(
                 ("Sandbox", "Image iaa-sandbox", check_sandbox_image),
                 ("Observabilité", "Langfuse HTTP :3000", check_langfuse_http),
             ]
+        )
+
+    # Sprint NNN : --full ou --notify-test active les checks coûteux
+    # (envoi réseau, etc.)
+    if full or notify_test:
+        checks.append(
+            ("Notification", "Webhook envoi test", check_notifier_send_test),
         )
 
     n_ok = n_warn = n_fail = n_skip = 0
