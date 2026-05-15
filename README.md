@@ -4,20 +4,38 @@
 > mémoire partagée vivante, évolution par expérience, autonomie sécurisée.
 
 [![CI](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml/badge.svg)](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-573%20passing-brightgreen)](tests/unit/)
-[![Coverage](https://img.shields.io/badge/coverage-93%25-brightgreen)](#)
+[![Tests](https://img.shields.io/badge/tests-573%20passing-brightgreen)](tests/)
+[![Coverage](https://img.shields.io/badge/coverage-93%25-brightgreen)](docs/adr/020-coverage-ci-automation.md)
+[![Audit](https://img.shields.io/badge/audit-0%20findings-brightgreen)](docs/adr/022-codebase-audit-rules.md)
 [![Python](https://img.shields.io/badge/python-3.12+-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Guildes](https://img.shields.io/badge/guildes-4%20+%20cross--guildes-blueviolet)](#les-4-guildes)
+[![ADRs](https://img.shields.io/badge/ADRs-23-blueviolet)](docs/adr/)
 [![Skills](https://img.shields.io/badge/skills-16%20auto--générées-orange)](skills/)
 
 **Auteur :** MikaelArth (Mike Arthur) · **Démarré :** 2026-05-10
 
 ---
 
+## En 3 liens
+
+| Tu veux… | Va voir |
+|---|---|
+| **Démarrer en 5 minutes** | [docs/getting-started.md](docs/getting-started.md) |
+| **Tourner en autonome 24/7 sur VPS** | [docs/operations.md](docs/operations.md) |
+| **Comprendre l'architecture en 4 couches** | [docs/architecture.md](docs/architecture.md) |
+
+Et pour les décisions structurantes : [23 ADRs](docs/adr/) · pour les incidents : [docs/runbook.md](docs/runbook.md).
+
+---
+
 ## Pourquoi IA-Expert-Army
 
-Plutôt qu'**un** agent IA généraliste, **une équipe** d'agents spécialisés qui se passent le travail comme une PME — avec une **mémoire partagée qui s'enrichit à chaque mission** et un système qui **refuse de produire du travail médiocre par construction** (sandbox Docker, mining strict, parser tolérant 3-tiers, saturation auto-détectée).
+Plutôt qu'**un** agent IA généraliste, **une équipe** d'agents spécialisés qui se passent le travail comme une PME — avec :
+
+- ✅ **Mémoire partagée vivante** qui s'enrichit à chaque mission (RAG sémantique sur les épisodes passés)
+- ✅ **Apprentissage par expérience** : skills auto-extraites des meilleurs épisodes, citées par les agents dans leurs futures missions
+- ✅ **Autonomie sécurisée** : 5 garde-fous non-négociables (budget cap, killswitch, error rate, saturation, quality drift)
+- ✅ **Boucle qualité fermée** : code généré → écrit sur disque → validé en sandbox Docker isolé, en une commande
 
 **Promesse vérifiable** :
 
@@ -30,14 +48,31 @@ uv run python scripts/run_mission.py \
 # → "Boucle qualité fermée : mission APPROVED + apply OK + sandbox pytest OK."
 ```
 
-Une commande. Code généré, écrit sur disque, validé en sandbox isolé, tout en 100s.
+Une commande. Tout en ~100 secondes pour ~$0.50.
 
-### Zone de confort empiriquement validée (v0.2.0)
+---
+
+## Démarrage express
+
+```bash
+git clone https://github.com/MikaelArth/IA-Expert-Army.git
+cd IA-Expert-Army
+uv sync                      # installe toutes les dépendances Python (~30s)
+cp .env.example .env         # ajoute ANTHROPIC_API_KEY=sk-ant-...
+uv run python scripts/health_check.py --quick    # tout doit être vert/skip
+uv run pytest tests/integration/test_smoke_autonomous.py -v   # smoke E2E en 5s, $0
+```
+
+Pour démarrer une vraie mission : suivre [docs/getting-started.md](docs/getting-started.md).
+
+---
+
+## Zone de confort empiriquement validée (v0.2.0)
 
 | Type de mission | État | Preuve |
 |---|---|---|
 | Engineering simple (50-200 lignes) | ✅ converge confortablement | slugify, /ping, /version, /info — APPROVED 0.91-0.97 |
-| Research / Creative / Business (synthèse, copy, plan) | ✅ converge | Pydantic v1 vs v2, water-tracker landing, roadmap |
+| Research / Creative / Business | ✅ converge | Pydantic v1 vs v2, water-tracker landing, roadmap |
 | Cross-guildes meta-missions | ✅ converge | water-tracker APPROVED 0.92 (3 sous-missions) |
 | **Engineering 400-500 lignes multi-fichiers** | ✅ converge (avec QG + SecurityAuditor) | **mini-API FastAPI complète (JWT + CRUD + tests + Docker) — APPROVED 0.93 en 12 min / $1.74** ([Sprint DDD.ter](docs/adr/015-etalon-mission-findings.md)) |
 | Engineering > 1000 lignes | ⏳ Sprint FFF (décomposition livraison) | non testé, dette tracée |
@@ -52,18 +87,18 @@ Une commande. Code généré, écrit sur disque, validé en sandbox isolé, tout
 ├─────────────────────────────────────────────────────────────────────┤
 │  3. Infrastructure    · FileMemory · VectorMemory · SkillsLibrary
 │                       · Sandbox Docker · BudgetController · Killswitch
-│                       · Daily digest · MCP server (memory_search)
+│                       · Notifier (Discord/Slack/Telegram) · MCP server
 ├─────────────────────────────────────────────────────────────────────┤
 │  2. 4 Guildes         · Engineering (4 agents : architect/dev/reviewer/orchestrator)
 │                       · Research    (4 agents : lead/watch/synthesizer/reviewer)
 │                       · Creative    (3 agents : strategist/copywriter/editor)
 │                       · Business    (3 agents : PM/analyst/legal)
 ├─────────────────────────────────────────────────────────────────────┤
-│  1. Direction         · Chief Orchestrator + Quality Guardian
+│  1. Direction         · Chief Orchestrator + Quality Guardian + Security Auditor
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-Voir [docs/architecture.md](docs/architecture.md) (diagrammes mermaid + état d'implémentation) et [docs/adr/](docs/adr/) pour les **15 ADRs** documentant les décisions structurantes. En cas d'incident en mode autonome : [docs/runbook.md](docs/runbook.md).
+Détails complets + diagrammes Mermaid : [docs/architecture.md](docs/architecture.md).
 
 ---
 
@@ -80,92 +115,40 @@ Boucle d'apprentissage = un agent **cite explicitement** sa propre skill auto-g�
 
 ---
 
-## Démarrage rapide (5 min)
-
-### 1. Prérequis
-
-- **Python 3.12+** (sera installé par uv si absent)
-- [**uv**](https://github.com/astral-sh/uv) — package manager Python
-- **Docker Desktop** (pour le sandbox de validation)
-- **Git**
-- Une clé API Anthropic ([console.anthropic.com](https://console.anthropic.com))
-
-### 2. Installation
-
-```powershell
-git clone <repo-url> IA-Expert-Army
-cd IA-Expert-Army
-uv sync                    # installe toutes les dépendances
-copy .env.example .env     # crée ton fichier d'environnement
-notepad .env               # colle ta clé ANTHROPIC_API_KEY=sk-ant-...
-```
-
-### 3. Vérifier l'installation
-
-```powershell
-uv run python scripts/check_setup.py
-```
-
-Tous les contrôles doivent être verts.
-
-### 4. Lancer le premier agent (smoke test, ~$0.03)
-
-```powershell
-uv run python scripts/hello_agent.py
-```
-
-Le Chief Orchestrator se présente.
-
-### 5. Lancer une vraie mission (boucle qualité fermée, ~$0.50)
-
-```powershell
-# Optionnel : build l'image sandbox une fois (~3 min)
-uv run python scripts/check_sandbox.py --build
-
-# Mission Engineering → code → apply → sandbox pytest
-uv run python scripts/run_mission.py `
-  --title "Endpoint /uptime" `
-  --description "Crée un endpoint FastAPI GET /uptime qui retourne {seconds: float} via time.monotonic. Inclus tests pytest." `
-  --apply --validate
-```
-
----
-
 ## Outils CLI principaux
 
 | Script | Usage |
 |---|---|
 | `scripts/run_mission.py` | Lance une mission live (auto-routée vers la bonne guilde) avec `--apply --validate` |
-| `scripts/apply_mission.py` | Re-applique ou re-valide une mission archivée |
-| `scripts/sandbox_run_pytest.py` | Lance pytest dans le sandbox sur des fichiers existants |
+| `scripts/autonomous_run.py` | Mode autonome (queue YAML + 5 garde-fous) |
+| `scripts/daily_digest.py` | Rapport quotidien (`--notify` envoie sur Discord/Telegram) |
 | `scripts/nightly_learning.py` | Mine les épisodes APPROVED en skills réutilisables |
-| `scripts/budget.py` / `killswitch.py` / `daily_digest.py` | Garde-fous d'autonomie |
+| `scripts/budget.py` / `killswitch.py` / `health_check.py` | Garde-fous + diagnostic |
+| `scripts/audit_codebase.py` | Audit anti-pattern (5 règles AST-based) |
+| `scripts/deploy_vps.sh` / `migrate_vps.sh` | Toolkit VPS (Ubuntu 22.04+) |
 | `scripts/run_memory_search_mcp.py` | Expose la mémoire à des LLMs tiers via MCP |
 
-Tous supportent `--help`.
+Tous supportent `--help`. Recipes raccourcies dans le `justfile` (`just <cmd>`).
 
 ---
 
-## Garde-fous (mode autonome)
+## Garanties de qualité (auto-vérifiées)
 
-Le système est conçu pour tourner de manière autonome. Les **10 garde-fous non négociables** ([ADR-003](docs/adr/003-autonomy-with-guardrails.md)) :
+Le projet est **auto-protégé contre la dérive silencieuse** par 3 garde-fous croisés en CI :
 
-1. ✅ **Sandbox Docker** pour toute exécution de code (network=none, non-root, mem/cpu/pid limits)
-2. ✅ **Filesystem restreint** (whitelist `src/`, `tests/`, `scripts/`, `docs/`, `prompts/`, `skills/`)
-3. ✅ **Pas d'accès réseau** dans le sandbox (whitelist explicite si besoin)
-4. ✅ **Hard cap budget** API journalier (refus prouvé en condition réelle)
-5. 🚧 **Circuit breakers** sur taux d'erreur (Phase 6+)
-6. 🚧 **Approbation humaine** pour deploy prod / envois externes (Phase 6+)
-7. ✅ **Logs immutables** Langfuse (stack opérationnelle)
-8. ✅ **Killswitch global** (sentinel file)
-9. ✅ **Daily digest** CLI
-10. ✅ **Backups** automatiques via versioning Git
+| Garde-fou | Mécanisme | Sprint |
+|---|---|---|
+| **Coverage ≥ 90%** | `pyproject.toml` `fail_under = 90` + step CI dédié | [JJJ/KKK](docs/adr/020-coverage-ci-automation.md) |
+| **Anti-patterns = 0** | 5 règles AST-based (`audit_codebase.py --strict`) en CI + pre-commit | [LLL/QQQ](docs/adr/023-audit-ci-pre-commit-integration.md) |
+| **Tests E2E sans coût API** | `FakeAsyncAnthropic` simule la chaîne complète en 5s à chaque PR | [OOO](docs/adr/021-smoke-e2e-tests.md) |
+
+Pour qu'une régression atterrisse en `main`, il faut explicitement bypasser **trois portes** (pre-commit local + CI step + branch protection). Beaucoup plus dur de dériver.
 
 ---
 
 ## Apprentissage par expérience
 
-Le système ne se contente pas d'exécuter — il **apprend de ses succès**. À chaque mission APPROVED non-saturée, ses épisodes sont indexés dans une mémoire vectorielle. Périodiquement, le `PatternMiner` analyse les meilleurs épisodes par rôle et fait extraire par Opus une **skill réutilisable**. À la mission suivante, l'agent retrouve sa propre skill via RAG sémantique et l'applique.
+À chaque mission APPROVED non-saturée, ses épisodes sont indexés dans une mémoire vectorielle Chroma. Périodiquement, le `PatternMiner` analyse les meilleurs épisodes par rôle et fait extraire une **skill réutilisable**. À la mission suivante, l'agent retrouve sa propre skill via RAG sémantique et l'applique.
 
 **Preuve textuelle observable en production** (mission Research « Rate limiting d'API LLM ») :
 
@@ -180,44 +163,61 @@ L'agent `tech_watch` cite la skill que le système a auto-générée à partir d
 ```
 IA-Expert-Army/
 ├── src/
-│   ├── orchestrator/       # Couche 1 — Chief Orchestrator + MissionRouter
+│   ├── orchestrator/       # Couche 1 — Chief Orchestrator + MissionRouter + QG
 │   ├── guilds/             # Couche 2 — 4 guildes spécialisées
 │   ├── memory/             # Couche 3 — FileMemory + VectorMemory
 │   ├── learning/           # Couche 4 — PatternMiner + SkillExtractor
 │   ├── sandbox/            # Sandbox Docker runner
-│   ├── mcp_servers/        # Serveurs MCP custom
+│   ├── mcp_servers/        # Serveurs MCP custom (memory_search)
 │   ├── tools/              # apply_files + sandbox_validate
-│   └── core/               # config + logging + budget + killswitch + tracing
+│   └── core/               # config, logging, budget, killswitch, tracing,
+│                           # notifier, audit, backup, approvals
 ├── prompts/                # System prompts versionnés (markdown + frontmatter)
 ├── skills/                 # Procédures réussies auto-extraites (markdown)
-├── docs/                   # README + architecture + 7 ADRs
-├── scripts/                # CLI tools
-├── tests/                  # 212 tests pytest (unit + integration)
+├── docs/                   # Getting Started + Operations + Architecture + 23 ADRs
+├── scripts/                # CLI tools (Python + bash deploy/migrate)
+├── tests/
+│   ├── unit/               # Tests unitaires (~560)
+│   └── integration/        # Smoke E2E + round-trip (~13)
 ├── infra/docker/           # Dockerfile sandbox
 └── docker-compose.yml      # Langfuse + Redis + Chroma (profile-gated)
 ```
 
 ---
 
-## État du projet
+## État du projet (v0.2.0+)
 
 | Capacité | Statut | Détails |
 |---|---|---|
 | 4 guildes avec boucle d'apprentissage | ✅ | Engineering, Research, Creative, Business |
 | Sandbox Docker validé en réel | ✅ | `run_mission --apply --validate` end-to-end |
+| Quality Guardian (peer review méta) | ✅ | Opt-in `ENABLE_QUALITY_GUARDIAN=true` |
+| Security Auditor (OWASP) | ✅ | Opt-in `ENABLE_SECURITY_AUDITOR=true` |
 | BudgetController prouvé en condition réelle | ✅ | Refus mission en cap atteint |
-| Langfuse v3 self-hosted | ✅ | Stack démarrable, instrumentation `@observe` opt-in |
-| MCP server `memory_search` | ✅ | Exposable à Claude Desktop / Cursor |
-| Tests régression | ✅ | 517 verts (93% coverage mesurée), jamais de régression silencieuse |
-| ADRs documentés | ✅ | 19 ADRs structurants |
+| Notifier mobile multi-backend | ✅ | Discord/Slack/Telegram/generic |
+| Toolkit VPS (deploy + migrate) | ✅ | Round-trip testé + bugs Windows fixés |
+| Coverage gardé par CI | ✅ | 93% / fail_under=90 |
+| Audit anti-patterns en CI + pre-commit | ✅ | 5 règles, 0 finding actuel |
+| Smoke tests E2E sans coût API | ✅ | 11 tests, 5s |
+| Langfuse v3 self-hosted ou cloud | ✅ | Stack démarrable, opt-in |
+| MCP server `memory_search` (6 tools) | ✅ | Exposable à Claude Desktop / Cursor |
+| Tests régression | ✅ | **573 verts** (93% coverage mesurée) |
+| ADRs documentés | ✅ | **23 ADRs** structurants |
 
-**~$19 d'API consommés** sur 16 missions APPROVED (score moyen 0.89). Le système est opérationnel pour de l'usage réel, pas juste de la démo.
+**~$19 d'API consommés** sur 16 missions APPROVED en mode dev (score moyen 0.89). Le système est opérationnel pour de l'usage réel sur VPS, pas juste de la démo.
 
 ---
 
 ## Contribuer
 
-Voir [CONTRIBUTING.md](CONTRIBUTING.md). En 30 secondes : `uv sync` + `uv run pytest tests/unit/` doit être vert avant tout PR.
+```bash
+uv sync                       # install
+just test                     # 573 tests doivent être verts
+just coverage-strict          # ≥ 90% obligatoire
+just audit-strict             # 0 finding obligatoire
+```
+
+Voir [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
