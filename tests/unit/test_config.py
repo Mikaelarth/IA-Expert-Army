@@ -97,9 +97,7 @@ def test_settings_notify_url_loaded_from_env(monkeypatch: pytest.MonkeyPatch) ->
     assert s.notify_webhook_url == "https://discord.com/api/webhooks/X/Y"
 
 
-@pytest.mark.parametrize(
-    "backend", ["auto", "discord", "slack", "telegram", "generic", "none"]
-)
+@pytest.mark.parametrize("backend", ["auto", "discord", "slack", "telegram", "generic", "none"])
 def test_settings_notify_backend_accepts_known_values(
     monkeypatch: pytest.MonkeyPatch, backend: str
 ) -> None:

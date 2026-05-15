@@ -66,9 +66,7 @@ def _is_ignored(line: str, rule: str) -> bool:
 DEFAULT_MAX_LINES = 500
 
 
-def detect_long_files(
-    paths: list[Path], max_lines: int = DEFAULT_MAX_LINES
-) -> list[Finding]:
+def detect_long_files(paths: list[Path], max_lines: int = DEFAULT_MAX_LINES) -> list[Finding]:
     """Signale les fichiers > max_lines.
 
     Whitelist : un commentaire `# audit: ignore FILE_TOO_LONG` n'importe où dans
@@ -190,9 +188,7 @@ def detect_tests_without_assertions(paths: list[Path]) -> list[Finding]:
                 continue
             line_no = node.lineno  # 1-based
             # Vérifie le tag d'ignore sur la ligne du def
-            if line_no - 1 < len(lines) and _is_ignored(
-                lines[line_no - 1], "TEST_NO_ASSERT"
-            ):
+            if line_no - 1 < len(lines) and _is_ignored(lines[line_no - 1], "TEST_NO_ASSERT"):
                 continue
             if _function_contains_assertion(node):
                 continue
@@ -246,8 +242,18 @@ def detect_orphan_todos(paths: list[Path]) -> list[Finding]:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        for line_no, line in enumerate(text.splitlines(), start=1):
+        all_lines = text.splitlines()
+        for line_no, line in enumerate(all_lines, start=1):
+            # Sprint QQQ : whitelist tolérante ±2 lignes (les formatters ruff
+            # peuvent déplacer un commentaire `# audit: ignore` d'une ligne).
             if _is_ignored(line, "ORPHAN_TODO"):
+                continue
+            window_start = max(0, line_no - 3)  # -3 pour ±2 lignes (0-based)
+            window_end = min(len(all_lines), line_no + 2)
+            if any(
+                _is_ignored(all_lines[i], "ORPHAN_TODO")
+                for i in range(window_start, window_end)
+            ):
                 continue
             todo_match = _TODO_RE.search(line)
             if not todo_match:
@@ -390,9 +396,7 @@ def detect_hardcoded_prompts(paths: list[Path]) -> list[Finding]:
                 continue
             line_no = node.lineno
             # Whitelist : tag sur la ligne ou la ligne au-dessus
-            if line_no - 1 < len(lines) and _is_ignored(
-                lines[line_no - 1], "HARDCODED_PROMPT"
-            ):
+            if line_no - 1 < len(lines) and _is_ignored(lines[line_no - 1], "HARDCODED_PROMPT"):
                 continue
             if line_no >= 2 and _is_ignored(lines[line_no - 2], "HARDCODED_PROMPT"):
                 continue
@@ -435,9 +439,7 @@ class AuditConfig:
     )
     max_file_lines: int = DEFAULT_MAX_LINES
     # Paths à scanner (par défaut : src/, scripts/, tests/, prompts/)
-    include_dirs: list[str] = field(
-        default_factory=lambda: ["src", "scripts", "tests"]
-    )
+    include_dirs: list[str] = field(default_factory=lambda: ["src", "scripts", "tests"])
     # Paths à exclure systématiquement
     exclude_patterns: list[str] = field(
         default_factory=lambda: [

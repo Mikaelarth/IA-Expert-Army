@@ -107,8 +107,7 @@ def test_research_lead_uses_opus(settings: Settings, memory: FileMemory) -> None
     pour la qualité downstream. Garde Opus, vague 2 EEE prévue."""
     agent = ResearchLead(memory=memory, settings=settings)
     assert agent.model == settings.model_strategic, (
-        f"ResearchLead garde Opus pour l'instant (vague 2 EEE prévue). "
-        f"Actuellement : {agent.model}"
+        f"ResearchLead garde Opus pour l'instant (vague 2 EEE prévue). Actuellement : {agent.model}"
     )
 
 
@@ -191,9 +190,7 @@ def test_legal_reviewer_uses_sonnet(settings: Settings, memory: FileMemory) -> N
 # remet ces agents en Opus sans audit conscient.
 
 
-def test_skill_extractor_sprint_eee_moved_to_sonnet(
-    settings: Settings, memory: FileMemory
-) -> None:
+def test_skill_extractor_sprint_eee_moved_to_sonnet(settings: Settings, memory: FileMemory) -> None:
     """Sprint EEE : SkillExtractor passe Opus → Sonnet.
 
     Justification : tâche = synthèse d'épisodes déjà structurés vers template
@@ -207,9 +204,7 @@ def test_skill_extractor_sprint_eee_moved_to_sonnet(
     )
 
 
-def test_meta_decomposer_sprint_eee_moved_to_sonnet(
-    settings: Settings, memory: FileMemory
-) -> None:
+def test_meta_decomposer_sprint_eee_moved_to_sonnet(settings: Settings, memory: FileMemory) -> None:
     """Sprint EEE : MetaDecomposer passe Opus → Sonnet.
 
     Justification : décomposition très contrainte (4 guildes valides max,

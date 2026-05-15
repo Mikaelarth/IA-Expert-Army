@@ -191,9 +191,7 @@ def test_check_notifier_send_test_ok_when_send_succeeds(
     fake_resp.__enter__ = MagicMock(return_value=fake_resp)
     fake_resp.__exit__ = MagicMock(return_value=False)
 
-    with patch(
-        "src.core.notifier.urllib.request.urlopen", return_value=fake_resp
-    ):
+    with patch("src.core.notifier.urllib.request.urlopen", return_value=fake_resp):
         from health_check import check_notifier_send_test
 
         status, detail = check_notifier_send_test()

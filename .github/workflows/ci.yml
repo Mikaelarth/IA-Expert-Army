@@ -52,11 +52,11 @@ jobs:
         run: uv sync --all-extras
 
       - name: Run pre-commit (lint + format + checks)
-        # On skip pytest-unit et health-check-quick ici : ils tournent dans
-        # des steps séparés pour avoir un feedback distinct dans l'UI GitHub
-        # (un step rouge = on sait immédiatement où regarder).
+        # On skip pytest-unit, health-check-quick et audit-codebase ici : ils
+        # tournent dans des steps séparés pour avoir un feedback distinct dans
+        # l'UI GitHub (un step rouge = on sait immédiatement où regarder).
         env:
-          SKIP: pytest-unit,health-check-quick
+          SKIP: pytest-unit,health-check-quick,audit-codebase
         run: uv run pre-commit run --all-files --show-diff-on-failure
 
       - name: Run unit + integration test suite
@@ -83,3 +83,11 @@ jobs:
 
       - name: Run health check (quick mode, no Docker)
         run: uv run python scripts/health_check.py --quick
+
+      # Sprint QQQ : audit anti-pattern bloquant (--strict). Bloque la PR si
+      # un nouvel anti-pattern apparaît (file > 500 lignes, test sans assert,
+      # TODO orphelin, Opus sans justification, prompt hardcodé).
+      # Cf. ADR-022 pour la liste des règles + ADR-023 pour la politique CI.
+      # Whitelist : `# audit: ignore <RULE>` à la ligne du finding.
+      - name: Audit codebase (anti-patterns)
+        run: uv run python scripts/audit_codebase.py --strict

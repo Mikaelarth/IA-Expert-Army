@@ -137,7 +137,9 @@ def _payload_generic(level: NotifyLevel, title: str, body: str) -> dict[str, Any
     }
 
 
-def _build_payload(backend: NotifyBackend, level: NotifyLevel, title: str, body: str) -> dict[str, Any]:
+def _build_payload(
+    backend: NotifyBackend, level: NotifyLevel, title: str, body: str
+) -> dict[str, Any]:
     if backend == "discord":
         return _payload_discord(level, title, body)
     if backend == "slack":
@@ -198,9 +200,7 @@ class Notifier:
         # `file://` ou autres schemes custom ne devraient JAMAIS apparaître ici car
         # _detect_backend renvoie "none" pour url vide, et un user qui colle une URL
         # arbitraire dans .env doit pas pouvoir lire le filesystem local.
-        if not (
-            self.webhook_url.startswith("https://") or self.webhook_url.startswith("http://")
-        ):
+        if not (self.webhook_url.startswith("https://") or self.webhook_url.startswith("http://")):
             log.warning("notifier.bad_scheme", url=self.webhook_url[:50])
             return False
 

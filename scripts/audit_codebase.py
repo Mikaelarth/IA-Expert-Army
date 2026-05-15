@@ -86,12 +86,8 @@ def audit(
     rule: str | None = typer.Option(
         None, "--rule", "-r", help="Filtre par règle (ex: FILE_TOO_LONG)"
     ),
-    strict: bool = typer.Option(
-        False, "--strict", help="Exit non-zero si findings (utile en CI)"
-    ),
-    json_output: bool = typer.Option(
-        False, "--json", help="Sortie JSON (pour CI / tooling)"
-    ),
+    strict: bool = typer.Option(False, "--strict", help="Exit non-zero si findings (utile en CI)"),
+    json_output: bool = typer.Option(False, "--json", help="Sortie JSON (pour CI / tooling)"),
     max_lines: int = typer.Option(
         500,
         "--max-lines",
@@ -142,9 +138,7 @@ def audit(
             console.print(f"  {f.message}")
 
     if strict and findings:
-        console.print(
-            f"\n[bold red]--strict : {len(findings)} findings → exit 1[/bold red]"
-        )
+        console.print(f"\n[bold red]--strict : {len(findings)} findings → exit 1[/bold red]")
         raise SystemExit(1)
     raise SystemExit(0)
 

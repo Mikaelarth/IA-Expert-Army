@@ -484,10 +484,7 @@ def test_research_workflow_smoke_e2e(
     assert result.success is True
     assert result.final_verdict == "APPROVED", f"Verdict : {result.final_verdict}"
     assert result.quality_score is not None and result.quality_score >= 0.85
-    assert (
-        "Pydantic v1 vs v2" in result.synthesis_markdown
-        or "TL;DR" in result.synthesis_markdown
-    )
+    assert "Pydantic v1 vs v2" in result.synthesis_markdown or "TL;DR" in result.synthesis_markdown
 
 
 def test_router_dispatches_engineering_correctly(
@@ -555,8 +552,7 @@ def test_router_force_guild_overrides_classifier(
         # Cas piège : le prompt CodeReviewer contient "Backend Developer" en
         # référence au rôle amont. La détection par H1 doit ignorer ces refs.
         (
-            "# Code Reviewer — System Prompt\n\nTu juges le code "
-            "produit par le Backend Developer.",
+            "# Code Reviewer — System Prompt\n\nTu juges le code produit par le Backend Developer.",
             "code_reviewer",
         ),
         # Pas de H1 reconnu

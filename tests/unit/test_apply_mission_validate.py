@@ -234,6 +234,7 @@ def test_validate_in_sandbox_skipped_when_enable_sandbox_false(
 ) -> None:
     """Sprint GGG.1 : si enable_sandbox=False (cas VPS sans Docker ou skip dev),
     le helper court-circuite immédiatement sans tenter d'instancier SandboxRunner."""
+
     # Si ce mock était appelé, il lèverait — preuve que le court-circuit
     # est bien antérieur à toute interaction Docker.
     def _should_not_be_called(**kwargs):

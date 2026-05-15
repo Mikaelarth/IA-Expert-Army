@@ -62,3 +62,15 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-commit]
+
+      # Sprint QQQ : audit anti-pattern bloquant. Mêmes règles qu'en CI
+      # (cf. .github/workflows/ci.yml step "Audit codebase"). Tourne en
+      # 1-2s sur tout le repo — acceptable pour pre-commit.
+      # Skip ponctuel : SKIP=audit-codebase git commit -m "..."
+      # Cf. ADR-022 (règles) + ADR-023 (politique CI/pre-commit).
+      - id: audit-codebase
+        name: Audit codebase (anti-patterns Sprint LLL)
+        entry: uv run python scripts/audit_codebase.py --strict
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]

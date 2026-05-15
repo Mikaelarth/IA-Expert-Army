@@ -115,12 +115,7 @@ def test_test_no_assert_accepts_mock_assert_called(tmp_path: Path) -> None:
     """`mock.assert_called_once()` compte comme assertion."""
     f = _write(
         tmp_path / "test_thing.py",
-        (
-            "def test_mock():\n"
-            "    m = create_mock()\n"
-            "    do_thing(m)\n"
-            "    m.assert_called_once()\n"
-        ),
+        ("def test_mock():\n    m = create_mock()\n    do_thing(m)\n    m.assert_called_once()\n"),
     )
     assert detect_tests_without_assertions([f]) == []
 
@@ -149,7 +144,9 @@ def test_test_no_assert_skips_non_test_files(tmp_path: Path) -> None:
 
 
 def test_orphan_todo_detects_bare_todo(tmp_path: Path) -> None:
-    f = _write(tmp_path / "module.py", "# TODO refactor this later\nx = 1\n")  # audit: ignore ORPHAN_TODO
+    # audit: ignore ORPHAN_TODO -- fixture intentionnelle (TODO de test)
+    todo_content = "# TODO refactor this later\nx = 1\n"
+    f = _write(tmp_path / "module.py", todo_content)
     findings = detect_orphan_todos([f])
     assert len(findings) == 1
     assert findings[0].rule == "ORPHAN_TODO"
@@ -340,9 +337,7 @@ def test_collect_paths_respects_include_dirs(tmp_path: Path) -> None:
     _write(tmp_path / "scripts" / "b.py", "y = 2")
     _write(tmp_path / "node_modules" / "c.py", "z = 3")  # devrait être skip si exclu
 
-    config = AuditConfig(
-        include_dirs=["src", "scripts"], exclude_patterns=["__pycache__"]
-    )
+    config = AuditConfig(include_dirs=["src", "scripts"], exclude_patterns=["__pycache__"])
     paths = collect_paths(tmp_path, config)
     paths_str = [str(p) for p in paths]
     assert any("src" in p and "a.py" in p for p in paths_str)
@@ -388,15 +383,9 @@ def test_run_audit_disable_rule(tmp_path: Path) -> None:
 
 def test_summarize_findings_counts_correctly() -> None:
     findings = [
-        Finding(
-            rule="A", severity="warning", path=Path("x"), line=1, snippet="", message=""
-        ),
-        Finding(
-            rule="A", severity="warning", path=Path("y"), line=2, snippet="", message=""
-        ),
-        Finding(
-            rule="B", severity="info", path=Path("z"), line=3, snippet="", message=""
-        ),
+        Finding(rule="A", severity="warning", path=Path("x"), line=1, snippet="", message=""),
+        Finding(rule="A", severity="warning", path=Path("y"), line=2, snippet="", message=""),
+        Finding(rule="B", severity="info", path=Path("z"), line=3, snippet="", message=""),
     ]
     counts = summarize_findings(findings)
     assert counts == {"A": 2, "B": 1}

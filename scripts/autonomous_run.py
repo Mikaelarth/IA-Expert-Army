@@ -483,9 +483,7 @@ def run(
             )
             sent = n.send(level, title, body)
             if sent:
-                console.print(
-                    f"[dim green]Rapport envoyé via webhook ({n.backend})[/dim green]"
-                )
+                console.print(f"[dim green]Rapport envoyé via webhook ({n.backend})[/dim green]")
 
     # exit code : 0 si stop = queue épuisée, 3 si garde-fou déclenché
     raise SystemExit(0 if queue_drained else 3)

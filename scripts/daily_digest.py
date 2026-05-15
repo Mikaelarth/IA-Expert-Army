@@ -368,13 +368,9 @@ def show(
             title = f"Digest IA-Expert-Army {target.isoformat()}"
             sent = n.send(level, title, digest)
             if sent:
-                console.print(
-                    f"[dim green]Digest envoyé via webhook ({n.backend})[/dim green]"
-                )
+                console.print(f"[dim green]Digest envoyé via webhook ({n.backend})[/dim green]")
             else:
-                console.print(
-                    "[red]Échec d'envoi webhook (cf. logs). Digest local OK.[/red]"
-                )
+                console.print("[red]Échec d'envoi webhook (cf. logs). Digest local OK.[/red]")
 
 
 if __name__ == "__main__":

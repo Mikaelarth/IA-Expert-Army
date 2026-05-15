@@ -109,7 +109,9 @@ def _populate_install_dir(install_dir: Path) -> None:
     )
 
 
-def _run_migrate(install_dir: Path, args: list[str], expected_rc: int = 0) -> subprocess.CompletedProcess:
+def _run_migrate(
+    install_dir: Path, args: list[str], expected_rc: int = 0
+) -> subprocess.CompletedProcess:
     """Lance migrate_vps.sh avec INSTALL_DIR override."""
     env = os.environ.copy()
     env["INSTALL_DIR"] = str(install_dir)
@@ -185,7 +187,8 @@ def test_migrate_vps_export_then_import_round_trip(tmp_path: Path) -> None:
     extra = set(dst_hashes.keys()) - set(src_hashes.keys())
     # Ignorer les manifests éventuels et fichiers techniques
     extra_filtered = {
-        e for e in extra
+        e
+        for e in extra
         if not e.startswith("data/.pre-migrate-backup-")
         and not e.endswith("manifest.json")
         and not e.endswith("checksums.sha256")
@@ -246,7 +249,9 @@ def test_migrate_vps_import_creates_pre_migration_backup(tmp_path: Path) -> None
     _populate_install_dir(dst)
     # Modifie un fichier dans dst pour qu'on puisse vérifier qu'il est sauvegardé
     sentinel = dst / "data" / "memory" / "missions" / "DST-SENTINEL.md"
-    sentinel.write_text("# Sentinel destination — doit aller en pre-migrate-backup\n", encoding="utf-8")
+    sentinel.write_text(
+        "# Sentinel destination — doit aller en pre-migrate-backup\n", encoding="utf-8"
+    )
 
     _run_migrate(dst, ["import", str(archive)])
 

@@ -255,10 +255,7 @@ def check_notifier_config() -> tuple[str, str]:
     notifier = get_notifier_from_settings()
     if not notifier.is_enabled:
         return _skipped("NOTIFY_WEBHOOK_URL absent dans .env (notifier en NO-OP)")
-    return _ok(
-        f"backend détecté : {notifier.backend} "
-        f"(URL : {notifier.webhook_url[:40]}…)"
-    )
+    return _ok(f"backend détecté : {notifier.backend} (URL : {notifier.webhook_url[:40]}…)")
 
 
 def check_notifier_send_test() -> tuple[str, str]:
@@ -347,9 +344,7 @@ def check_adrs_index() -> tuple[str, str]:
         return _warn("docs/adr/README.md absent")
     index_content = index.read_text(encoding="utf-8")
     # Compte les fichiers ADR sur disque (NNN-*.md)
-    on_disk = sorted(
-        f.name for f in adr_dir.glob("[0-9][0-9][0-9]-*.md") if f.name != "README.md"
-    )
+    on_disk = sorted(f.name for f in adr_dir.glob("[0-9][0-9][0-9]-*.md") if f.name != "README.md")
     not_indexed = [name for name in on_disk if name not in index_content]
     if not_indexed:
         return _warn(f"{len(not_indexed)} ADR(s) non indexé(s) : {not_indexed[:3]}")

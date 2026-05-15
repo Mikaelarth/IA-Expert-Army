@@ -548,9 +548,7 @@ def test_list_recent_missions_skips_corrupted_frontmatter(
     result = _handle_list_recent_missions(file_memory, {"limit": 10})
     payload = json.loads(result[0].text)
     # La mission corrompue doit être skippée silencieusement (mais loggée)
-    assert payload["n_results"] == 1, (
-        f"Attendu 1 mission valide, got {payload['n_results']}"
-    )
+    assert payload["n_results"] == 1, f"Attendu 1 mission valide, got {payload['n_results']}"
     assert payload["results"][0]["mission_id"] == "good-mission-1"
 
 
@@ -625,9 +623,7 @@ def test_get_meta_mission_summary_handles_top_level_exception() -> None:
     fake_fm = MagicMock(spec=FileMemory)
     fake_fm.get_meta_mission_summary.side_effect = OSError("network DB down")
 
-    result = _handle_get_meta_mission_summary(
-        fake_fm, {"meta_mission_id": "abc"}
-    )
+    result = _handle_get_meta_mission_summary(fake_fm, {"meta_mission_id": "abc"})
     payload = json.loads(result[0].text)
     assert "error" in payload
     assert "network DB down" in payload["error"]
@@ -648,9 +644,7 @@ def test_serve_function_exists_and_is_async() -> None:
 def test_search_skills_with_query_uses_semantic_path(fake_skills: MagicMock) -> None:
     """Sprint JJJ.3b : couvre le path "with query" qui appelle
     skills_library.search_skills (sémantique) au lieu de list_skills (récence)."""
-    fake_skills.search_skills.return_value = [
-        _skill(skill_id="sk-relevant", title="Pertinent")
-    ]
+    fake_skills.search_skills.return_value = [_skill(skill_id="sk-relevant", title="Pertinent")]
     result = _handle_search_skills(
         fake_skills, {"agent": "research_lead", "query": "trouver des sources"}
     )

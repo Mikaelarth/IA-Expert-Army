@@ -189,7 +189,11 @@ def test_notifier_send_returns_false_on_http_error() -> None:
 
     def _raises_http_error(req: Any, timeout: float = 0) -> Any:
         raise urllib.error.HTTPError(
-            "https://example.com/hook", 401, "Unauthorized", {}, None  # type: ignore[arg-type]
+            "https://example.com/hook",
+            401,
+            "Unauthorized",
+            {},
+            None,  # type: ignore[arg-type]
         )
 
     with patch("src.core.notifier.urllib.request.urlopen", side_effect=_raises_http_error):
