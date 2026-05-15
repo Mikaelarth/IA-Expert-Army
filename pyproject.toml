@@ -108,6 +108,45 @@ filterwarnings = [
     "ignore:.*asyncio.iscoroutinefunction.*:DeprecationWarning:chromadb",
 ]
 
+# ============================================================================
+# Coverage configuration — Sprint KKK
+# ============================================================================
+# Politique fixée par ADR-019 (audit JJJ) : 90% global mesuré.
+# Sprint KKK automatise via fail_under pour bloquer toute régression.
+
+[tool.coverage.run]
+source = ["src"]
+branch = false  # on reste sur statement coverage pour éviter le bruit
+# Les __init__.py vides faussent le %, idem conftest.
+omit = [
+    "*/__init__.py",
+    "*/conftest.py",
+]
+
+[tool.coverage.report]
+# Cible globale — bloquera le CI si on régresse. ADR-019 documente que
+# c'est une cible "honnête" (vrai chiffre observé, pas une estimation).
+# Pour bumper : modifier ici + MAJ badge README + note dans CHANGELOG.
+fail_under = 90
+precision = 1
+show_missing = true
+skip_covered = false
+sort = "Cover"
+exclude_lines = [
+    # Marqueurs explicites pour les lignes vraiment non-testables
+    "pragma: no cover",
+    # Code défensif standard
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    'if __name__ == "__main__":',
+    # `serve()` dans memory_search.py et autres entrypoints qui bloquent sur stdin
+    "async with stdio_server",
+    # Imports défensifs au top de modules (try/except ImportError pour SDK
+    # optionnels — déjà documenté dans ADR-019). Catch pas le module-level
+    # try/except, mais évite les false positives sur les fallbacks.
+    "raise SandboxUnavailable",
+]
+
 [tool.mypy]
 python_version = "3.12"
 # strict = true a été désactivé Sprint UU.5 — mypy 2.0 le trouve trop agressif

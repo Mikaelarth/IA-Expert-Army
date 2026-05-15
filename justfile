@@ -30,9 +30,25 @@ health-quick:
 test:
     uv run pytest tests/unit/
 
-# Lance la suite avec couverture
+# Lance la suite avec couverture (rapport terminal)
 test-cov:
     uv run pytest tests/unit/ --cov=src --cov-report=term-missing
+
+# === Coverage (Sprint KKK) ===
+
+# Coverage complète (unit + integration) — rapport terminal détaillé
+coverage:
+    uv run pytest tests/unit/ tests/integration/ --cov=src --cov-report=term-missing
+
+# Coverage strict — bloque si < seuil de pyproject.toml (fail_under=90)
+# C'est exactement ce que fait le CI. À lancer AVANT chaque PR.
+coverage-strict:
+    uv run pytest tests/unit/ tests/integration/ --cov=src --cov-report=term
+
+# Coverage HTML — rapport browsable dans htmlcov/index.html
+coverage-html:
+    uv run pytest tests/unit/ tests/integration/ --cov=src --cov-report=html
+    @echo "Ouvre htmlcov/index.html dans ton navigateur"
 
 # Lance UN test précis (usage: just test-one tests/unit/test_x.py::test_y)
 test-one PATTERN:
