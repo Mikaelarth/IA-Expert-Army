@@ -1,0 +1,61 @@
+# 06 — Mission étalon : mini-API FastAPI complète (Sprint DDD)
+#
+# Usage :
+#   uv run python scripts/autonomous_run.py --queue data/example_queues/06-engineering-api-complete.yml
+#
+#   # OU en mission unique avec apply + sandbox validation :
+#   uv run python scripts/run_mission.py --apply --validate \
+#     --title "Mini API FastAPI todo-list avec auth JWT" \
+#     --description "$(cat data/example_queues/06-engineering-api-complete.yml | grep -A50 description: | tail -40)"
+#
+# Coût attendu : ~$1.74 (mission étalon validée empiriquement)
+# Durée : ~12 min (multi-fichiers + repair loop + QG + SecurityAuditor)
+# Verdict attendu : APPROVED 0.93 (cf. ADR-015 mission étalon DDD)
+#
+# Démontre :
+#   - Engineering > 400 lignes multi-fichiers (limite zone confort actuelle)
+#   - Repair loop avec Architect + Developer + Reviewer ré-exécutés
+#   - Quality Guardian peer review méta (ENABLE_QUALITY_GUARDIAN=true)
+#   - Security Auditor OWASP (ENABLE_SECURITY_AUDITOR=true)
+#   - max_tokens BackendDeveloper bumpé à 16384 (Sprint DDD)
+#
+# REQUIS pour cette mission (à ajouter dans .env) :
+#   ENABLE_QUALITY_GUARDIAN=true
+#   ENABLE_SECURITY_AUDITOR=true
+#   DAILY_BUDGET_USD=10.0   # marge confortable pour 1 mission étalon
+
+missions:
+  - title: "Mini API FastAPI todo-list avec auth JWT (étalon)"
+    description: |
+      Crée une mini-API REST FastAPI prête à exécuter (`uvicorn main:app`) :
+
+      (1) **Authentification JWT** : endpoints /auth/register, /auth/login
+          (retourne access_token + refresh_token), /auth/refresh.
+          Mots de passe hashed via bcrypt (passlib).
+
+      (2) **Modèle User** : SQLAlchemy 2.0 + SQLite (db file app.db).
+
+      (3) **CRUD Todo** protégé : POST /todos, GET /todos, GET /todos/{id},
+          PUT /todos/{id}, DELETE /todos/{id}. Dépendance get_current_user.
+
+      (4) **Pydantic v2 models** séparés pour Create / Update / Response.
+
+      (5) **Tests pytest** couvrant : flow register/login/refresh, CRUD
+          complet authentifié, cas d'erreur 401 (token manquant/invalide),
+          404 (todo absent ou d'un autre user), 422 (validation Pydantic).
+
+      (6) **Dockerfile** minimal multi-stage : builder uv + runner
+          python:3.12-slim, USER non-root.
+
+      (7) **Variables d'env** : SECRET_KEY (JWT), ACCESS_TOKEN_EXPIRE_MINUTES=30.
+
+      **Stack** : FastAPI + SQLAlchemy 2.0 + sqlite + passlib[bcrypt] +
+      python-jose[cryptography] + pytest + httpx.
+
+      **Architecture** : split en main.py, models.py, schemas.py, auth.py,
+      routes_auth.py, routes_todos.py, deps.py, tests/test_auth.py,
+      tests/test_todos.py, Dockerfile, README.md.
+
+      **Cible** : ~400-500 lignes de code lisible, idiomatique, prêt pour
+      code review.
+    guild: engineering

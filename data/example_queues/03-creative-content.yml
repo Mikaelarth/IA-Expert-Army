@@ -1,0 +1,48 @@
+# 03 — Creative content : 3 missions rédaction marketing/copy
+#
+# Usage :
+#   uv run python scripts/autonomous_run.py --queue data/example_queues/03-creative-content.yml --notify
+#
+# Coût attendu : ~$0.80 ($0.25-$0.35 par mission Creative)
+# Durée : ~5 min (3 × ~100s)
+# Verdict attendu : 3/3 APPROVED (quality_score 0.87-0.92)
+#
+# Démontre :
+#   - Workflow Creative (Strategist → Copywriter → Editor)
+#   - Brief structuré par le Strategist (audience + positioning + proofs)
+#   - Output markdown rédactionnel signé/sourcé
+#
+# Astuce : variez "audience" et "tone" pour voir comment le système adapte
+# la voix éditoriale.
+
+missions:
+  - title: "Landing page : SaaS de suivi d'hydratation"
+    description: |
+      Rédige une landing page (markdown, 400-500 mots) pour une web app
+      gratuite de suivi de consommation d'eau quotidienne. Audience :
+      30-50 ans, sportifs amateurs, sensibilisés santé. Structure :
+      headline + sub-headline, 3 bénéfices avec icônes émoji, mini-FAQ
+      (3 questions), CTA. Ton : amical mais sérieux, jamais culpabilisant.
+      Cible de conversion : créer un compte gratuit en 1 clic.
+    guild: creative
+
+  - title: "Email d'onboarding : ouverture de compte SaaS B2B"
+    description: |
+      Rédige un email de bienvenue (180-250 mots) envoyé après la création
+      d'un compte sur un SaaS B2B d'analyse de logs. Audience : DevOps /
+      SRE seniors, occupés. Objectif : faire compléter le setup wizard en
+      moins de 5 min. Structure : greeting personnalisé, 3 étapes claires
+      avec checkboxes, lien direct vers la doc, signature humaine. Ton :
+      direct, pro, pas trop chaleureux. Pas de jargon marketing.
+    guild: creative
+
+  - title: "Article blog : pourquoi documenter ses décisions techniques (ADRs)"
+    description: |
+      Rédige un article de blog (600-800 mots) qui explique l'intérêt des
+      ADRs (Architecture Decision Records) à des tech leads. Inclus :
+      définition courte, 3 problèmes qu'ils résolvent (avec exemples),
+      template minimum, 2 anti-patterns à éviter. Audience : tech lead /
+      staff engineer avec 5+ ans d'expérience qui n'a jamais formalisé
+      ses décisions. Ton : pragmatique, légèrement provocateur, exemples
+      concrets. Conclusion actionnable.
+    guild: creative

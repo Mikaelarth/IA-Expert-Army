@@ -1,0 +1,45 @@
+# 02 — Research veille : 3 missions de synthèse / comparatif
+#
+# Usage :
+#   uv run python scripts/autonomous_run.py --queue data/example_queues/02-research-veille.yml --notify
+#
+# Coût attendu : ~$1.00 ($0.30-$0.45 par mission Research)
+# Durée : ~6 min (3 × ~120s)
+# Verdict attendu : 3/3 APPROVED (quality_score 0.88-0.93)
+#
+# Démontre :
+#   - Workflow Research (Lead → TechWatch → DocSynthesizer → Reviewer)
+#   - Découpage en sous-questions par le Lead
+#   - Indexation des findings avec sources nommées
+#   - Apprentissage : skills "findings YAML structuré" auto-extraites
+#
+# Note : Research n'écrit pas de fichiers code — la sortie est un markdown
+# structuré dans data/memory/missions/<mission_id>.md
+
+missions:
+  - title: "Comparatif court Pydantic v1 vs v2"
+    description: |
+      Produis un comparatif synthétique (150-300 mots) Pydantic v1 vs v2 :
+      3 différences clés en API publique (BaseModel.dict → model_dump,
+      class Config → model_config, validators decorators), 1 piège de
+      migration courant. Audience : développeurs Python qui considèrent
+      l'upgrade. Format markdown structuré.
+    guild: research
+
+  - title: "État de l'art : Sandbox Docker pour code généré par LLM (2026)"
+    description: |
+      Synthétise les meilleures pratiques pour exécuter du code généré par
+      LLM dans un sandbox isolé : réseau désactivé, user non-root, limits
+      mem/CPU/PIDs, tmpfs, durée max. Compare 3 approches : Docker éphémère
+      (notre choix), micro-VM (gVisor/Firecracker), processus isolés
+      (seccomp/landlock). Cite sources avec URLs. 400-600 mots.
+    guild: research
+
+  - title: "Trade-offs RAG vs Fine-tuning pour LLM en 2026"
+    description: |
+      Veille croisée RAG (Retrieval-Augmented Generation) vs Fine-tuning
+      léger (LoRA, QLoRA) pour adapter un LLM à un corpus interne. Critères :
+      coût initial, coût marginal par requête, fraîcheur des données, contrôle
+      du contenu, sécurité, infra requise. Verdict tranché par cas d'usage
+      (Q&A doc, code assistant, classification). 400-500 mots, sources.
+    guild: research

@@ -48,17 +48,39 @@ uv run python scripts/autonomous_run.py \
 
 ```yaml
 # data/autonomous_queue.yml
-- title: "Endpoint /uptime"
-  description: "Crée un endpoint FastAPI GET /uptime..."
-  # force_guild: engineering  # optionnel — sinon auto-routé
+missions:
+  - title: "Endpoint /uptime"
+    description: "Crée un endpoint FastAPI GET /uptime..."
+    guild: engineering   # optionnel — sinon auto-routé via mots-clés
 
-- title: "Comparatif RAG vs Fine-tuning 2026"
-  description: "Synthétise les trade-offs entre les 2 approches..."
-  force_guild: research
+  - title: "Comparatif RAG vs Fine-tuning 2026"
+    description: "Synthétise les trade-offs entre les 2 approches..."
+    guild: research
+```
 
-- title: "MVP water-tracker app"
-  description: "Crée landing + code + business plan"
-  # cross-guildes — sera décomposé automatiquement par MetaWorkflow
+### Templates prêts à l'emploi
+
+Pas besoin de partir de zéro — **7 templates documentés** dans
+[`data/example_queues/`](https://github.com/MikaelArth/IA-Expert-Army/tree/main/data/example_queues) couvrent les
+cas d'usage canon :
+
+| # | Template | Cas d'usage | Coût | Durée |
+|---|---|---|---|---|
+| 01 | `01-engineering-simple.yml` | 3 fonctions Python courtes | ~$1.50 | ~5 min |
+| 02 | `02-research-veille.yml` | 3 synthèses / comparatifs | ~$1.00 | ~6 min |
+| 03 | `03-creative-content.yml` | Landing + email + blog | ~$0.80 | ~5 min |
+| 04 | `04-business-roadmap.yml` | Roadmap + viabilité + RGPD | ~$1.50 | ~6 min |
+| 05 | `05-cross-guildes-mvp.yml` | Méta-mission cross-guildes | ~$4-5 | ~12 min |
+| 06 | `06-engineering-api-complete.yml` | Mission étalon FastAPI JWT/CRUD | ~$1.74 | ~12 min |
+| 07 | `07-stress-test-budget.yml` | 10 missions courtes (stress garde-fous) | ~$3-5 | ~25-40 min |
+
+Pour démarrer : `01-engineering-simple.yml` est le plus rapide et le moins
+cher. Lance avec `--max-missions 1` la première fois pour valider :
+
+```bash
+uv run python scripts/autonomous_run.py \
+  --queue data/example_queues/01-engineering-simple.yml \
+  --max-missions 1
 ```
 
 ---

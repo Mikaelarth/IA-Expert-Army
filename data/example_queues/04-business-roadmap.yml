@@ -1,0 +1,47 @@
+# 04 — Business roadmap : 3 missions plan / viabilité / conformité
+#
+# Usage :
+#   uv run python scripts/autonomous_run.py --queue data/example_queues/04-business-roadmap.yml --notify
+#
+# Coût attendu : ~$1.50 ($0.40-$0.55 par mission Business)
+# Durée : ~6 min (3 × ~120s)
+# Verdict attendu : 3/3 APPROVED (quality_score 0.87-0.93)
+#
+# Démontre :
+#   - Workflow Business (PM → BusinessAnalyst → LegalReviewer)
+#   - Plan YAML structuré (milestones + scope + KPIs + risks)
+#   - Verdict de viabilité par BA + verdict de conformité par Legal
+#
+# Note : sortie en YAML structuré (pas en code) — `data/memory/missions/`
+# contient le résultat complet.
+
+missions:
+  - title: "Roadmap 12 semaines : MVP marketplace freelances tech"
+    description: |
+      Produis une roadmap structurée pour un MVP de marketplace de
+      freelances tech (front-end, devops, data) à lancer en 12 semaines.
+      Structure : 4 milestones (3 semaines chacun) avec deliverables
+      vérifiables, scope explicite (in/out), 3 risques majeurs avec
+      mitigation, 5 KPIs de lancement, équipe minimum requise (rôles).
+      Hypothèse budget : 30k€ TTC max.
+    guild: business
+
+  - title: "Analyse viabilité : outil B2B audit Lighthouse + Core Web Vitals"
+    description: |
+      Évalue la viabilité d'un produit B2B qui audite automatiquement les
+      sites web client sur Lighthouse + Core Web Vitals, alerte sur les
+      régressions, et propose des fixes priorisés. Couvre : marché TAM/SAM/SOM
+      estimé, 3 alternatives existantes + différenciation, unit economics
+      (LTV/CAC ratio cible), 4 KPIs go/no-go à 6 mois, verdict viable/pivot/no-go
+      avec justification.
+    guild: business
+
+  - title: "Audit conformité RGPD : SaaS de suivi de productivité"
+    description: |
+      Audit conformité RGPD pour un SaaS B2B qui agrège des données
+      individuelles d'usage (apps utilisées, durées, idle time) à des fins
+      managériales. Couvre : base légale (intérêt légitime vs consentement),
+      DPO requis ?, registre des traitements, mentions légales obligatoires,
+      droits utilisateurs (accès, rectif, oubli, opposition), DPIA nécessaire ?,
+      3 risques conformité majeurs avec sévérité (BLOQUANT / FORT / MOYEN).
+    guild: business

@@ -161,6 +161,23 @@ Pour les incidents en production / mode autonome, voir [docs/runbook.md](runbook
 
 ---
 
+## Templates de missions prêts à l'emploi
+
+7 templates documentés dans [`data/example_queues/`](https://github.com/MikaelArth/IA-Expert-Army/tree/main/data/example_queues)
+couvrent les cas d'usage canon — code Python, synthèses Research, contenus
+Creative, plans Business, méta-missions cross-guildes, mission étalon
+FastAPI complète, stress test des garde-fous.
+
+Le moins cher pour démarrer (~$1.50, 5 min) :
+
+```bash
+uv run python scripts/autonomous_run.py \
+  --queue data/example_queues/01-engineering-simple.yml \
+  --max-missions 1
+```
+
+---
+
 ## Aller plus loin avec le système
 
 Une fois familier avec les bases :

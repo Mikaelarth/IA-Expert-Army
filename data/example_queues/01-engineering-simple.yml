@@ -1,0 +1,43 @@
+# 01 — Engineering simple : 3 missions courtes Python
+#
+# Usage :
+#   uv run python scripts/autonomous_run.py --queue data/example_queues/01-engineering-simple.yml
+#   uv run python scripts/autonomous_run.py --queue data/example_queues/01-engineering-simple.yml --notify
+#
+# Coût attendu : ~$1.50 ($0.40-$0.60 par mission Engineering)
+# Durée : ~5 min (3 × ~100s)
+# Verdict attendu : 3/3 APPROVED (quality_score 0.90-0.95)
+#
+# Démontre :
+#   - Workflow Engineering (Architect → Developer → Reviewer)
+#   - Routage automatique vers Engineering via mots-clés
+#   - Boucle qualité fermée si --apply --validate ajouté
+#
+# Pour une mission unique en mode live : voir scripts/run_mission.py
+
+missions:
+  - title: "Slugify utility"
+    description: |
+      Crée une fonction Python `slugify(text: str) -> str` dans
+      `src/utils/text.py` qui transforme une chaîne en slug URL-friendly
+      (lowercase, accents retirés via unicodedata.normalize NFKD, espaces
+      et ponctuation remplacés par '-', dashes multiples compactés).
+      Doctest dans la docstring + 4 tests pytest couvrant : cas canonique,
+      accents (Café → cafe), chaîne vide, ponctuation multiple.
+      Pas de dépendance externe — stdlib uniquement.
+    guild: engineering
+
+  - title: "Endpoint /uptime"
+    description: |
+      Crée un endpoint FastAPI GET /uptime dans `src/api/uptime.py` qui
+      retourne `{"seconds": float}` via time.monotonic() depuis le boot
+      du process. 2 tests pytest minimum : route accessible (200), valeur
+      monotone (call twice, t2 >= t1).
+    guild: engineering
+
+  - title: "Format duration helper"
+    description: |
+      Crée `format_duration(seconds: float) -> str` qui produit "1h 23m 45s"
+      pour les longues durées et "12.3s" pour moins de 60s. Edge cases :
+      0 → "0s", très long (> 24h) → "Nd Hh Mm Ss". 5 tests pytest.
+    guild: engineering

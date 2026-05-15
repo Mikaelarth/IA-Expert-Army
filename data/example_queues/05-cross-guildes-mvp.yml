@@ -1,0 +1,46 @@
+# 05 — Cross-guildes : 1 méta-mission qui traverse plusieurs guildes
+#
+# Usage : utilise --meta dans scripts/run_mission.py (pas autonomous_run)
+#   uv run python scripts/run_mission.py --meta \
+#     --title "MVP water-tracker app" \
+#     --description "$(cat data/example_queues/05-cross-guildes-mvp.yml | grep -A50 description: | tail -45)"
+#
+# Coût attendu : ~$4-5 (3 sous-missions parallélisées)
+# Durée : ~10-15 min (parallélisation par niveau DAG, gain ~2× vs séquentiel)
+# Verdict attendu : APPROVED 0.88-0.93 (3 sous-missions APPROVED)
+#
+# Démontre :
+#   - MetaWorkflow (cf. ADR-009) : MetaDecomposer Sonnet (Sprint EEE.v1)
+#     découpe en 2-4 sous-missions
+#   - Parallélisation asyncio.gather par niveau DAG
+#   - Cross-guildes : Engineering + Creative + Business sur un même projet
+#   - Aggregation finale verdict (APPROVED si toutes APPROVED, sinon NEEDS_CHANGES)
+#
+# Pour une version courte (1 sous-mission par guilde au lieu de tout),
+# ajouter "garde le scope minimal, 1 livrable par guilde" à la description.
+
+# Ce fichier est un EXEMPLE — la mission cross-guildes se lance via
+# --meta, pas via une queue YAML. Format mission unique :
+
+mission:
+  title: "MVP water-tracker app"
+  description: |
+    Crée un mini-MVP d'application web de suivi d'hydratation quotidienne.
+    Cette mission est cross-guildes — décompose en 3 sous-missions :
+
+    1. **Engineering** : crée le code Python minimal d'un endpoint FastAPI
+       POST /intake qui enregistre une consommation (timestamp + ml) et
+       GET /history?date=YYYY-MM-DD qui retourne la liste du jour. Stockage
+       en mémoire suffit (pas de DB). 3 tests pytest.
+
+    2. **Creative** : rédige une landing page (400-500 mots markdown) pour
+       l'app. Audience : 30-50 ans, sportifs amateurs. Structure standard
+       (headline + benefits + FAQ + CTA). Ton amical, jamais culpabilisant.
+
+    3. **Business** : produis un mini-roadmap 8 semaines pour faire évoluer
+       le MVP vers une v1 monétisée (freemium → premium). 3 milestones,
+       2 KPIs de conversion, 3 risques majeurs avec mitigation.
+
+    Les 3 sous-missions sont INDÉPENDANTES (parallélisables). Pas besoin que
+    le Code soit fini avant la Landing — ce sont 3 livrables séparés qui
+    constituent ensemble le MVP.

@@ -1,0 +1,71 @@
+# 07 — Stress test : 10 missions courtes pour tester garde-fous
+#
+# Usage :
+#   uv run python scripts/autonomous_run.py \
+#     --queue data/example_queues/07-stress-test-budget.yml \
+#     --budget-floor 1.00 \
+#     --max-missions 10
+#
+#   # Pour un vrai stress test sur 24h en arrière-plan :
+#   nohup uv run python scripts/autonomous_run.py \
+#     --queue data/example_queues/07-stress-test-budget.yml \
+#     --notify > /tmp/iaa-stress.log 2>&1 &
+#
+# Coût attendu : ~$3-5 (10 × ~$0.30-0.50)
+# Durée : ~25-40 min (10 missions séquentielles)
+# Verdict attendu : 8-10/10 APPROVED (1-2 NEEDS_CHANGES toléré sur fonctions complexes)
+#
+# Démontre :
+#   - Mode autonome avec queue longue
+#   - Tous les 5 garde-fous testables :
+#     * Budget : --budget-floor 1.00 (stop si reste < $1)
+#     * Killswitch : `just killswitch engage` pendant le run → stop gracieux
+#     * Error rate : si > 30% des 5 dernières échouent → stop
+#     * Saturation rate : si > 20% saturent → stop (peu probable, missions courtes)
+#     * Quality drift : moving avg < 0.70 sur 5 dernières → stop
+#
+# Pour observer en temps réel :
+#   tail -f data/autonomous_runs/$(date +%Y%m%d)*.md   # rapport en cours
+#   just budget                                          # consommé / restant
+#   just digest                                          # bilan du jour
+
+missions:
+  - title: "Function reverse_string"
+    description: "Fonction Python pure `reverse_string(s: str) -> str`. 3 tests pytest dont edge cases (vide, unicode)."
+    guild: engineering
+
+  - title: "Function is_palindrome"
+    description: "Fonction `is_palindrome(s: str) -> bool` insensible casse + ponctuation. 4 tests pytest."
+    guild: engineering
+
+  - title: "Function fizzbuzz"
+    description: "Fonction `fizzbuzz(n: int) -> list[str]` classique. 3 tests pytest dont n=15."
+    guild: engineering
+
+  - title: "Function count_words"
+    description: "Fonction `count_words(text: str) -> dict[str, int]` qui compte les occurrences. 3 tests."
+    guild: engineering
+
+  - title: "Function flatten_list"
+    description: "Fonction `flatten(nested: list) -> list` qui aplatit récursivement. 4 tests."
+    guild: engineering
+
+  - title: "Function chunked"
+    description: "Fonction `chunked(items: list, size: int) -> list[list]` split en chunks. 3 tests."
+    guild: engineering
+
+  - title: "Function median"
+    description: "Fonction `median(numbers: list[float]) -> float` pure. 3 tests dont liste vide → ValueError."
+    guild: engineering
+
+  - title: "Function safe_get"
+    description: "Fonction `safe_get(d: dict, *keys) -> Any` accès imbriqué sans KeyError. 4 tests."
+    guild: engineering
+
+  - title: "Function deduplicate"
+    description: "Fonction `deduplicate(items: list) -> list` qui préserve l'ordre. 3 tests."
+    guild: engineering
+
+  - title: "Function levenshtein_distance"
+    description: "Fonction `levenshtein(a: str, b: str) -> int` distance d'édition classique. 3 tests dont chaînes vides."
+    guild: engineering
