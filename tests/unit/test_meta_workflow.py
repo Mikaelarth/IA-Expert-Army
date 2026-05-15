@@ -6,7 +6,11 @@ exécution end-to-end avec MissionRouter et MetaDecomposer mockés.
 Décision archi : on mock le router (pas de vraies guildes invoquées) car
 l'intégration guildes est déjà testée par leurs propres suites.
 Le test prouve que MetaWorkflow orchestre correctement, pas que les
-guildes fonctionnent — séparation des responsabilités."""
+guildes fonctionnent — séparation des responsabilités.
+
+# audit: ignore FILE_TOO_LONG -- 639 lignes : tests du DAG + parallélisation
+# nécessitent setups complexes (sub_missions multiples, dépendances variées).
+# Cohésion préférée à la fragmentation."""
 
 from __future__ import annotations
 

@@ -38,6 +38,8 @@ class ContentStrategist(BaseAgent):
         super().__init__(
             name="content_strategist",
             prompt_path=_PROMPTS_DIR / "content_strategist.md",
+            # Opus : brief créatif (positioning + audience + proofs critiques).
+            # ADR-016 catégorie B — vague 2 EEE candidate après validation smoke.
             model=s.model_strategic,
             memory=memory,
             settings=s,

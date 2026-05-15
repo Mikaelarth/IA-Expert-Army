@@ -30,6 +30,9 @@ class ChiefOrchestrator(BaseAgent):
         super().__init__(
             name="chief_orchestrator",
             prompt_path=_PROMPT,
+            # Opus : routage + classification de mission. ADR-016 catégorie B
+            # (template-guidé) — vague 2 EEE candidate après smoke validation
+            # sur 5+ missions live (pas encore fait, donc on garde Opus prudent).
             model=s.model_strategic,
             memory=memory,
             settings=s,

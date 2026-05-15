@@ -2,7 +2,11 @@
 
 Tests les handlers _handle_search_episodes et _handle_search_skills
 directement (sans démarrer un vrai serveur MCP via stdio). On mock les
-dépendances VectorMemory et SkillsLibrary."""
+dépendances VectorMemory et SkillsLibrary.
+
+# audit: ignore FILE_TOO_LONG -- 656 lignes : suite exhaustive (36 tests)
+# couvrant les 6 handlers MCP + paths d'erreur. Split par handler créerait
+# 6 fichiers avec setup dupliqué — préférable de garder cohésion."""
 
 from __future__ import annotations
 

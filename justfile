@@ -50,6 +50,25 @@ coverage-html:
     uv run pytest tests/unit/ tests/integration/ --cov=src --cov-report=html
     @echo "Ouvre htmlcov/index.html dans ton navigateur"
 
+# === Audit anti-patterns (Sprint LLL) ===
+
+# Audit complet du codebase (5 règles : FILE_TOO_LONG, TEST_NO_ASSERT,
+# ORPHAN_TODO, OPUS_WITHOUT_JUSTIFICATION, HARDCODED_PROMPT)
+audit:
+    uv run python scripts/audit_codebase.py
+
+# Audit strict — exit non-zero si findings (utile en pre-commit ou CI)
+audit-strict:
+    uv run python scripts/audit_codebase.py --strict
+
+# Audit verbose — affiche le message complet de chaque finding
+audit-verbose:
+    uv run python scripts/audit_codebase.py --verbose
+
+# Audit filtré sur une règle (usage: just audit-rule FILE_TOO_LONG)
+audit-rule RULE:
+    uv run python scripts/audit_codebase.py --rule {{RULE}}
+
 # Lance UN test précis (usage: just test-one tests/unit/test_x.py::test_y)
 test-one PATTERN:
     uv run pytest {{PATTERN}} -v

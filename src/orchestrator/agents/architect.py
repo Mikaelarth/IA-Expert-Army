@@ -36,6 +36,8 @@ class SoftwareArchitect(BaseAgent):
         super().__init__(
             name="software_architect",
             prompt_path=_PROMPT,
+            # Opus : raisonnement architectural critique. ADR-016 catégorie A
+            # (jugement irrémédiable — une mauvaise arch contamine tout downstream).
             model=s.model_strategic,
             memory=memory,
             settings=s,

@@ -4,6 +4,11 @@ Permet à un LLM tiers (Anthropic Workbench, Claude Desktop, Cursor, …) de
 chercher dans nos épisodes et nos skills sans qu'on ait à embarquer tout
 notre code Python dans son environnement.
 
+# audit: ignore FILE_TOO_LONG -- 509 lignes acceptées : 6 handlers MCP +
+# définition complète des inputSchemas inline (séparation par fichier
+# augmenterait la fragmentation sans gain. Split prévu si on dépasse 700 ou
+# si on rajoute > 8 outils MCP).
+
 6 tools exposés :
   - search_episodes(query, agent=None, n=3) : recherche sémantique dans la
     VectorMemory des épisodes (collection "agent_episodes")

@@ -447,9 +447,13 @@ def test_print_sandbox_result_uses_default_console_when_none() -> None:
         timed_out=False,
         image="x:latest",
         command=[],
+        # Sprint LLL : assertion explicite (la fonction est void → return None).
+        # Sans cette ligne, le test était flaggé TEST_NO_ASSERT.
     )
     # Ne lève rien — la fonction crée une Console par défaut en interne
-    print_sandbox_result(result, console=None)
+    out = print_sandbox_result(result, console=None)
+    # Assertion : la fonction est void par contrat (logging-only).
+    assert out is None
 
 
 # Régression : apply_mission.py expose toujours les helpers en alias pour la

@@ -8,6 +8,10 @@ Tests symétriques aux suites Business/Engineering existantes :
 - happy path (4 agents appelés, APPROVED retourné)
 - chaque agent peut planter → workflow retourne FAILED:<stage>
 - repair loop sur NEEDS_CHANGES → Synthesizer/Editor re-runs
+
+# audit: ignore FILE_TOO_LONG -- 506 lignes : 2 workflows × 8 cas chacun =
+# 16 tests + helpers. Split en 2 fichiers (research / creative) ferait
+# perdre la symétrie qui justifie d'avoir une suite croisée.
 - killswitch / budget → FAILED early
 - score propagation aux épisodes
 """

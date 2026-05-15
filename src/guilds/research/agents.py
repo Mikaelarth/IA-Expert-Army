@@ -34,6 +34,9 @@ class ResearchLead(BaseAgent):
         super().__init__(
             name="research_lead",
             prompt_path=_PROMPTS_DIR / "research_lead.md",
+            # Opus : plan de recherche (découpage en sous-questions critique
+            # pour qualité downstream). ADR-016 catégorie B — vague 2 EEE
+            # candidate après smoke validation.
             model=s.model_strategic,
             memory=memory,
             settings=s,

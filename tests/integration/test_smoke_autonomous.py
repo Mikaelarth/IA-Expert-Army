@@ -15,6 +15,10 @@ silencieuse au niveau du Router ou du Workflow ne se voyait qu'au moment de
 lancer une vraie mission (= dépense API).
 
 Ce test tourne en < 1 seconde et garantit l'intégrité du chemin E2E.
+
+# audit: ignore FILE_TOO_LONG -- 566 lignes acceptées : les CANON_RESPONSES
+# pour 9 agents (~30 lignes chacun) + tests E2E. Split par agent fragmenterait
+# le test et rendrait les régressions inter-agents plus difficiles à détecter.
 """
 
 from __future__ import annotations

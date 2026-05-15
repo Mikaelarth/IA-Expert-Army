@@ -49,6 +49,7 @@ async def main() -> int:
 
     log.info(
         "settings.loaded",
+        # Opus pour le script demo (présentation initiale, ~$0.03 unique, justifié).
         model=settings.model_strategic,
         budget=settings.daily_budget_usd,
         log_format=settings.log_format,
@@ -72,6 +73,7 @@ async def main() -> int:
     console.print("\n[dim]Appel à Claude…[/dim]\n")
 
     try:
+        # Opus pour la présentation initiale (cf. commentaire ligne 50).
         response = await client.messages.create(
             model=settings.model_strategic,
             max_tokens=512,

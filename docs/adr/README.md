@@ -46,3 +46,4 @@ Format minimal :
 - [ADR-019 — Politique de couverture de tests (audit honnête + seuils par module)](019-coverage-audit-policy.md)
 - [ADR-020 — Automatisation du gate coverage en CI (fail_under + justfile)](020-coverage-ci-automation.md)
 - [ADR-021 — Smoke tests E2E avec FakeAsyncAnthropic (sans coût API)](021-smoke-e2e-tests.md)
+- [ADR-022 — Audit codebase : 5 règles d'anti-patterns détectées automatiquement](022-codebase-audit-rules.md)
