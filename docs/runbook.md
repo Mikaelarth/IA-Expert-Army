@@ -559,7 +559,7 @@ Puis appliquer la procédure du runbook correspondant. **Toujours commencer par 
 | Sujet | Source |
 |---|---|
 | Architecture 4 couches | [docs/architecture.md](architecture.md) |
-| Décisions structurelles | [docs/adr/](adr/) |
+| Décisions structurelles | [docs/adr/](adr/README.md) |
 | Saturation max_tokens | [ADR-005](adr/005-saturation-detection-and-prevention.md) |
 | MetaWorkflow cross-guildes | [ADR-009](adr/009-meta-workflow-cross-guilds.md) |
 | Validation Phase 6 (autonomous) | [ADR-010](adr/010-phase-6-autonomous-validation.md) |

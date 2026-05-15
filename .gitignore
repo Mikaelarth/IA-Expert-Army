@@ -109,3 +109,7 @@ redis-data/
 Thumbs.db
 desktop.ini
 coverage.json
+
+# MkDocs site (Sprint RRR) — généré, déployé via GitHub Actions
+site/
+.mkdocs-cache/

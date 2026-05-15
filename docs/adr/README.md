@@ -48,3 +48,4 @@ Format minimal :
 - [ADR-021 — Smoke tests E2E avec FakeAsyncAnthropic (sans coût API)](021-smoke-e2e-tests.md)
 - [ADR-022 — Audit codebase : 5 règles d'anti-patterns détectées automatiquement](022-codebase-audit-rules.md)
 - [ADR-023 — Audit anti-patterns intégré en CI + pre-commit](023-audit-ci-pre-commit-integration.md)
+- [ADR-024 — Site mkdocs déployé automatiquement sur GitHub Pages](024-mkdocs-site-deployment.md)

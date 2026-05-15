@@ -69,6 +69,20 @@ audit-verbose:
 audit-rule RULE:
     uv run python scripts/audit_codebase.py --rule {{RULE}}
 
+# === Documentation site (Sprint RRR) ===
+
+# Build le site mkdocs en strict (échoue sur warning — utilisé par CI)
+docs-build:
+    uv run mkdocs build --strict
+
+# Lance le serveur local mkdocs (live reload sur http://127.0.0.1:8000)
+docs-serve:
+    uv run mkdocs serve
+
+# Clean le dossier site/
+docs-clean:
+    rm -rf site
+
 # Lance UN test précis (usage: just test-one tests/unit/test_x.py::test_y)
 test-one PATTERN:
     uv run pytest {{PATTERN}} -v

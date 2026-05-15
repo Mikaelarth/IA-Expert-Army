@@ -171,4 +171,7 @@ dev = [
     "pytest-asyncio>=1.3.0",
     "pytest-cov>=7.1.0",
     "types-pyyaml>=6.0.12.20260510",
+    # Sprint RRR — site docs déployable sur GitHub Pages
+    "mkdocs-material>=9.5.0",
+    "mkdocs-mermaid2-plugin>=1.2.0",
 ]

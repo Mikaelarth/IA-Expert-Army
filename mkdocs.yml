@@ -1,0 +1,162 @@
+# Sprint RRR — site docs déployable sur GitHub Pages.
+# Sources : README.md + docs/*.md + docs/adr/*.md
+#
+# Build local      : just docs-serve   (http://127.0.0.1:8000)
+# Build production : just docs-build   (sortie dans site/)
+# Deploy : automatique via .github/workflows/docs.yml sur push main
+
+site_name: IA Expert Army
+site_description: >
+  Une armée d'agents IA experts spécialisés qui collaborent comme une entreprise
+  distribuée. Mémoire partagée vivante, évolution par expérience, autonomie sécurisée.
+site_author: MikaelArth (Mike Arthur)
+site_url: https://mikaelarth.github.io/IA-Expert-Army/
+repo_url: https://github.com/MikaelArth/IA-Expert-Army
+repo_name: MikaelArth/IA-Expert-Army
+edit_uri: edit/main/docs/
+copyright: "Copyright &copy; 2026 MikaelArth — MIT License"
+
+# Le README à la racine est utilisé comme accueil
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  language: fr
+  palette:
+    # Mode clair
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: deep purple
+      toggle:
+        icon: material/brightness-7
+        name: Passer au mode sombre
+    # Mode sombre
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: deep purple
+      toggle:
+        icon: material/brightness-4
+        name: Passer au mode clair
+  font:
+    text: Inter
+    code: JetBrains Mono
+  features:
+    # Navigation
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.indexes
+    - navigation.footer
+    - toc.follow
+    - toc.integrate
+    # Search
+    - search.suggest
+    - search.highlight
+    - search.share
+    # Code
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    # Edit page
+    - content.action.edit
+  icon:
+    repo: fontawesome/brands/github
+    edit: material/pencil
+
+markdown_extensions:
+  # Syntaxe étendue
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      permalink_title: Lien vers cette section
+  # Code highlighting + line numbers + copy button
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:mermaid2.fence_mermaid_custom
+  # Tabs
+  - pymdownx.tabbed:
+      alternate_style: true
+  # Task lists
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  # Callouts colorés
+  - pymdownx.details
+  # Emoji
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+plugins:
+  - search:
+      lang:
+        - fr
+        - en
+  - mermaid2:
+      version: 11.4.0
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/MikaelArth/IA-Expert-Army
+      name: Repo GitHub
+  generator: false  # cache "Made with Material for MkDocs"
+
+# Navigation explicite (sinon l'ordre alpha est suivi)
+nav:
+  - Accueil: index.md
+
+  - Démarrer:
+    - Getting Started (5 min): getting-started.md
+
+  - Opérations:
+    - Mode autonome 24/7: operations.md
+    - Déploiement VPS: deploy.md
+    - Runbook incidents: runbook.md
+
+  - Architecture:
+    - Vue 4 couches: architecture.md
+
+  - Décisions (ADRs):
+    - Index: adr/README.md
+    - "001 — Architecture en 4 couches": adr/001-four-layer-architecture.md
+    - "002 — Stack technique": adr/002-tech-stack.md
+    - "003 — Mode autonome avec garde-fous": adr/003-autonomy-with-guardrails.md
+    - "004 — Stratégie d'apprentissage": adr/004-learning-strategy.md
+    - "005 — Saturation max_tokens": adr/005-saturation-detection-and-prevention.md
+    - "006 — Mining strategy": adr/006-mining-strategy-and-eligibility.md
+    - "007 — A/B testing prompts (Proposed)": adr/007-prompt-ab-testing-strategy.md
+    - "008 — Sandbox read-only trade-off": adr/008-sandbox-readonly-tradeoff.md
+    - "009 — MetaWorkflow cross-guildes": adr/009-meta-workflow-cross-guilds.md
+    - "010 — Phase 6 autonomous validation": adr/010-phase-6-autonomous-validation.md
+    - "011 — Quality Guardian": adr/011-quality-guardian.md
+    - "012 — Security Auditor": adr/012-security-auditor.md
+    - "013 — Backup & disaster recovery": adr/013-backup-and-disaster-recovery.md
+    - "014 — HITL approvals": adr/014-hitl-approvals.md
+    - "015 — Mission étalon findings": adr/015-etalon-mission-findings.md
+    - "016 — Tier mixing (Opus/Sonnet/Haiku)": adr/016-tier-mixing-strategy.md
+    - "017 — Déploiement VPS multi-profile": adr/017-vps-deployment.md
+    - "018 — Notifications mobiles": adr/018-mobile-notifications.md
+    - "019 — Politique de couverture": adr/019-coverage-audit-policy.md
+    - "020 — Coverage CI automation": adr/020-coverage-ci-automation.md
+    - "021 — Smoke tests E2E": adr/021-smoke-e2e-tests.md
+    - "022 — Audit codebase 5 règles": adr/022-codebase-audit-rules.md
+    - "023 — Audit en CI + pre-commit": adr/023-audit-ci-pre-commit-integration.md
+    - "024 — Site mkdocs sur GitHub Pages": adr/024-mkdocs-site-deployment.md

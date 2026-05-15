@@ -9,15 +9,15 @@
 ## Table des matières
 
 1. [Vue d'ensemble du mode autonome](#1-vue-densemble-du-mode-autonome)
-2. [Déploiement sur VPS](#2-déploiement-sur-vps)
+2. [Déploiement sur VPS](#2-deploiement-sur-vps)
 3. [Configuration des garde-fous](#3-configuration-des-garde-fous)
 4. [Notifications mobiles](#4-notifications-mobiles-discordslacktelegram)
-5. [Monitoring et observabilité](#5-monitoring-et-observabilité)
-6. [Réduire le coût Anthropic](#6-réduire-le-coût-anthropic)
-7. [Migration VPS → VPS sans perte](#7-migration-vps--vps-sans-perte)
-8. [Backup & disaster recovery](#8-backup--disaster-recovery)
+5. [Monitoring et observabilité](#5-monitoring-et-observabilite)
+6. [Réduire le coût Anthropic](#6-reduire-le-cout-anthropic)
+7. [Migration VPS → VPS sans perte](#7-migration-vps-vps-sans-perte)
+8. [Backup & disaster recovery](#8-backup-disaster-recovery)
 9. [Mode service systemd](#9-mode-service-systemd)
-10. [Commandes opérationnelles courantes](#10-commandes-opérationnelles-courantes)
+10. [Commandes opérationnelles courantes](#10-commandes-operationnelles-courantes)
 
 ---
 

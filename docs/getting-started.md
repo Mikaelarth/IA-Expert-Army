@@ -1,6 +1,6 @@
 # Getting Started — IA Expert Army en 5 minutes
 
-> De zéro à ta première mission live (~$0.50). Si tu veux juste regarder ce que ça fait sans dépenser un cent, va à **[Étape 4 — Smoke test](#étape-4--smoke-test-sans-coût-api)**.
+> De zéro à ta première mission live (~$0.50). Si tu veux juste regarder ce que ça fait sans dépenser un cent, va à **[Étape 4 — Smoke test](#etape-4-smoke-test-sans-cout-api)**.
 
 ---
 
@@ -140,7 +140,7 @@ Attendu (après ~2 min) :
 | Lancer en autonome 24/7 sur un VPS | [docs/operations.md](operations.md) |
 | Comprendre l'architecture en 4 couches | [docs/architecture.md](architecture.md) |
 | Quoi faire quand quelque chose casse | [docs/runbook.md](runbook.md) |
-| Décisions techniques structurantes | [docs/adr/](adr/) (23 ADRs) |
+| Décisions techniques structurantes | [docs/adr/](adr/README.md) (23 ADRs) |
 | Réduire le coût Anthropic | [ADR-016 — Tier mixing](adr/016-tier-mixing-strategy.md) |
 | Notifications mobiles (Discord/Telegram) | [ADR-018 — Notifications mobiles](adr/018-mobile-notifications.md) |
 
@@ -181,4 +181,4 @@ uv run python scripts/nightly_learning.py
 uv run python scripts/audit_codebase.py
 ```
 
-Toutes les commandes ont un `--help`. Le [README.md](../README.md) liste les outils CLI principaux.
+Toutes les commandes ont un `--help`. Le [Getting Started](index.md) et l'[Operations Guide](operations.md) listent les outils CLI principaux par cas d'usage.

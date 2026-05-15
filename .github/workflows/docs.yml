@@ -1,0 +1,77 @@
+name: Deploy MkDocs site to GitHub Pages
+
+# Sprint RRR — déploiement automatique du site docs/ sur GitHub Pages.
+# Le site est buildé via mkdocs-material + mermaid2-plugin et publié dans
+# l'environnement github-pages.
+#
+# Activation GitHub Pages (à faire une seule fois côté repo settings) :
+#   Settings → Pages → Source: GitHub Actions
+#
+# URL finale : https://mikaelarth.github.io/IA-Expert-Army/
+
+on:
+  push:
+    branches: [main]
+    # Ne re-build que si la doc ou la config mkdocs change.
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "README.md"
+      - ".github/workflows/docs.yml"
+  # Permet de déclencher manuellement depuis l'UI Actions
+  workflow_dispatch:
+
+# Permissions minimales pour publier sur Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Une seule build à la fois — annule les anciennes sur même branche
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Sync dev dependencies (mkdocs-material + mermaid2-plugin)
+        run: uv sync --all-extras
+
+      # Strict mode = build échoue sur un warning (lien cassé, etc.)
+      # Cohérent avec la politique anti-dérive du projet (Sprint LLL / QQQ).
+      - name: Build MkDocs site (strict)
+        run: uv run mkdocs build --strict
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
