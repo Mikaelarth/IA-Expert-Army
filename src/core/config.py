@@ -105,6 +105,23 @@ class Settings(BaseSettings):
         description="Indicateur du profil hardware (vps1/vps2/vps3/local) pour diagnostic",
     )
 
+    # --- Notifications (Sprint HHH) ---
+    # Webhook pour recevoir les notifications mobiles : daily digest, warnings
+    # autonomous_run, alertes critiques (budget, killswitch).
+    # Auto-détection du backend depuis l'URL :
+    #   - discord.com/api/webhooks/...    → discord (embeds colorés)
+    #   - hooks.slack.com/services/...    → slack (blocks)
+    #   - api.telegram.org/bot.../sendMessage → telegram (markdown)
+    #   - autre URL                       → generic (POST JSON brut, n8n/pipedream/zapier)
+    notify_webhook_url: str = Field(
+        "",
+        description="Webhook URL pour notifications (Discord/Slack/Telegram/generic). Vide = désactivé.",
+    )
+    notify_backend: Literal["auto", "discord", "slack", "telegram", "generic", "none"] = Field(
+        "auto",
+        description="Backend notifier (auto = détection depuis URL)",
+    )
+
     @property
     def project_root(self) -> Path:
         return PROJECT_ROOT

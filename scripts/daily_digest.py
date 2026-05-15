@@ -338,6 +338,11 @@ def show(
     output: Path | None = typer.Option(
         None, "--output", "-o", help="Fichier où sauvegarder le digest"
     ),
+    notify: bool = typer.Option(
+        False,
+        "--notify",
+        help="Envoie aussi le digest via webhook (Sprint HHH — Discord/Slack/Telegram/generic)",
+    ),
 ) -> None:
     target = _parse_date(date_str)
     digest = _build_digest(target)
@@ -346,6 +351,30 @@ def show(
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(digest, encoding="utf-8")
         console.print(f"\n[dim]Digest sauvegardé dans {output}[/dim]")
+
+    if notify:
+        from src.core.notifier import NotifyLevel, get_notifier_from_settings
+
+        n = get_notifier_from_settings()
+        if not n.is_enabled:
+            console.print(
+                "[yellow]--notify : NOTIFY_WEBHOOK_URL non configuré dans .env, "
+                "envoi skippé.[/yellow]"
+            )
+        else:
+            # Choix du level depuis le contenu : si REJECTED présent → warning,
+            # sinon info. Heuristique simple, à raffiner si besoin.
+            level = NotifyLevel.WARNING if "REJECTED" in digest else NotifyLevel.INFO
+            title = f"Digest IA-Expert-Army {target.isoformat()}"
+            sent = n.send(level, title, digest)
+            if sent:
+                console.print(
+                    f"[dim green]Digest envoyé via webhook ({n.backend})[/dim green]"
+                )
+            else:
+                console.print(
+                    "[red]Échec d'envoi webhook (cf. logs). Digest local OK.[/red]"
+                )
 
 
 if __name__ == "__main__":

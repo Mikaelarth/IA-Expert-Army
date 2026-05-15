@@ -50,6 +50,44 @@ ok()   { echo -e "${GREEN}[ok]${NC} $*"; }
 warn() { echo -e "${YELLOW}[warn]${NC} $*" >&2; }
 err()  { echo -e "${RED}[err]${NC} $*" >&2; }
 
+# Lecture d'un champ scalaire dans un JSON. Préfère jq, fallback python3.
+# Refactor Sprint HHH.1 : jq est absent de certains VPS minimaux et de Git Bash
+# (Windows dev). Python3 est garanti présent (installé par deploy_vps.sh).
+json_get() {
+    local file="$1" key="$2"
+    if command -v jq &>/dev/null; then
+        jq -r ".${key}" "$file"
+    else
+        python3 -c "import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])" "$file" "$key"
+    fi
+}
+
+json_pretty() {
+    local file="$1"
+    if command -v jq &>/dev/null; then
+        jq . "$file"
+    else
+        python3 -c "import json,sys; print(json.dumps(json.load(open(sys.argv[1])), indent=2))" "$file"
+    fi
+}
+
+# Conversion bytes → human-readable (KiB/MiB/GiB). Fallback si numfmt absent.
+human_size() {
+    local bytes="$1"
+    if command -v numfmt &>/dev/null; then
+        numfmt --to=iec --suffix=B "$bytes"
+    else
+        # Fallback python3 — toujours dispo
+        python3 -c "
+b = $bytes
+for unit in ('B','KiB','MiB','GiB','TiB'):
+    if b < 1024:
+        print(f'{b:.1f}{unit}'); break
+    b /= 1024
+"
+    fi
+}
+
 usage() {
     cat <<EOF
 Usage : $0 <action> [archive]
@@ -130,35 +168,86 @@ do_export() {
     done
 
     # Manifest JSON avec checksums + métadonnées
+    # Sprint HHH.1 — Bugfix : génération via python3 pour escape correct des
+    # paths Windows (`C:\Users\...`) qui cassaient le JSON parsing en bash.
     log "Génération du manifest…"
     cd "$SNAPSHOT"
     GIT_COMMIT=$(cd "$INSTALL_DIR" && git rev-parse HEAD 2>/dev/null || echo "unknown")
     HOSTNAME_SRC=$(hostname)
     NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-    # Checksums sha256 de tous les fichiers
-    find . -type f -not -name 'manifest.json' -print0 | \
-        xargs -0 sha256sum > checksums.sha256
+    # Checksums sha256 — Sprint HHH.1 : génération via python3 pour
+    # déterminisme cross-OS. `sha256sum` sur Git Bash Windows hashe
+    # différemment selon mode texte/binaire et convertit CRLF→LF, ce qui
+    # cassait le verify après tar+extract. Python3 hashe toujours en binaire
+    # exact byte-for-byte.
+    python3 -c "
+import hashlib, os, sys
+out = []
+for root, _, files in os.walk('.'):
+    for fname in sorted(files):
+        if fname == 'manifest.json':
+            continue
+        path = os.path.join(root, fname)
+        h = hashlib.sha256()
+        with open(path, 'rb') as f:
+            for chunk in iter(lambda: f.read(8192), b''):
+                h.update(chunk)
+        # Format compatible sha256sum -c : '<hash>  <path>' (2 espaces, mode binaire)
+        rel = os.path.relpath(path, '.').replace(os.sep, '/')
+        out.append(f'{h.hexdigest()}  ./{rel}')
+with open('checksums.sha256', 'w', newline='\n') as f:
+    f.write('\n'.join(out) + '\n')
+"
 
-    cat > manifest.json <<EOF
-{
-  "schema_version": "1",
-  "created_at": "$NOW",
-  "source_hostname": "$HOSTNAME_SRC",
-  "source_install_dir": "$INSTALL_DIR",
-  "source_git_commit": "$GIT_COMMIT",
-  "n_files": $(wc -l < checksums.sha256),
-  "total_bytes": $(du -sb . | awk '{print $1}'),
-  "checksums_file": "checksums.sha256",
-  "paths_included": [$(printf '"%s",' "${PATHS_TO_BACKUP[@]}" | sed 's/,$//')]
+    N_FILES=$(wc -l < checksums.sha256 | tr -d ' ')
+    TOTAL_BYTES=$(du -sb . 2>/dev/null | awk '{print $1}')
+    if [[ -z "$TOTAL_BYTES" ]]; then
+        # Fallback portable (BSD du n'a pas -b ; on somme via python)
+        TOTAL_BYTES=$(python3 -c "
+import os, sys
+total = 0
+for root, _, files in os.walk('.'):
+    for f in files:
+        try: total += os.path.getsize(os.path.join(root, f))
+        except OSError: pass
+print(total)
+")
+    fi
+
+    # Génération JSON via python3 (escape natif des paths Windows)
+    PATHS_JSON=$(python3 -c "
+import json, sys
+paths = sys.argv[1:]
+print(json.dumps(paths))
+" "${PATHS_TO_BACKUP[@]}")
+
+    python3 -c "
+import json, sys
+manifest = {
+    'schema_version': '1',
+    'created_at': sys.argv[1],
+    'source_hostname': sys.argv[2],
+    'source_install_dir': sys.argv[3],
+    'source_git_commit': sys.argv[4],
+    'n_files': int(sys.argv[5]),
+    'total_bytes': int(sys.argv[6]),
+    'checksums_file': 'checksums.sha256',
+    'paths_included': json.loads(sys.argv[7]),
 }
-EOF
-    ok "Manifest généré ($(jq -r '.n_files' manifest.json) fichiers, $(numfmt --to=iec --suffix=B "$(jq -r '.total_bytes' manifest.json)"))"
+with open('manifest.json', 'w') as f:
+    json.dump(manifest, f, indent=2)
+" "$NOW" "$HOSTNAME_SRC" "$INSTALL_DIR" "$GIT_COMMIT" "$N_FILES" "$TOTAL_BYTES" "$PATHS_JSON"
+
+    ok "Manifest généré ($N_FILES fichiers, $(human_size "$TOTAL_BYTES"))"
 
     # Tar avec compression
+    # Sprint HHH.1 — Bugfix : --force-local empêche tar d'interpréter les
+    # paths Windows comme `host:path` rcp-style (ex: C:\Users\... → essaie SSH
+    # vers host "C", erreur "Cannot connect to C: resolve failed").
     log "Compression…"
     cd "$TMPDIR"
-    tar -czf "$ARCHIVE" -C "$SNAPSHOT" .
+    tar --force-local -czf "$ARCHIVE" -C "$SNAPSHOT" .
 
     ARCHIVE_SIZE=$(du -h "$ARCHIVE" | cut -f1)
     ok "Archive créée : $ARCHIVE ($ARCHIVE_SIZE)"
@@ -195,7 +284,7 @@ do_verify() {
 
     log "Vérification de $ARCHIVE…"
     TMPDIR=$(mktemp -d)
-    tar -xzf "$ARCHIVE" -C "$TMPDIR"
+    tar --force-local -xzf "$ARCHIVE" -C "$TMPDIR"
 
     if [[ ! -f "$TMPDIR/manifest.json" ]]; then
         err "Manifest manquant — archive corrompue ou pas générée par migrate_vps.sh"
@@ -207,11 +296,38 @@ do_verify() {
     fi
 
     log "Métadonnées :"
-    jq . "$TMPDIR/manifest.json"
+    json_pretty "$TMPDIR/manifest.json"
 
     log "Vérification des checksums…"
     cd "$TMPDIR"
-    if sha256sum -c checksums.sha256 --quiet; then
+    # Sprint HHH.1 — Vérification via python3 pour symétrie avec la génération
+    # (cf. comment dans do_export). sha256sum -c divergeait sur Windows à cause
+    # du mode texte/binaire.
+    if python3 -c "
+import hashlib, os, sys
+ok = True
+with open('checksums.sha256') as f:
+    for line in f:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            expected, path = line.split('  ', 1)
+        except ValueError:
+            print(f'BAD LINE: {line}', file=sys.stderr); ok = False; continue
+        if not os.path.exists(path):
+            print(f'MISSING: {path}', file=sys.stderr); ok = False; continue
+        h = hashlib.sha256()
+        with open(path, 'rb') as fp:
+            for chunk in iter(lambda: fp.read(8192), b''):
+                h.update(chunk)
+        if h.hexdigest() != expected:
+            print(f'MISMATCH: {path}', file=sys.stderr)
+            print(f'  expected={expected}', file=sys.stderr)
+            print(f'  got     ={h.hexdigest()}', file=sys.stderr)
+            ok = False
+sys.exit(0 if ok else 1)
+"; then
         ok "Checksums valides"
     else
         err "❌ Checksums divergent — archive altérée"
@@ -228,8 +344,8 @@ do_list() {
     if [[ -z "$ARCHIVE" ]]; then err "Manque le chemin de l'archive."; usage; exit 1; fi
     if [[ ! -f "$ARCHIVE" ]]; then err "Archive introuvable : $ARCHIVE"; exit 1; fi
     log "Contenu de $ARCHIVE :"
-    tar -tzf "$ARCHIVE" | head -50
-    n=$(tar -tzf "$ARCHIVE" | wc -l)
+    tar --force-local -tzf "$ARCHIVE" | head -50
+    n=$(tar --force-local -tzf "$ARCHIVE" | wc -l)
     log "Total : $n entrées"
 }
 
@@ -268,7 +384,7 @@ do_import() {
 
     log "Extraction…"
     TMPDIR=$(mktemp -d)
-    tar -xzf "$ARCHIVE" -C "$TMPDIR"
+    tar --force-local -xzf "$ARCHIVE" -C "$TMPDIR"
 
     log "Restauration des artefacts dans $INSTALL_DIR…"
     for p in data/memory data/chroma data/budget.json data/error_log.json \

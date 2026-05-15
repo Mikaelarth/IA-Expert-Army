@@ -42,3 +42,4 @@ Format minimal :
 - [ADR-015 — Mission étalon : findings et seuils empiriques](015-etalon-mission-findings.md)
 - [ADR-016 — Stratégie de tier mixing (Opus / Sonnet / Haiku)](016-tier-mixing-strategy.md)
 - [ADR-017 — Déploiement VPS multi-profile (vps1/vps2/vps3)](017-vps-deployment.md)
+- [ADR-018 — Notifications mobiles via webhook (Discord/Slack/Telegram/generic)](018-mobile-notifications.md)

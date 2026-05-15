@@ -398,6 +398,12 @@ def run(
     output: Path | None = typer.Option(
         None, "--output", "-o", help="Chemin du rapport markdown (défaut auto)"
     ),
+    notify: bool = typer.Option(
+        False,
+        "--notify",
+        help="Sprint HHH : envoie le rapport final via webhook (NOTIFY_WEBHOOK_URL). "
+        "Niveau warning si garde-fou déclenché, sinon success.",
+    ),
 ) -> None:
     s = get_settings()
     setup_logging(level=s.log_level, fmt=s.log_format)
@@ -448,8 +454,41 @@ def run(
     console.print("\n" + report)
     console.print(f"\n[bold green]Rapport écrit :[/bold green] {out_path}")
 
+    queue_drained = stop_reason == "queue épuisée"
+
+    if notify:
+        from src.core.notifier import NotifyLevel, get_notifier_from_settings
+
+        n = get_notifier_from_settings()
+        if not n.is_enabled:
+            console.print(
+                "[yellow]--notify : NOTIFY_WEBHOOK_URL non configuré, envoi skippé.[/yellow]"
+            )
+        else:
+            n_done = len(history)
+            n_total = len(items)
+            cost_spent = b_start - b_end if (b_start is not None and b_end is not None) else 0.0
+            level = NotifyLevel.SUCCESS if queue_drained else NotifyLevel.WARNING
+            title = (
+                f"Autonomous run {'OK' if queue_drained else 'STOPPED'} "
+                f"({n_done}/{n_total} missions)"
+            )
+            body = (
+                f"**Raison d'arrêt :** {stop_reason}\n"
+                f"**Missions exécutées :** {n_done}/{n_total}\n"
+                f"**Budget consommé :** ${cost_spent:.2f} "
+                f"(début ${b_start:.2f} → fin ${b_end:.2f})\n"
+                f"**Durée :** {(ended - started).total_seconds() / 60:.1f} min\n\n"
+                f"Rapport complet : {out_path}"
+            )
+            sent = n.send(level, title, body)
+            if sent:
+                console.print(
+                    f"[dim green]Rapport envoyé via webhook ({n.backend})[/dim green]"
+                )
+
     # exit code : 0 si stop = queue épuisée, 3 si garde-fou déclenché
-    raise SystemExit(0 if stop_reason == "queue épuisée" else 3)
+    raise SystemExit(0 if queue_drained else 3)
 
 
 if __name__ == "__main__":

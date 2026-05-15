@@ -77,3 +77,40 @@ def test_settings_vps_profile_rejects_unknown_values(monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("VPS_PROFILE", "vps42")
     with pytest.raises(ValidationError):
         Settings(_env_file=None)  # type: ignore[call-arg]
+
+
+# ===== Sprint HHH — Notifier =====
+
+
+def test_settings_notify_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Sprint HHH : notify_webhook_url vide par défaut → no-op silencieux."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    s = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert s.notify_webhook_url == ""
+    assert s.notify_backend == "auto"
+
+
+def test_settings_notify_url_loaded_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    monkeypatch.setenv("NOTIFY_WEBHOOK_URL", "https://discord.com/api/webhooks/X/Y")
+    s = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert s.notify_webhook_url == "https://discord.com/api/webhooks/X/Y"
+
+
+@pytest.mark.parametrize(
+    "backend", ["auto", "discord", "slack", "telegram", "generic", "none"]
+)
+def test_settings_notify_backend_accepts_known_values(
+    monkeypatch: pytest.MonkeyPatch, backend: str
+) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    monkeypatch.setenv("NOTIFY_BACKEND", backend)
+    s = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert s.notify_backend == backend
+
+
+def test_settings_notify_backend_rejects_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    monkeypatch.setenv("NOTIFY_BACKEND", "smoke-signal")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)  # type: ignore[call-arg]
