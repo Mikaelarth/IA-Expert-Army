@@ -19,6 +19,198 @@ versioning [SemVer](https://semver.org/spec/v2.0.0.html).
 - **Couverture meta-mission `verdict?` filter** : `list_recent_meta_missions`
   MCP n'expose pas encore un filtre verdict optionnel (mentionné dans
   ADR-009 "Pour la suite" — pas critique mais nice-to-have).
+- **Engineering > 1000 lignes** : non testé, dette tracée publiquement dans
+  README (zone de confort). Sprint FFF planifié — décomposition livraison
+  automatique en sous-missions.
+- **Vague 2 tier mixing** (ADR-016) : ChiefOrchestrator + ResearchLead +
+  ContentStrategist sont candidats à passer Opus → Sonnet, mais bloqué tant
+  qu'on n'a pas validé sur 5 missions live d'observation.
+
+## [0.3.0-alpha] — 2026-05-15 — Mode autonome production-ready (Sprints EEE → RRR)
+
+11 sprints de consolidation : économie API, déploiement VPS, notifications
+mobiles, garanties qualité auto-vérifiées en CI, smoke E2E sans coût, audit
+anti-pattern AST-based, doc utilisateur consolidée, site mkdocs déployé.
+
+### Added — Sprint RRR : Site mkdocs sur GitHub Pages (commit `dd94855`)
+
+- `mkdocs.yml` avec theme **mkdocs-material** : mode sombre/clair auto,
+  recherche client-side multi-langue, copy-to-clipboard, Mermaid plugin.
+- `docs/index.md` : page d'accueil dédiée au site (hero + 3 cartes + CTA),
+  séparée du README GitHub (objectifs distincts).
+- `.github/workflows/docs.yml` : déploiement auto sur push main (paths
+  filtrés), via `actions/deploy-pages@v4` dans env `github-pages`.
+- 3 recipes justfile : `docs-build` (strict), `docs-serve` (live reload),
+  `docs-clean`.
+- 3 bugs trouvés/fixés grâce au strict mode : ancres avec accents (slugify),
+  lien `../README.md` cross-dir, liens `adr/` ambigus.
+- ADR-024 documente design + 5 alternatives écartées.
+
+### Added — Sprint PPP : Doc utilisateur consolidée (commit `192ad26`)
+
+- `docs/getting-started.md` (184 lignes) : démarrage 5 min, smoke test
+  étape 4 sans coût API, troubleshooting démarrage (6 cas typiques).
+- `docs/operations.md` (360 lignes) : vue unifiée mode autonome 24/7 sur
+  VPS (11 sections : autonome, deploy, garde-fous, notifications, monitoring,
+  économie, migration, backup, systemd, commandes, incidents).
+- README.md condensé (226 → 207 lignes) : section "En 3 liens" en tête,
+  démarrage express en 5 lignes, "Garanties de qualité auto-vérifiées"
+  (3 portes), badges enrichis (Audit, ADRs).
+
+### Added — Sprint QQQ : Audit en CI + pre-commit (commit `3212528`)
+
+- Step CI dédié dans `.github/workflows/ci.yml` lance
+  `audit_codebase.py --strict` → bloque PR si findings.
+- Hook pre-commit `audit-codebase` (1-2s, skippable via
+  `SKIP=audit-codebase`).
+- Bugfix tolérance ±2 lignes pour ORPHAN_TODO : ruff format peut déplacer
+  `# audit: ignore` d'1 ligne, le détecteur cherche désormais sur fenêtre.
+- ADR-023 documente "3 portes en cascade" (pre-commit + CI + branch
+  protection).
+
+### Added — Sprint LLL : Anti-pattern checker AST-based (commit `328a8d7`)
+
+- `src/core/audit.py` : 5 règles AST-based — FILE_TOO_LONG (>500 lignes),
+  TEST_NO_ASSERT (assert/raises/assert_*/fail/skip), ORPHAN_TODO (sans
+  référence #issue / Sprint XXX / ADR-NNN / @user / date),
+  OPUS_WITHOUT_JUSTIFICATION (commentaire `# Opus :` à ±3 lignes),
+  HARDCODED_PROMPT (Assign str > 300 chars avec indicateurs prompt).
+- `scripts/audit_codebase.py` : CLI Rich + flags `--rule`, `--strict`,
+  `--json`, `--verbose`, `--max-lines`.
+- Whitelisting via `# audit: ignore <RULE>` à la ligne du finding.
+- 34 tests unitaires + 4 recipes justfile (`audit`, `audit-strict`,
+  `audit-verbose`, `audit-rule X`).
+- Bug critique trouvé : 1ère implémentation regex de TEST_NO_ASSERT
+  → 466 faux positifs sur 539 vrais tests. Fix : passage à `ast.parse()`
+  + `ast.walk()`. Pareil pour HARDCODED_PROMPT (matchait docstrings de
+  modules) — switch AST exclut naturellement.
+- Validation empirique : 487 findings initiaux → 13 vrais positifs →
+  0 finding après corrections + whitelists.
+- 5 corrections OPUS : Architect, ChiefOrchestrator, ResearchLead,
+  ContentStrategist, hello_agent — commentaires `# Opus : ...` ajoutés.
+- 1 correction TEST_NO_ASSERT : `assert out is None` ajouté.
+- 5 whitelists FILE_TOO_LONG (memory_search.py + 4 tests longs cohérents).
+- ADR-022 documente design.
+
+### Added — Sprint OOO : Smoke tests E2E sans coût API (commit `bdd7d23`)
+
+- `tests/integration/test_smoke_autonomous.py` (11 tests, 5s, $0) :
+  - `test_engineering_workflow_smoke_e2e` : mission slugify, 4 agents
+    enchaînés, 2 fichiers extraits, 4 épisodes archivés.
+  - `test_research_workflow_smoke_e2e` : ResearchLead → TechWatch →
+    Synthesizer → Reviewer.
+  - `test_router_dispatches_engineering_correctly` : routing auto.
+  - `test_router_force_guild_overrides_classifier` : force_guild gagne.
+  - 6 tests paramétrés `test_detect_agent_name`.
+- `FakeAsyncAnthropic` : drop-in replacement, détecte agent via H1 prompt
+  (`# <Display Name> — System Prompt`).
+- CANON_RESPONSES pour 9 agents (format copié-collé du PATTERN observé sur
+  vraies missions APPROVED dans `data/memory/missions/`).
+- Bug critique trouvé : 1ère détection par mots-clés produisait des faux
+  positifs (le prompt CodeReviewer contient "Backend Developer" en
+  référence amont → détecté comme backend_developer). Fix : matcher sur
+  le H1 standard via regex, ignorer le corps.
+- ADR-021 documente le design + 4 alternatives écartées.
+
+### Added — Sprint NNN : Health check étendu (commit `7e08f5e`)
+
+- 5 nouveaux checks dans `scripts/health_check.py` :
+  `check_vps_config`, `check_coverage_config`, `check_notifier_config`,
+  `check_deploy_scripts`, `check_adrs_index`.
+- Flag `--full` + `--notify-test` (envoie message test via webhook).
+- 11 tests unitaires `tests/unit/test_health_check.py`.
+
+### Added — Sprint KKK : Coverage CI automation (commit `e841924`)
+
+- `pyproject.toml` `[tool.coverage.report]` : `fail_under = 90`, precision 1,
+  show_missing, exclude_lines patterns.
+- Step CI `Coverage gate (90% global, fail on regression)` dans
+  `.github/workflows/ci.yml`.
+- Upload artifact `coverage.xml` (rétention 30 jours).
+- 3 recipes justfile : `coverage`, `coverage-strict`, `coverage-html`.
+- ADR-020 documente "workflow d'évolution du seuil" + 5 alternatives.
+
+### Added — Sprint JJJ : Audit honnête couverture (commit `4c99a4c`)
+
+- Vraie mesure : 91% global mesurée vs 90% annoncée (badge tenait honnêtement).
+- 4 modules sous-couverts identifiés et comblés :
+  - `tracing.py` 64 → 89% (+5 tests path Langfuse actif mocké)
+  - `memory_search.py` 73 → 85% (+11 tests error paths)
+  - `sandbox/runner.py` 84 → 95% (+5 tests Docker errors)
+  - `sandbox_validate.py` 79 → 100% (+6 tests print_sandbox_result)
+- 27 nouveaux tests, total : 491 → 517 (+26).
+- ADR-019 documente politique "mesurer avant d'annoncer" + seuils par
+  catégorie de module (core ≥90%, sandbox ≥90%, orchestrator ≥85%, etc.).
+
+### Added — Sprint HHH : Notifier mobile + round-trip migrate_vps (commit `1bb692e`)
+
+- `src/core/notifier.py` : Notifier class avec auto-détection backend depuis
+  l'URL (Discord embeds, Slack blocks, Telegram markdown, generic JSON).
+  POST via urllib stdlib (zéro nouvelle dep). Échec gracieux garanti.
+- 4 niveaux : INFO / SUCCESS / WARNING / CRITICAL avec emojis + couleurs.
+- 31 tests unitaires couvrant détection, payloads, échecs HTTP/réseau/timeout,
+  truncation, helpers.
+- Settings : `NOTIFY_WEBHOOK_URL` + `NOTIFY_BACKEND` (Literal validé).
+- Intégration `daily_digest.py --notify` + `autonomous_run.py --notify`.
+- Test round-trip `tests/integration/test_migrate_vps.py` (6 tests E2E).
+- **3 bugs critiques fixés dans `migrate_vps.sh`** révélés par le test :
+  manifest JSON cassé par paths Windows (`C:\...`), `tar` interprétait `C:` 
+  comme host SSH (fix `--force-local`), `sha256sum` mode texte/binaire 
+  incohérent sur Windows (fix génération via python3).
+- ADR-018 documente design notifications + 5 alternatives écartées.
+
+### Added — Sprint GGG : Toolkit VPS multi-profile (commit `427ad46`)
+
+- `scripts/deploy_vps.sh` : provisioning idempotent Ubuntu 22.04+ en 5 min
+  (apt + Docker + uv + clone + user iaa-army + .env + sandbox build).
+  Auto-détection profil VPS depuis `/proc/meminfo` (≤9G=vps1, ≤14G=vps2,
+  sinon vps3).
+- `scripts/migrate_vps.sh` : actions `export | import | verify | list-content`.
+  Snapshot atomique (killswitch engagé), manifest JSON + checksums sha256,
+  backup pré-migration auto, permissions correctes (chown iaa-army).
+- Settings adaptables : `enable_sandbox` (kill-switch), `vps_profile`
+  (Literal informatif).
+- `docs/deploy.md` (393 lignes) : 10 sections (choix VPS, install, .env,
+  vérifs, migration, systemd, sécu, monitoring, troubleshooting).
+- `docs/runbook.md` : +2 sections (#13 migration échouée, #14 sandbox
+  désactivé).
+- ADR-017 documente décisions + 5 alternatives (Ansible, Terraform, etc.).
+
+### Added — Sprint EEE.v1 : Tier mixing initial (commit `dcdd2fd`)
+
+- SkillExtractor (mining nightly) : Opus → Sonnet.
+- MetaDecomposer (cross-guildes) : Opus → Sonnet.
+- 19 tests régression assertant tier exact par agent.
+- Test méta `test_opus_agent_count_under_threshold` plafonne à 7 Opus max.
+- ADR-016 documente 4 catégories d'agents + vague 1/vague 2.
+- Économie attendue : ~10-20% sur missions cross-guildes.
+
+### Added — Sprint DDD : Mission étalon FastAPI (commit `607e791`)
+
+- BackendDeveloper `DEFAULT_MAX_TOKENS` : 4096 → 16384.
+- Parser fallback élargi `_RECOGNIZED_TOP_LEVEL_FIELDS` (verdict, verdict_qg,
+  verdict_sec, etc.) — Sprint DDD.bis fix critique.
+- Mission étalon mini-API FastAPI complète (JWT + CRUD + tests + Docker)
+  APPROVED 0.93 en 12 min / $1.74 — preuve zone confort 400-500 lignes
+  multi-fichiers.
+- ADR-015 documente findings empiriques.
+
+### Stats — fin v0.3.0-alpha
+
+- **Tests** : 415 → 573 (+158), 0 régression
+- **Coverage** : 93% mesurée + gardée par CI (fail_under=90)
+- **Audit** : 0 finding sur le codebase (5 règles AST gardées CI + pre-commit)
+- **ADRs** : 15 → 24 (+9 : 015 à 024)
+- **Docs utilisateur** : 3 (getting-started + operations + architecture) +
+  site mkdocs déployable
+- **Notifier** : 4 backends (Discord/Slack/Telegram/generic)
+- **Toolkit VPS** : 2 scripts shell testés round-trip (6 tests intégration)
+- **Économie API** : ~10-20% sur cross-guildes (tier mixing vague 1)
+- **Bugs critiques fixés en passant** : 8 (3 migrate_vps + 1 détection agent
+  smoke + 1 ORPHAN_TODO tolérance + 3 mkdocs strict)
+- **Workflows CI** : 1 → 2 (test + docs)
+- **Garanties auto-vérifiées** : 3 portes (coverage + anti-patterns +
+  smoke E2E)
 
 ## [0.2.0] — 2026-05-14 — Phase 6+7 livrées + audit qualité (Sprint UU)
 
@@ -257,5 +449,7 @@ définition de la vision, choix de stack, ADRs initiaux.
 
 ---
 
-[Unreleased]: https://github.com/MikaelArth/IA-Expert-Army/compare/v0.1.0-rc1...HEAD
+[Unreleased]: https://github.com/MikaelArth/IA-Expert-Army/compare/v0.3.0-alpha...HEAD
+[0.3.0-alpha]: https://github.com/MikaelArth/IA-Expert-Army/compare/v0.2.0...v0.3.0-alpha
+[0.2.0]: https://github.com/MikaelArth/IA-Expert-Army/compare/v0.1.0-rc1...v0.2.0
 [0.1.0-rc1]: https://github.com/MikaelArth/IA-Expert-Army/releases/tag/v0.1.0-rc1
