@@ -42,9 +42,14 @@ def _reset_get_settings_cache() -> None:
 def test_check_vps_config_default_shows_auto_and_sandbox_on(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Sprint NNN : par défaut, vps_profile vide → 'auto/inconnu', sandbox ON."""
-    monkeypatch.delenv("VPS_PROFILE", raising=False)
-    monkeypatch.delenv("ENABLE_SANDBOX", raising=False)
+    """Sprint NNN : par défaut, vps_profile vide → 'auto/inconnu', sandbox ON.
+
+    Note : `delenv` ne suffit pas à neutraliser le .env du projet (Pydantic-Settings
+    le lit toujours via env_file). On force explicitement les valeurs voulues avec
+    setenv pour que le test reste hermétique au .env local du développeur.
+    """
+    monkeypatch.setenv("VPS_PROFILE", "")
+    monkeypatch.setenv("ENABLE_SANDBOX", "true")
     from src.core.config import get_settings
 
     get_settings.cache_clear()  # type: ignore[attr-defined]
