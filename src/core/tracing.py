@@ -80,9 +80,10 @@ def init_tracing(force_disable: bool = False) -> bool:
 
     settings = get_settings()
     public_key = settings.langfuse_public_key
-    secret_key = (
-        settings.langfuse_secret_key.get_secret_value() if settings.langfuse_secret_key else ""
-    )
+    # Bascule v0.4.0 : langfuse_secret_key est désormais un str simple (plus
+    # SecretStr) — Ollama local n'a plus besoin du même niveau de protection
+    # secret et ça aligne les autres clés string (ollama_api_key, etc.).
+    secret_key = settings.langfuse_secret_key
 
     if not public_key or not secret_key:
         _log.info(

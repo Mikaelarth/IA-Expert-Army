@@ -55,15 +55,23 @@ def _file_lock(lock_path: Path, timeout: float = 30.0) -> Iterator[None]:
         try:
             fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
             break
-        except FileExistsError:
+        # PermissionError est traité comme FileExistsError sur Windows : la doc
+        # Microsoft confirme que O_EXCL peut lever EACCES (PermissionError) au
+        # lieu de EEXIST quand un autre process/thread a le fichier ouvert ou
+        # vient juste de l'unlink. C'est sémantiquement la même chose (lock pris
+        # ailleurs), on retry.
+        except (FileExistsError, PermissionError):
             if time.monotonic() >= deadline:
                 # Stale lock detection : un fichier vieux > 2× timeout est probablement
                 # orphelin (process crashé sans cleanup).
                 try:
                     age = time.time() - lock_path.stat().st_mtime
                     if age > timeout * 2:
-                        lock_path.unlink(missing_ok=True)
-                        continue
+                        try:
+                            lock_path.unlink(missing_ok=True)
+                            continue
+                        except OSError:
+                            pass
                 except OSError:
                     pass
                 raise TimeoutError(
@@ -74,8 +82,18 @@ def _file_lock(lock_path: Path, timeout: float = 30.0) -> Iterator[None]:
         yield
     finally:
         if fd is not None:
-            os.close(fd)
-        lock_path.unlink(missing_ok=True)
+            try:
+                os.close(fd)
+            except OSError:
+                # fd déjà fermé ou invalide — pas critique
+                pass
+        # Windows peut lever PermissionError si un autre thread vient de réacquérir
+        # le lock juste après notre close. On accepte silencieusement : le détenteur
+        # courant sera responsable du cleanup à son tour.
+        try:
+            lock_path.unlink(missing_ok=True)
+        except (PermissionError, OSError):
+            pass
 
 
 class BudgetController:

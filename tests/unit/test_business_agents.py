@@ -26,17 +26,17 @@ def memory(tmp_path: Path) -> FileMemory:
 
 def test_project_manager_uses_operational_model(settings: Settings, memory: FileMemory) -> None:
     agent = ProjectManager(memory=memory, settings=settings)
-    assert "sonnet" in agent.model.lower()
+    assert agent.model == settings.model_operational
 
 
 def test_business_analyst_uses_strategic_model(settings: Settings, memory: FileMemory) -> None:
     agent = BusinessAnalyst(memory=memory, settings=settings)
-    assert "opus" in agent.model.lower()
+    assert agent.model == settings.model_strategic
 
 
 def test_legal_reviewer_uses_operational_model(settings: Settings, memory: FileMemory) -> None:
     agent = LegalReviewer(memory=memory, settings=settings)
-    assert "sonnet" in agent.model.lower()
+    assert agent.model == settings.model_operational
 
 
 def test_business_agents_max_tokens_aligned() -> None:

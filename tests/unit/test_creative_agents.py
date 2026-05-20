@@ -25,17 +25,17 @@ def memory(tmp_path: Path) -> FileMemory:
 
 def test_content_strategist_uses_strategic_model(settings: Settings, memory: FileMemory) -> None:
     agent = ContentStrategist(memory=memory, settings=settings)
-    assert "opus" in agent.model.lower()
+    assert agent.model == settings.model_strategic
 
 
 def test_copywriter_uses_operational_model(settings: Settings, memory: FileMemory) -> None:
     agent = Copywriter(memory=memory, settings=settings)
-    assert "sonnet" in agent.model.lower()
+    assert agent.model == settings.model_operational
 
 
 def test_editor_uses_operational_model(settings: Settings, memory: FileMemory) -> None:
     agent = Editor(memory=memory, settings=settings)
-    assert "sonnet" in agent.model.lower()
+    assert agent.model == settings.model_operational
 
 
 def test_creative_agents_max_tokens_aligned() -> None:

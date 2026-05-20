@@ -10,6 +10,11 @@ En une commande, vérifie que toutes les couches sont opérationnelles :
 Bascule v0.4.0 (ADR-025) : le backend LLM est Ollama local — le check
 vérifie que le daemon répond et que les 3 modèles configurés sont pullés.
 
+# audit: ignore FILE_TOO_LONG -- ~510 lignes acceptées : 18 checks indépendants
+# regroupés dans un seul script CLI pour un usage `just health-quick`. Split
+# par couche fragmenterait l'output utilisateur (tableau unique avec 18 lignes)
+# sans gain de lisibilité.
+
 Usage:
     uv run python scripts/health_check.py
     uv run python scripts/health_check.py --quick  # skip les checks Docker (rapide)
@@ -234,7 +239,7 @@ def check_tracing() -> tuple[str, str]:
 
     s = get_settings()
     pk = s.langfuse_public_key
-    sk = s.langfuse_secret_key.get_secret_value()
+    sk = s.langfuse_secret_key
     if not pk or not sk:
         return _skipped("LANGFUSE_PUBLIC_KEY/SECRET_KEY absents — tracing en NO-OP")
     tracing.reset_for_tests()
@@ -354,13 +359,25 @@ def check_deploy_scripts() -> tuple[str, str]:
         return _warn("Scripts présents mais bash absent — syntaxe non vérifiée")
 
     for script in scripts:
-        result = subprocess.run(  # noqa: S603 — args contrôlés (paths du repo)
-            [bash, "-n", str(script)],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
+        try:
+            result = subprocess.run(  # noqa: S603 — args contrôlés (paths du repo)
+                [bash, "-n", str(script)],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            return _warn(f"bash trouvé mais inexécutable ({type(exc).__name__}) — syntaxe non vérifiée")
         if result.returncode != 0:
+            stderr = result.stderr.lower()
+            # Cas WSL Windows sans distribution installée : bash.EXE existe dans
+            # system32 mais le relai échoue. On le distingue d'une vraie erreur
+            # de syntaxe (WARN au lieu de FAIL — c'est un manque d'environnement,
+            # pas un bug du script).
+            if "wsl" in stderr or "createprocesscommon" in stderr or "no such file or directory" in stderr:
+                return _warn(
+                    f"bash trouvé mais relai WSL/exécution indisponible — syntaxe non vérifiée ({script.name})"
+                )
             return _fail(f"{script.name} : syntaxe invalide ({result.stderr[:100]})")
     return _ok(f"{len(scripts)} scripts syntaxe OK (deploy + migrate)")
 

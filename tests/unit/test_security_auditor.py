@@ -124,7 +124,7 @@ def test_has_downgrade_findings_tolerates_malformed_findings() -> None:
 def test_security_auditor_uses_operational_tier(settings: Settings, memory: FileMemory) -> None:
     """Sonnet (operational) — pas Opus, pour économie."""
     agent = SecurityAuditor(memory=memory, settings=settings)
-    assert "sonnet" in agent.model.lower()
+    assert agent.model == settings.model_operational
 
 
 def test_security_auditor_max_tokens_4096(settings: Settings, memory: FileMemory) -> None:

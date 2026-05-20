@@ -111,13 +111,17 @@ sources_count: 2
 ```"""
 
     fake_response = SimpleNamespace(
-        content=[SimpleNamespace(type="text", text=fake_yaml)],
-        usage=SimpleNamespace(input_tokens=500, output_tokens=300),
-        model="claude-opus-4-7",
-        stop_reason="end_turn",
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content=fake_yaml),
+                finish_reason="stop",
+            )
+        ],
+        usage=SimpleNamespace(prompt_tokens=500, completion_tokens=300),
+        model="qwen2.5-coder:32b",
     )
     fake_client = SimpleNamespace(
-        messages=SimpleNamespace(create=AsyncMock(return_value=fake_response))
+        chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock(return_value=fake_response)))
     )
     extractor = SkillExtractor(memory=memory, settings=settings, client=fake_client)  # type: ignore[arg-type]
 
@@ -149,13 +153,17 @@ async def test_mine_handles_invalid_yaml_gracefully(
     _add_episode(memory, "code_reviewer", quality_score=0.90)
 
     fake_response = SimpleNamespace(
-        content=[SimpleNamespace(type="text", text="**not yaml at all** %&^@")],
-        usage=SimpleNamespace(input_tokens=100, output_tokens=20),
-        model="claude-opus-4-7",
-        stop_reason="end_turn",
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content="**not yaml at all** %&^@"),
+                finish_reason="stop",
+            )
+        ],
+        usage=SimpleNamespace(prompt_tokens=100, completion_tokens=20),
+        model="qwen2.5-coder:32b",
     )
     fake_client = SimpleNamespace(
-        messages=SimpleNamespace(create=AsyncMock(return_value=fake_response))
+        chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock(return_value=fake_response)))
     )
     extractor = SkillExtractor(memory=memory, settings=settings, client=fake_client)  # type: ignore[arg-type]
 
