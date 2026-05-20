@@ -9,7 +9,10 @@ name: CI
 #
 # Ce que la CI NE peut PAS valider (validations locales seulement) :
 # - sandbox Docker (image iaa-sandbox + container exec)
-# - appels Claude API réels (coût + secret)
+# - appels LLM réels (daemon Ollama local)
+#
+# Bascule v0.4.0 (ADR-025) : plus de clé API Anthropic à exposer en CI —
+# le backend Ollama est local, les tests unit mockent toujours AsyncOpenAI.
 
 on:
   push:
@@ -26,12 +29,6 @@ jobs:
   lint-and-test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-
-    env:
-      # Clé bidon pour permettre à Settings(...) de loader sans crash.
-      # Aucun appel Claude réel n'est fait en CI — les tests unit mockent
-      # toujours le client AsyncAnthropic.
-      ANTHROPIC_API_KEY: sk-ant-ci-fake-key-not-used-for-real-calls
 
     steps:
       - name: Checkout

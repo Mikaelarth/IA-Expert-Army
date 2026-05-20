@@ -7,6 +7,53 @@ versioning [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-05-20 — Bascule du backend LLM vers Ollama local (ADR-025)
+
+**BREAKING CHANGE** : retrait complet de la dépendance Anthropic. Tous les
+appels LLM passent désormais par Ollama local via son endpoint OpenAI-
+compatible (`http://localhost:11434/v1`). Voir [ADR-025](docs/adr/025-bascule-anthropic-to-ollama.md)
+pour le rationale, le mapping de modèles et les trade-offs assumés.
+
+### Migration
+
+Pré-requis : installer Ollama (https://ollama.com) puis pull les 3 modèles
+par défaut :
+
+```bash
+ollama pull qwen2.5:32b           # model_strategic
+ollama pull qwen2.5-coder:32b     # model_operational
+ollama pull qwen2.5:14b           # model_bulk
+```
+
+Adapter `.env` (les variables `ANTHROPIC_*` deviennent `OLLAMA_*`, défauts
+sensés pour démarrer) — cf. `.env.example` regénéré.
+
+### Changed
+
+- `pyproject.toml` : `anthropic>=0.40.0` → `openai>=1.50.0`. Version `0.2.0` → `0.4.0`.
+- `src/core/config.py` : `anthropic_api_key/max_retries/timeout` → `ollama_base_url/api_key/max_retries/timeout`. Défauts modèles Qwen2.5. `daily_budget_usd` défaut `0.0` (Ollama gratuit).
+- `src/orchestrator/base_agent.py` : `AsyncAnthropic` → `AsyncOpenAI`. Adaptation du shape (`chat.completions.create`, `choices[0].message.content`, `usage.prompt_tokens/completion_tokens`, `finish_reason="length"` pour saturation).
+- 9 agents (`src/orchestrator/agents/*.py`, `src/guilds/*/agents.py`, `src/learning/skill_extractor.py`, `src/orchestrator/quality_guardian.py`, `src/orchestrator/meta_workflow.py`) : signature `client: AsyncAnthropic` → `AsyncOpenAI`.
+- `src/core/pricing.py` : `estimate_cost()` retourne toujours 0 (structure conservée pour retour cloud futur).
+- `src/core/audit.py` : règle `OPUS_WITHOUT_JUSTIFICATION` désactivée par défaut (plus de tier payant à protéger).
+- `scripts/hello_agent.py`, `scripts/check_setup.py`, `scripts/health_check.py` : adaptés. Nouveau check `check_ollama_daemon` qui ping `/api/tags` et vérifie que les 3 modèles configurés sont pullés.
+- `tests/integration/test_smoke_autonomous.py` : `FakeAsyncAnthropic` → `FakeAsyncOpenAI` (mock du shape `chat.completions.create`, détection d'agent par H1 inchangée).
+- `tests/unit/test_base_agent.py` et `tests/unit/test_config.py` : réécritures complètes.
+- `.github/workflows/ci.yml` : variable d'env `ANTHROPIC_API_KEY` retirée.
+
+### Removed
+
+- Dépendance `anthropic>=0.40.0`.
+- Settings `anthropic_api_key`, `anthropic_max_retries`, `anthropic_timeout_seconds`.
+- Pricing par token Claude (Opus/Sonnet/Haiku) — conservé code-wise mais retourne 0.
+
+### Trade-offs assumés (cf. ADR-025)
+
+- **Qualité** : QualityGuardian et BusinessAnalyst dégradés (qwen2.5:32b ≈ Sonnet, pas Opus). À valider sur 3-5 missions réelles ; fallback Llama 3.3 70B si besoin.
+- **Latence** : mission étalon attendue à 25-40 min vs 12 min Sonnet (selon hardware).
+- **Coût** : $0 par mission.
+- **Souveraineté** : 100% local.
+
 ### Technical debt
 
 - **Typage mypy** : `strict = true` génère 85 erreurs sur la base (passage à

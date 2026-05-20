@@ -262,9 +262,7 @@ def test_validate_in_sandbox_enable_sandbox_param_overrides_settings(
     # doit gagner et court-circuiter.
     from src.core.config import Settings
 
-    fake_settings = Settings(  # type: ignore[call-arg]
-        _env_file=None, anthropic_api_key="sk-ant-test"
-    )
+    fake_settings = Settings(_env_file=None)  # type: ignore[call-arg]
     fake_settings.enable_sandbox = True
 
     def _fake_get_settings():

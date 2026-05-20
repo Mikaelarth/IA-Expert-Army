@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 
 from src.core.config import Settings, get_settings
 from src.learning.skills_library import SkillsLibrary
@@ -28,7 +28,7 @@ class SoftwareArchitect(BaseAgent):
         self,
         memory: FileMemory,
         settings: Settings | None = None,
-        client: AsyncAnthropic | None = None,
+        client: AsyncOpenAI | None = None,
         vector_memory: VectorMemory | None = None,
         skills_library: SkillsLibrary | None = None,
     ) -> None:

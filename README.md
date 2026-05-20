@@ -55,13 +55,21 @@ Une commande. Tout en ~100 secondes pour ~$0.50.
 ## Démarrage express
 
 ```bash
+# 1. Installer Ollama (backend LLM local, gratuit) : https://ollama.com
+ollama pull qwen2.5:32b              # model_strategic (~20 Go)
+ollama pull qwen2.5-coder:32b        # model_operational (~20 Go)
+ollama pull qwen2.5:14b              # model_bulk (~9 Go)
+
+# 2. Cloner + setup
 git clone https://github.com/MikaelArth/IA-Expert-Army.git
 cd IA-Expert-Army
-uv sync                      # installe toutes les dépendances Python (~30s)
-cp .env.example .env         # ajoute ANTHROPIC_API_KEY=sk-ant-...
+uv sync                              # installe les dépendances Python (~30s)
+cp .env.example .env                 # défauts Ollama OK out-of-the-box
 uv run python scripts/health_check.py --quick    # tout doit être vert/skip
 uv run pytest tests/integration/test_smoke_autonomous.py -v   # smoke E2E en 5s, $0
 ```
+
+Bascule **v0.4.0** (ADR-025) : plus de dépendance Anthropic, tout tourne en local.
 
 Pour démarrer une vraie mission : suivre [docs/getting-started.md](docs/getting-started.md).
 

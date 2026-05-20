@@ -433,7 +433,11 @@ class AuditConfig:
             "FILE_TOO_LONG": True,
             "TEST_NO_ASSERT": True,
             "ORPHAN_TODO": True,
-            "OPUS_WITHOUT_JUSTIFICATION": True,
+            # Désactivée par défaut depuis la bascule Ollama (ADR-025) : il
+            # n'y a plus de tier payant à protéger contre l'escalade silencieuse
+            # vers Opus. Réactiver explicitement si tu remets un backend cloud
+            # avec tarification par token.
+            "OPUS_WITHOUT_JUSTIFICATION": False,
             "HARDCODED_PROMPT": True,
         }
     )

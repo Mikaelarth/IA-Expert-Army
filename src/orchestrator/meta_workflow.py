@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
-from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
 from src.core.budget import BudgetController
@@ -95,7 +95,7 @@ class MetaDecomposer(BaseAgent):
         self,
         memory: FileMemory,
         settings: Settings | None = None,
-        client: AsyncAnthropic | None = None,
+        client: AsyncOpenAI | None = None,
     ) -> None:
         s = settings or get_settings()
         super().__init__(

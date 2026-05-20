@@ -3,9 +3,13 @@
 Contrôles :
 - Python 3.12+
 - Dépendances Phase 0 importables
-- Fichier .env présent et valide
-- Clé API Anthropic présente (sans la valider auprès du serveur)
+- Fichier .env présent
+- Settings chargeables (Ollama URL configurée)
 - Dossiers data/ accessibles en écriture
+
+Bascule v0.4.0 (ADR-025) : le backend LLM est Ollama local. Plus de
+clé API Anthropic à vérifier, mais on contrôle que le SDK openai
+est importable.
 
 Usage:
     uv run python scripts/check_setup.py
@@ -44,7 +48,7 @@ def check_python() -> tuple[bool, str]:
 
 
 def check_imports() -> tuple[bool, str]:
-    pkgs = ["anthropic", "pydantic", "pydantic_settings", "structlog", "rich", "httpx", "typer"]
+    pkgs = ["openai", "pydantic", "pydantic_settings", "structlog", "rich", "httpx", "typer"]
     missing = []
     for p in pkgs:
         try:
@@ -68,10 +72,9 @@ def check_settings() -> tuple[bool, str]:
     from src.core.config import get_settings
 
     s = get_settings()
-    key = s.anthropic_api_key.get_secret_value()
-    if not key or not key.startswith("sk-ant-"):
-        return False, "ANTHROPIC_API_KEY manquante ou invalide"
-    return True, f"clé OK (modèle stratégique : {s.model_strategic})"
+    if not s.ollama_base_url:
+        return False, "OLLAMA_BASE_URL vide dans .env"
+    return True, f"Ollama={s.ollama_base_url} · model_strategic={s.model_strategic}"
 
 
 def check_data_dirs() -> tuple[bool, str]:

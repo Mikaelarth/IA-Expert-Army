@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -20,44 +20,83 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # --- Anthropic ---
-    anthropic_api_key: SecretStr = Field(..., description="Clé API Anthropic")
-    # Retry/timeout du SDK AsyncAnthropic (Sprint VV.1). Exposés depuis le SDK
-    # mais implicites par défaut — on les rend explicites + configurables.
-    # Le SDK fait du backoff exponentiel automatique entre les retries.
-    anthropic_max_retries: int = Field(
-        2, ge=0, le=5, description="Retries auto sur 5xx/timeout/connection error"
+    # --- Backend LLM : Ollama local (ADR-025) ---
+    # Bascule v0.4.0 — l'API Anthropic est remplacée par Ollama via son
+    # endpoint OpenAI-compatible (http://localhost:11434/v1). Le SDK `openai`
+    # est utilisé comme client générique. Aucune clé API requise (placeholder
+    # "ollama" suffit), aucun coût USD : tout tourne en local.
+    ollama_base_url: str = Field(
+        "http://localhost:11434/v1",
+        description="URL de l'endpoint OpenAI-compatible d'Ollama (peut viser un LAN/proxy).",
     )
-    anthropic_timeout_seconds: float = Field(
-        300.0, ge=10.0, description="Timeout par appel Claude (défaut SDK = 600s, on serre)"
+    ollama_api_key: str = Field(
+        "ollama",
+        description="Placeholder API key — Ollama ignore la valeur mais le SDK openai l'exige.",
+    )
+    ollama_max_retries: int = Field(
+        2, ge=0, le=5, description="Retries auto sur erreurs réseau / 5xx"
+    )
+    ollama_timeout_seconds: float = Field(
+        600.0,
+        ge=10.0,
+        description=(
+            "Timeout par appel Ollama. Plus généreux qu'avec Claude car les "
+            "modèles locaux (Qwen 32B…) peuvent prendre plusieurs minutes à "
+            "générer 16k tokens, surtout sans GPU."
+        ),
     )
 
-    # --- Modèles par tier ---
-    model_strategic: str = Field("claude-opus-4-7", description="Modèle pour rôles stratégiques")
+    # --- Modèles par tier (Ollama tags exacts) ---
+    # Setup recommandé (ADR-025) : trio Qwen2.5 — qualité YAML structuré et
+    # gestion du français très solides à ces tailles. À adapter au hardware
+    # local : sur machine modeste, basculer sur qwen2.5:14b / 7b.
+    model_strategic: str = Field(
+        "qwen2.5:32b",
+        description=(
+            "Modèle pour rôles stratégiques (Architect, ChiefOrch, "
+            "QualityGuardian, BusinessAnalyst, ResearchLead, ContentStrategist). "
+            "Doit gérer le jugement nuancé."
+        ),
+    )
     model_operational: str = Field(
-        "claude-sonnet-4-6", description="Modèle pour rôles opérationnels"
+        "qwen2.5-coder:32b",
+        description=(
+            "Modèle pour rôles opérationnels (BackendDeveloper, CodeReviewer, "
+            "SecurityAuditor, Copywriter, Editor, Synthesizer, ResearchReviewer, "
+            "LegalReviewer, PM, SkillExtractor, MetaDecomposer). Spécialisé code "
+            "pour la guilde Engineering, mais reste capable sur du texte structuré."
+        ),
     )
     model_bulk: str = Field(
-        "claude-haiku-4-5-20251001", description="Modèle pour tâches volumineuses"
+        "qwen2.5:14b",
+        description=(
+            "Modèle pour tâches volumineuses simples (TechWatch findings). "
+            "Plus rapide / moins gourmand que les 32B."
+        ),
     )
 
     # --- Limites & garde-fous ---
-    daily_budget_usd: float = Field(10.0, ge=0, description="Plafond budget quotidien en USD")
+    # Backend local = coût USD = 0. Le BudgetController devient no-op si
+    # daily_budget_usd <= 0 (cf. src/core/budget.py). On garde la mécanique en
+    # place pour pouvoir re-câbler un cap en tokens/temps plus tard sans
+    # toucher le wiring.
+    daily_budget_usd: float = Field(
+        0.0, ge=0, description="Plafond budget quotidien en USD (0 = désactivé, défaut Ollama)"
+    )
     max_agent_turns: int = Field(20, ge=1, description="Nombre max de tours par agent")
     max_concurrent_agents: int = Field(5, ge=1, description="Agents concurrents max")
     circuit_breaker_error_rate: float = Field(
         0.3, ge=0, le=1, description="Seuil d'erreur déclenchant le circuit breaker"
     )
-    # Quality Guardian (Sprint YY) — peer review méta cross-guilde. Opt-in car
-    # ajoute ~$0.10-0.20/mission (1 appel Opus). À activer en mode autonome.
+    # Quality Guardian (Sprint YY) — peer review méta cross-guilde. Opt-in.
+    # En mode Ollama c'est gratuit donc l'argument coût ne joue plus, mais
+    # ça reste un appel LLM supplémentaire qui rallonge la mission de ~30-60s.
     enable_quality_guardian: bool = Field(
         False,
         description="Active le QG après chaque mission guilde (alignement promesse↔livraison)",
     )
     # Security Auditor (Sprint AAA) — audit OWASP / secrets / pratiques sécu
-    # défensives sur les missions Engineering APPROVED. Opt-in car ajoute
-    # ~$0.05-0.10/mission (1 appel Sonnet). À activer en mode autonome ou pour
-    # les missions touchant des endpoints publics / données sensibles.
+    # défensives sur les missions Engineering APPROVED. Opt-in.
     enable_security_auditor: bool = Field(
         False,
         description="Active le SecurityAuditor après CodeReviewer pour les missions Engineering",
@@ -75,7 +114,7 @@ class Settings(BaseSettings):
     # --- Langfuse ---
     langfuse_host: str = Field("http://localhost:3000")
     langfuse_public_key: str = Field("")
-    langfuse_secret_key: SecretStr = Field(SecretStr(""))
+    langfuse_secret_key: str = Field("")
 
     # --- Sandbox ---
     sandbox_image: str = Field("python:3.12-slim")
@@ -85,34 +124,19 @@ class Settings(BaseSettings):
     # Sprint GGG.1 — kill-switch explicite pour environnements sans Docker
     # ou volontairement minimaux (VPS-1 phase démarrage). Quand False, les
     # appels validate_files_in_sandbox court-circuitent : aucun build d'image
-    # demandé, aucune tentative de connexion daemon, simple log warning. Sûr
-    # à laisser à True si Docker n'est pas installé : SandboxRunner détecte
-    # déjà SandboxUnavailable gracieusement, mais ce flag évite même la
-    # tentative (utile pour CI rapide ou diagnostic).
+    # demandé, aucune tentative de connexion daemon, simple log warning.
     enable_sandbox: bool = Field(
         True,
         description="False = skip validation sandbox (run_mission --validate devient no-op silencieux)",
     )
 
     # --- VPS profile (Sprint GGG) ---
-    # Champ informatif pour adapter les warnings/comportements selon la
-    # capacité hardware. Valeurs reconnues : "vps1" (8Go), "vps2" (12Go),
-    # "vps3" (24Go), "local" (poste dev), "" (auto/inconnu).
-    # N'affecte pas la logique métier — pur indicateur de diagnostic dans
-    # les digests et le runbook.
     vps_profile: Literal["", "vps1", "vps2", "vps3", "local"] = Field(
         "",
         description="Indicateur du profil hardware (vps1/vps2/vps3/local) pour diagnostic",
     )
 
     # --- Notifications (Sprint HHH) ---
-    # Webhook pour recevoir les notifications mobiles : daily digest, warnings
-    # autonomous_run, alertes critiques (budget, killswitch).
-    # Auto-détection du backend depuis l'URL :
-    #   - discord.com/api/webhooks/...    → discord (embeds colorés)
-    #   - hooks.slack.com/services/...    → slack (blocks)
-    #   - api.telegram.org/bot.../sendMessage → telegram (markdown)
-    #   - autre URL                       → generic (POST JSON brut, n8n/pipedream/zapier)
     notify_webhook_url: str = Field(
         "",
         description="Webhook URL pour notifications (Discord/Slack/Telegram/generic). Vide = désactivé.",
