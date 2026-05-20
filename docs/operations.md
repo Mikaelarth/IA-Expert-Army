@@ -121,13 +121,21 @@ Auto-détection du profil VPS depuis `/proc/meminfo` :
 ### Configuration `.env` recommandée pour autonome
 
 ```bash
-# Obligatoire
-ANTHROPIC_API_KEY=sk-ant-api03-...
+# Backend LLM Ollama local (ADR-025) — pré-requis : Ollama installé + modèles pullés
+OLLAMA_BASE_URL=http://localhost:11434/v1
+OLLAMA_API_KEY=ollama
+OLLAMA_TIMEOUT_SECONDS=900
+MODEL_STRATEGIC=qwen2.5:32b
+MODEL_OPERATIONAL=qwen2.5-coder:32b
+MODEL_BULK=qwen2.5:14b
 
-# Garde-fous serrés pour autonome (vs dev)
-DAILY_BUDGET_USD=20.0    # vs 50.0 par défaut
-ENABLE_QUALITY_GUARDIAN=true   # peer review méta cross-guilde (~$0.10-0.20/mission)
-ENABLE_SECURITY_AUDITOR=true   # audit OWASP/secrets (~$0.05-0.10/mission Eng)
+# Budget désactivé par défaut (Ollama gratuit). Réactivable en cap proxy
+# tokens/temps si besoin — mettre une valeur > 0.
+DAILY_BUDGET_USD=0.0
+
+# Garde-fous qualité opt-in (coûtent du temps de génération, pas de l'USD)
+ENABLE_QUALITY_GUARDIAN=true   # peer review méta cross-guilde (+1 appel Opus-équivalent)
+ENABLE_SECURITY_AUDITOR=true   # audit OWASP/secrets engineering (+1 appel Sonnet-équivalent)
 
 # Notifications mobiles (cf. §4)
 NOTIFY_WEBHOOK_URL=https://discord.com/api/webhooks/...

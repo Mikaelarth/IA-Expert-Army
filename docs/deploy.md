@@ -112,11 +112,33 @@ Après `deploy_vps.sh`, édite `/opt/ia-expert-army/.env` :
 sudo -u iaa-army nano /opt/ia-expert-army/.env
 ```
 
-### Champs OBLIGATOIRES
+### Champs OBLIGATOIRES — Ollama doit tourner sur le VPS
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-api03-...   # https://console.anthropic.com
+# Installer Ollama sur le VPS (https://ollama.com/install.sh)
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Pull les 3 modèles par défaut (~50 Go disque + RAM)
+# ATTENTION : qwen2.5:32b nécessite ~24 Go RAM. Sur vps1 (8 Go), basculer
+# sur qwen2.5:14b (strategic) + qwen2.5-coder:7b (operational) + llama3.2:3b (bulk).
+ollama pull qwen2.5:32b
+ollama pull qwen2.5-coder:32b
+ollama pull qwen2.5:14b
+
+# Vérifier
+ollama list
 ```
+
+Puis dans `.env` (les défauts conviennent si tu as pullé les 3 modèles ci-dessus) :
+
+```bash
+OLLAMA_BASE_URL=http://localhost:11434/v1
+MODEL_STRATEGIC=qwen2.5:32b
+MODEL_OPERATIONAL=qwen2.5-coder:32b
+MODEL_BULK=qwen2.5:14b
+```
+
+**Sécurité** : par défaut Ollama bind `127.0.0.1:11434` (pas exposé hors localhost). NE PAS publier ce port sur l'extérieur sans reverse proxy + auth, sinon n'importe qui sur Internet utilise ton GPU.
 
 ### Champs RECOMMANDÉS pour autonomie sûre
 
