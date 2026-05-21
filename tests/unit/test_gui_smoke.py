@@ -41,6 +41,24 @@ def _ensure_minimal_data_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     """
 
 
+def test_page_setup_renders() -> None:
+    """La page Setup (ADR-027) se charge même sans Ollama/Docker.
+
+    detect_all() est wrappé par _safe() côté setup_runner : il ne doit JAMAIS
+    lever, donc la page render même sur une machine vierge.
+    """
+    page = _ROOT / "src" / "gui" / "pages" / "0_🛠_Setup.py"
+    at = streamlit_testing.AppTest.from_file(str(page))
+    at.run(timeout=20)
+    assert not at.exception, f"Page Setup a planté : {at.exception}"
+    # 5 metrics dans le header (OK / MISSING / STOPPED / SKIPPED / Bloquant)
+    assert len(at.metric) >= 5, f"Attendu ≥5 metrics, trouvé {len(at.metric)}"
+    metric_labels = [m.label for m in at.metric]
+    assert any("OK" in lbl for lbl in metric_labels)
+    assert any("MISSING" in lbl for lbl in metric_labels)
+    assert any("Bloquant" in lbl for lbl in metric_labels)
+
+
 def test_app_home_renders() -> None:
     """La page d'accueil se charge sans exception."""
     at = streamlit_testing.AppTest.from_file(str(_ROOT / "src" / "gui" / "app.py"))

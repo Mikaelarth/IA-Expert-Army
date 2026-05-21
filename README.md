@@ -4,18 +4,19 @@
 > mémoire partagée vivante, évolution par expérience, autonomie sécurisée.
 
 [![CI](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml/badge.svg)](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.5.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.6.0-blue)](CHANGELOG.md)
 [![GUI](https://img.shields.io/badge/GUI-Streamlit-FF4B4B)](docs/adr/026-gui-streamlit.md)
-[![Tests](https://img.shields.io/badge/tests-583%20passing-brightgreen)](tests/)
+[![Setup Wizard](https://img.shields.io/badge/setup-click--to--go-blueviolet)](docs/adr/027-setup-wizard-gui.md)
+[![Tests](https://img.shields.io/badge/tests-592%20passing-brightgreen)](tests/)
 [![Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen)](docs/adr/020-coverage-ci-automation.md)
 [![Audit](https://img.shields.io/badge/audit-0%20findings-brightgreen)](docs/adr/022-codebase-audit-rules.md)
 [![Backend](https://img.shields.io/badge/LLM-Ollama%20local-purple)](docs/adr/025-bascule-anthropic-to-ollama.md)
 [![Python](https://img.shields.io/badge/python-3.12+-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![ADRs](https://img.shields.io/badge/ADRs-26-blueviolet)](docs/adr/)
+[![ADRs](https://img.shields.io/badge/ADRs-27-blueviolet)](docs/adr/)
 [![Skills](https://img.shields.io/badge/skills-16%20auto--générées-orange)](skills/)
 
-**Auteur :** MikaelArth (Mike Arthur) · **Démarré :** 2026-05-10 · **v0.5.0** : 2026-05-21
+**Auteur :** MikaelArth (Mike Arthur) · **Démarré :** 2026-05-10 · **v0.6.0** : 2026-05-21
 
 ---
 
@@ -27,7 +28,7 @@
 | **Tourner en autonome 24/7 sur VPS** | [docs/operations.md](docs/operations.md) |
 | **Comprendre l'architecture en 4 couches** | [docs/architecture.md](docs/architecture.md) |
 
-Et pour les décisions structurantes : [26 ADRs](docs/adr/) · pour les incidents : [docs/runbook.md](docs/runbook.md) · pour l'historique des sessions de qualité v0.4.0 → v0.5.0 : [docs/sessions/](docs/sessions/).
+Et pour les décisions structurantes : [27 ADRs](docs/adr/) · pour les incidents : [docs/runbook.md](docs/runbook.md) · pour l'historique des sessions de qualité v0.4.0 → v0.6.0 : [docs/sessions/](docs/sessions/).
 
 ---
 
@@ -85,7 +86,9 @@ uv sync --group gui     # installe Streamlit (~50 Mo, opt-in)
 just gui                # http://127.0.0.1:8501
 ```
 
-5 pages : 🚀 Mission · 📜 Historique · 🧠 Skills · 🏥 Health · 🔬 Probes.
+6 pages : 🛠 **Setup** · 🚀 Mission · 📜 Historique · 🧠 Skills · 🏥 Health · 🔬 Probes.
+
+**Onboarding zéro-terminal** (v0.6.0, [ADR-027](docs/adr/027-setup-wizard-gui.md)) : la page **🛠 Setup** détecte automatiquement ce qui manque (Ollama daemon, modèles Qwen2.5, image sandbox Docker, fichier `.env`) et propose un fix d'un clic — démarrer le daemon, pull un modèle avec barre de progression, build l'image sandbox, créer `.env` depuis `.env.example`. Pour les installeurs système (Ollama, Docker Desktop, uv), un bouton ouvre l'URL officielle.
 
 ---
 
@@ -208,7 +211,7 @@ IA-Expert-Army/
 
 ---
 
-## État du projet (v0.5.0)
+## État du projet (v0.6.0)
 
 | Capacité | Statut | Détails |
 |---|---|---|
@@ -226,12 +229,13 @@ IA-Expert-Army/
 | Coverage gardé par CI | ✅ | 91% / fail_under=90 |
 | Audit anti-patterns en CI + pre-commit | ✅ | 5 règles, 0 finding actuel |
 | Smoke tests E2E sans LLM réel | ✅ | 11 tests Engineering + Research |
-| Smoke tests GUI Streamlit | ✅ v0.5.0 | 8 tests `AppTest`, chaque page render sans crash |
+| Smoke tests GUI Streamlit | ✅ v0.5.0+ | 9 tests `AppTest`, chaque page render sans crash |
 | Langfuse | ✅ Cloud opt-in / ⛔ self-hosted v3 incomplet | Cf. [architecture.md](docs/architecture.md) section Observabilité |
 | MCP server `memory_search` (6 tools) | ✅ | Exposable à Claude Desktop / Cursor |
 | **GUI Streamlit** | ✅ v0.5.0 | 5 pages : Mission / Historique / Skills / Health / Probes — `just gui` |
-| Tests régression | ✅ | **583 verts** (91% coverage mesurée) |
-| ADRs documentés | ✅ | **26 ADRs** structurants |
+| **Setup Wizard click-to-go** | ✅ v0.6.0 | Page Setup : 10 détections + actions auto (start daemon, pull modèle streaming, build sandbox, créer `.env`) — [ADR-027](docs/adr/027-setup-wizard-gui.md) |
+| Tests régression | ✅ | **592 verts** (91% coverage mesurée) |
+| ADRs documentés | ✅ | **27 ADRs** structurants |
 
 **Coût total API consommé** : ~$19 sur les 16 missions Claude pré-bascule (score moyen 0.89). **Depuis Ollama (v0.4.0)** : $0. Le système est opérationnel pour de l'usage perso quotidien via GUI.
 
