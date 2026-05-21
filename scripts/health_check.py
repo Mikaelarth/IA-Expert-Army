@@ -27,8 +27,19 @@ from collections.abc import Callable
 from pathlib import Path
 
 if sys.platform == "win32":
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    # Reconfigure UTF-8 SEULEMENT si on tourne en terminal interactif. En
+    # subprocess capture (capture_output=True) ou en test CliRunner, stdout
+    # est un buffer non-TTY qui n'accepte pas reconfigure() → silencieusement
+    # rich.Console n'émet plus rien et la capture renvoie vide. Bug observé
+    # depuis la GUI Streamlit Health page (v0.5.0).
+    try:
+        if sys.stdout.isatty():
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        # AttributeError = stdout sans reconfigure (ex: StringIO en capture
+        # CliRunner). ValueError = stdout déjà configuré différemment.
+        pass
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
