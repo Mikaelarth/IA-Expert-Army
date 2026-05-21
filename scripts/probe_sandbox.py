@@ -54,7 +54,10 @@ def main() -> int:
 
     files = [
         {"path": "src/utils/text.py", "content": _read(src_text)},
-        {"path": "src/utils/__init__.py", "content": '"""Utilitaires généraux (slugify, etc.)."""\n'},
+        {
+            "path": "src/utils/__init__.py",
+            "content": '"""Utilitaires généraux (slugify, etc.)."""\n',
+        },
         {"path": "src/__init__.py", "content": ""},
         {"path": "tests/__init__.py", "content": ""},
         {"path": "tests/unit/__init__.py", "content": ""},
@@ -84,7 +87,9 @@ def main() -> int:
         return 3
 
     print_sandbox_result(result, console)
-    console.print(f"\n[dim]Wall-clock total (build workspace + run pytest + cleanup) : {total:.2f}s[/dim]")
+    console.print(
+        f"\n[dim]Wall-clock total (build workspace + run pytest + cleanup) : {total:.2f}s[/dim]"
+    )
 
     if result.exit_code == 0:
         console.print("\n[bold green]✓ Sandbox validation OK[/bold green] — critère #5 démontré.")

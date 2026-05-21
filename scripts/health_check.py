@@ -80,8 +80,7 @@ def check_settings() -> tuple[str, str]:
     if not s.ollama_base_url:
         return _fail("OLLAMA_BASE_URL absent dans .env")
     return _ok(
-        f"strategic={s.model_strategic} · operational={s.model_operational} "
-        f"· bulk={s.model_bulk}"
+        f"strategic={s.model_strategic} · operational={s.model_operational} · bulk={s.model_bulk}"
     )
 
 
@@ -104,7 +103,7 @@ def check_ollama_daemon() -> tuple[str, str]:
     tags_url = f"{api_base}/api/tags"
 
     try:
-        req = urllib.request.Request(tags_url)
+        req = urllib.request.Request(tags_url)  # noqa: S310 — localhost Ollama (cf. ligne suivante)
         with urllib.request.urlopen(req, timeout=5) as resp:  # noqa: S310 — localhost Ollama
             payload = json.loads(resp.read().decode("utf-8"))
     except urllib.error.URLError as exc:
@@ -367,14 +366,20 @@ def check_deploy_scripts() -> tuple[str, str]:
                 timeout=10,
             )
         except (OSError, subprocess.SubprocessError) as exc:
-            return _warn(f"bash trouvé mais inexécutable ({type(exc).__name__}) — syntaxe non vérifiée")
+            return _warn(
+                f"bash trouvé mais inexécutable ({type(exc).__name__}) — syntaxe non vérifiée"
+            )
         if result.returncode != 0:
             stderr = result.stderr.lower()
             # Cas WSL Windows sans distribution installée : bash.EXE existe dans
             # system32 mais le relai échoue. On le distingue d'une vraie erreur
             # de syntaxe (WARN au lieu de FAIL — c'est un manque d'environnement,
             # pas un bug du script).
-            if "wsl" in stderr or "createprocesscommon" in stderr or "no such file or directory" in stderr:
+            if (
+                "wsl" in stderr
+                or "createprocesscommon" in stderr
+                or "no such file or directory" in stderr
+            ):
                 return _warn(
                     f"bash trouvé mais relai WSL/exécution indisponible — syntaxe non vérifiée ({script.name})"
                 )

@@ -33,9 +33,7 @@ def _silent_llm_should_not_be_called():
 
 def _make_fake_openai_client(create_mock: AsyncMock) -> SimpleNamespace:
     """Construit un faux AsyncOpenAI : client.chat.completions.create(...)."""
-    return SimpleNamespace(
-        chat=SimpleNamespace(completions=SimpleNamespace(create=create_mock))
-    )
+    return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create_mock)))
 
 
 def test_workflow_aborts_when_killswitch_engaged(

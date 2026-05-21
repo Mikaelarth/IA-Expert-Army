@@ -251,8 +251,7 @@ def detect_orphan_todos(paths: list[Path]) -> list[Finding]:
             window_start = max(0, line_no - 3)  # -3 pour ±2 lignes (0-based)
             window_end = min(len(all_lines), line_no + 2)
             if any(
-                _is_ignored(all_lines[i], "ORPHAN_TODO")
-                for i in range(window_start, window_end)
+                _is_ignored(all_lines[i], "ORPHAN_TODO") for i in range(window_start, window_end)
             ):
                 continue
             todo_match = _TODO_RE.search(line)

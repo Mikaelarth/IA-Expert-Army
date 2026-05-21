@@ -64,9 +64,7 @@ def _fake_response(
 
 def _make_fake_client(create_mock: AsyncMock) -> SimpleNamespace:
     """Construit un faux AsyncOpenAI : client.chat.completions.create(...)."""
-    return SimpleNamespace(
-        chat=SimpleNamespace(completions=SimpleNamespace(create=create_mock))
-    )
+    return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create_mock)))
 
 
 @pytest.mark.asyncio

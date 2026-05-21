@@ -168,12 +168,15 @@ def _bug_was_detected(parsed: dict | None) -> tuple[bool, str]:
         msg = str(issue.get("message", "")).lower()
         sev = str(issue.get("severity", "")).lower()
         cat = str(issue.get("category", "")).lower()
-        if sev in {"blocker", "major"} and cat in {"tests", "correctness"}:
-            if any(marker.lower() in msg for marker in bug_markers):
-                return True, (
-                    f"finding severity={sev} category={cat} citant un marqueur du bug : "
-                    f"« {msg[:120]}… »"
-                )
+        if (
+            sev in {"blocker", "major"}
+            and cat in {"tests", "correctness"}
+            and any(marker.lower() in msg for marker in bug_markers)
+        ):
+            return True, (
+                f"finding severity={sev} category={cat} citant un marqueur du bug : "
+                f"« {msg[:120]}… »"
+            )
     return False, "aucun finding ne cite le bug du test_slugify_multiple_punctuation"
 
 
@@ -255,11 +258,11 @@ def probe(
 |---|---|
 | Verdict | `{verdict}` |
 | Quality score | `{score}` |
-| **Bug détecté** | {'✅ OUI' if detected else '❌ NON'} |
+| **Bug détecté** | {"✅ OUI" if detected else "❌ NON"} |
 | Raison | {reason} |
 | Durée | {output.duration_seconds:.1f} s |
 | Tokens in / out | {output.tokens_in} / {output.tokens_out} |
-| Saturation | {'OUI ⚠️' if output.saturated else 'non'} |
+| Saturation | {"OUI ⚠️" if output.saturated else "non"} |
 | Success | {output.success} |
 
 ## Output YAML brut du Reviewer

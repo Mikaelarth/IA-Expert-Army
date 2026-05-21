@@ -27,7 +27,7 @@ import re
 import urllib.error
 import urllib.request
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal
 
 from src.core.logging import get_logger
@@ -37,7 +37,7 @@ log = get_logger("notifier")
 NotifyBackend = Literal["auto", "discord", "slack", "telegram", "generic", "none"]
 
 
-class NotifyLevel(str, Enum):
+class NotifyLevel(StrEnum):
     """Niveau de sévérité — utilisé pour le rendu visuel (couleur Discord, emoji)."""
 
     INFO = "info"

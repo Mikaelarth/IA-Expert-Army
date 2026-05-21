@@ -121,7 +121,9 @@ sources_count: 2
         model="qwen2.5-coder:32b",
     )
     fake_client = SimpleNamespace(
-        chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock(return_value=fake_response)))
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(create=AsyncMock(return_value=fake_response))
+        )
     )
     extractor = SkillExtractor(memory=memory, settings=settings, client=fake_client)  # type: ignore[arg-type]
 
@@ -163,7 +165,9 @@ async def test_mine_handles_invalid_yaml_gracefully(
         model="qwen2.5-coder:32b",
     )
     fake_client = SimpleNamespace(
-        chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock(return_value=fake_response)))
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(create=AsyncMock(return_value=fake_response))
+        )
     )
     extractor = SkillExtractor(memory=memory, settings=settings, client=fake_client)  # type: ignore[arg-type]
 

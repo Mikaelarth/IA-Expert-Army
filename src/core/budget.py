@@ -17,6 +17,7 @@ parallèle (MetaWorkflow) de consommer leur budget sans race read-modify-write.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import time
@@ -82,18 +83,14 @@ def _file_lock(lock_path: Path, timeout: float = 30.0) -> Iterator[None]:
         yield
     finally:
         if fd is not None:
-            try:
+            # fd déjà fermé ou invalide — pas critique
+            with contextlib.suppress(OSError):
                 os.close(fd)
-            except OSError:
-                # fd déjà fermé ou invalide — pas critique
-                pass
         # Windows peut lever PermissionError si un autre thread vient de réacquérir
         # le lock juste après notre close. On accepte silencieusement : le détenteur
         # courant sera responsable du cleanup à son tour.
-        try:
+        with contextlib.suppress(PermissionError, OSError):
             lock_path.unlink(missing_ok=True)
-        except (PermissionError, OSError):
-            pass
 
 
 class BudgetController:
