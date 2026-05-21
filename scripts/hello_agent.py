@@ -1,10 +1,13 @@
-"""Hello Agent — Premier appel à Claude depuis IA-Expert-Army.
+"""Hello Agent — Premier appel LLM depuis IA-Expert-Army (Ollama local).
 
 Cette commande active le tout premier agent de l'armée. Elle valide :
-- la clé API Anthropic
-- la connectivité réseau
+- la connectivité au daemon Ollama (http://localhost:11434/v1)
+- la présence du modèle stratégique configuré
 - la configuration Settings
 - le pipeline de logging
+
+Bascule v0.4.0 (ADR-025) : passe par Ollama local via le SDK openai
+pointé sur localhost:11434/v1. Aucun coût, aucune clé API.
 
 Usage:
     uv run python scripts/hello_agent.py
@@ -24,7 +27,7 @@ if sys.platform == "win32":
 # Permet d'exécuter ce script depuis la racine du projet
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
@@ -49,13 +52,16 @@ async def main() -> int:
 
     log.info(
         "settings.loaded",
-        # Opus pour le script demo (présentation initiale, ~$0.03 unique, justifié).
         model=settings.model_strategic,
-        budget=settings.daily_budget_usd,
+        ollama_url=settings.ollama_base_url,
         log_format=settings.log_format,
     )
 
-    client = AsyncAnthropic(api_key=settings.anthropic_api_key.get_secret_value())
+    client = AsyncOpenAI(
+        base_url=settings.ollama_base_url,
+        api_key=settings.ollama_api_key,
+        timeout=settings.ollama_timeout_seconds,
+    )
 
     system_prompt = (
         "Tu es le tout premier agent activé du système IA-Expert-Army, "
@@ -70,24 +76,27 @@ async def main() -> int:
         "(Engineering, Research, Creative, Business), et exprime ce que cette armée pourra accomplir."
     )
 
-    console.print("\n[dim]Appel à Claude…[/dim]\n")
+    console.print(f"\n[dim]Appel à Ollama ({settings.model_strategic})…[/dim]\n")
 
     try:
-        # Opus pour la présentation initiale (cf. commentaire ligne 50).
-        response = await client.messages.create(
+        response = await client.chat.completions.create(
             model=settings.model_strategic,
             max_tokens=512,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
         )
     except Exception as exc:
-        log.error("anthropic.call.failed", error=str(exc), exc_info=True)
-        console.print(f"\n[bold red]Échec de l'appel Anthropic :[/bold red] {exc}")
+        log.error("ollama.call.failed", error=str(exc), exc_info=True)
+        console.print(f"\n[bold red]Échec de l'appel Ollama :[/bold red] {exc}")
+        console.print(
+            "\n[yellow]Vérifie qu'Ollama tourne :[/yellow] `ollama list` doit répondre.\n"
+            f"[yellow]Et que le modèle est pullé :[/yellow] `ollama pull {settings.model_strategic}`"
+        )
         return 1
 
-    text = "".join(
-        block.text for block in response.content if getattr(block, "type", None) == "text"
-    )
+    text = response.choices[0].message.content or ""
 
     console.print(
         Panel(
@@ -97,19 +106,20 @@ async def main() -> int:
         )
     )
 
-    in_tok = response.usage.input_tokens
-    out_tok = response.usage.output_tokens
+    usage = response.usage
+    in_tok = getattr(usage, "prompt_tokens", 0) if usage else 0
+    out_tok = getattr(usage, "completion_tokens", 0) if usage else 0
     log.info(
-        "anthropic.call.success",
+        "ollama.call.success",
         model=response.model,
-        stop_reason=response.stop_reason,
-        input_tokens=in_tok,
-        output_tokens=out_tok,
+        finish_reason=response.choices[0].finish_reason,
+        prompt_tokens=in_tok,
+        completion_tokens=out_tok,
     )
 
     console.print(
         f"\n[green]✓[/green] Tokens consommés : "
-        f"[bold]{in_tok}[/bold] in · [bold]{out_tok}[/bold] out"
+        f"[bold]{in_tok}[/bold] in · [bold]{out_tok}[/bold] out · [bold]$0.00[/bold] (local)"
     )
     console.print("\n[bold green]Phase 0 validée — l'armée est prête à grandir.[/bold green]\n")
     return 0

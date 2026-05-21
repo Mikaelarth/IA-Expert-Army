@@ -118,10 +118,13 @@ et la possibilité d'enchaîner cross-guildes via `MetaWorkflow`.
 ## Démarrage express
 
 ```bash
+# Pré-requis : Ollama installé (https://ollama.com)
+ollama pull qwen2.5:32b qwen2.5-coder:32b qwen2.5:14b   # ~50 Go au total
+
 git clone https://github.com/MikaelArth/IA-Expert-Army.git
 cd IA-Expert-Army
 uv sync                      # ~30s
-cp .env.example .env         # ajoute ANTHROPIC_API_KEY=sk-ant-...
+cp .env.example .env         # défauts Ollama OK out-of-the-box (cf. ADR-025)
 uv run python scripts/health_check.py --quick
 uv run pytest tests/integration/test_smoke_autonomous.py -v   # 5s, $0
 ```

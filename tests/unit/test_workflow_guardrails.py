@@ -27,8 +27,15 @@ def memory(tmp_path: Path) -> FileMemory:
     return FileMemory(tmp_path / "memory")
 
 
-def _silent_anthropic_should_not_be_called():
-    raise AssertionError("Claude ne devrait PAS être appelé quand un garde-fou refuse")
+def _silent_llm_should_not_be_called():
+    raise AssertionError("Le LLM ne devrait PAS être appelé quand un garde-fou refuse")
+
+
+def _make_fake_openai_client(create_mock: AsyncMock) -> SimpleNamespace:
+    """Construit un faux AsyncOpenAI : client.chat.completions.create(...)."""
+    return SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=create_mock))
+    )
 
 
 def test_workflow_aborts_when_killswitch_engaged(
@@ -40,10 +47,8 @@ def test_workflow_aborts_when_killswitch_engaged(
     wf = Workflow(memory=memory, settings=settings, killswitch=ks)
     # Sabote tous les agents pour vérifier qu'ils ne sont JAMAIS appelés
     for agent in (wf.orchestrator, wf.architect, wf.developer, wf.reviewer):
-        agent.client = SimpleNamespace(  # type: ignore[assignment]
-            messages=SimpleNamespace(
-                create=AsyncMock(side_effect=_silent_anthropic_should_not_be_called)
-            )
+        agent.client = _make_fake_openai_client(  # type: ignore[assignment]
+            AsyncMock(side_effect=_silent_llm_should_not_be_called)
         )
 
     result = asyncio.run(wf.run(title="t", description="d"))
@@ -61,10 +66,8 @@ def test_workflow_aborts_when_budget_exceeded(
 
     wf = Workflow(memory=memory, settings=settings, budget=bc)
     for agent in (wf.orchestrator, wf.architect, wf.developer, wf.reviewer):
-        agent.client = SimpleNamespace(  # type: ignore[assignment]
-            messages=SimpleNamespace(
-                create=AsyncMock(side_effect=_silent_anthropic_should_not_be_called)
-            )
+        agent.client = _make_fake_openai_client(  # type: ignore[assignment]
+            AsyncMock(side_effect=_silent_llm_should_not_be_called)
         )
 
     result = asyncio.run(wf.run(title="t", description="d"))
@@ -72,9 +75,14 @@ def test_workflow_aborts_when_budget_exceeded(
     assert "budget" in result.final_verdict.lower()
 
 
-def test_workflow_records_cost_after_success(
+def test_workflow_completes_successfully_with_zero_cost_local(
     settings: Settings, memory: FileMemory, tmp_path: Path
 ) -> None:
+    """Bascule Ollama (ADR-025) : un workflow réussi a un cost_usd = 0 (local).
+    Le BudgetController existe toujours mais ne récolte rien (workflow.py ligne
+    303 ne record() que si total_cost > 0). Le test vérifie qu'un succès complet
+    reste fonctionnel en cost-zero — le garde-fou budget n'est pas neutralisé
+    structurellement, juste non sollicité."""
     state = tmp_path / "budget.json"
     bc = BudgetController(state_path=state, daily_budget_usd=10.0)
 
@@ -90,31 +98,28 @@ def test_workflow_records_cost_after_success(
         out_tokens=200,
     )
 
-    wf.orchestrator.client = SimpleNamespace(
-        messages=SimpleNamespace(create=AsyncMock(return_value=fake_orch))
-    )  # type: ignore[assignment]
-    wf.architect.client = SimpleNamespace(
-        messages=SimpleNamespace(create=AsyncMock(return_value=fake_arch))
-    )  # type: ignore[assignment]
-    wf.developer.client = SimpleNamespace(
-        messages=SimpleNamespace(create=AsyncMock(return_value=fake_dev))
-    )  # type: ignore[assignment]
-    wf.reviewer.client = SimpleNamespace(
-        messages=SimpleNamespace(create=AsyncMock(return_value=fake_review))
-    )  # type: ignore[assignment]
+    wf.orchestrator.client = _make_fake_openai_client(AsyncMock(return_value=fake_orch))  # type: ignore[assignment]
+    wf.architect.client = _make_fake_openai_client(AsyncMock(return_value=fake_arch))  # type: ignore[assignment]
+    wf.developer.client = _make_fake_openai_client(AsyncMock(return_value=fake_dev))  # type: ignore[assignment]
+    wf.reviewer.client = _make_fake_openai_client(AsyncMock(return_value=fake_review))  # type: ignore[assignment]
 
     result = asyncio.run(wf.run(title="test mission", description="test"))
     assert result.success is True
-    # Le BudgetController doit avoir enregistré une dépense > 0
-    assert bc.spent_today > 0
-    # La dépense correspond à la somme des coûts des 4 agents (cf. test_pricing)
-    assert bc.spent_today == pytest.approx(result.total_cost_usd, rel=0.01)
+    # Backend local : cost USD = 0 (estimate_cost retourne toujours 0 - ADR-025)
+    assert result.total_cost_usd == 0.0
+    # Donc le BudgetController n'est pas sollicité (ligne 303 du workflow)
+    assert bc.spent_today == 0.0
 
 
 def _fake_response(text: str, in_tokens: int, out_tokens: int):
+    """Shape OpenAI/Ollama : chat.completions.create response."""
     return SimpleNamespace(
-        content=[SimpleNamespace(type="text", text=text)],
-        usage=SimpleNamespace(input_tokens=in_tokens, output_tokens=out_tokens),
-        model="claude-sonnet-4-6",
-        stop_reason="end_turn",
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content=text),
+                finish_reason="stop",
+            )
+        ],
+        usage=SimpleNamespace(prompt_tokens=in_tokens, completion_tokens=out_tokens),
+        model="qwen2.5-coder:32b",
     )

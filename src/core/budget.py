@@ -55,15 +55,23 @@ def _file_lock(lock_path: Path, timeout: float = 30.0) -> Iterator[None]:
         try:
             fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
             break
-        except FileExistsError:
+        # PermissionError est traité comme FileExistsError sur Windows : la doc
+        # Microsoft confirme que O_EXCL peut lever EACCES (PermissionError) au
+        # lieu de EEXIST quand un autre process/thread a le fichier ouvert ou
+        # vient juste de l'unlink. C'est sémantiquement la même chose (lock pris
+        # ailleurs), on retry.
+        except (FileExistsError, PermissionError):
             if time.monotonic() >= deadline:
                 # Stale lock detection : un fichier vieux > 2× timeout est probablement
                 # orphelin (process crashé sans cleanup).
                 try:
                     age = time.time() - lock_path.stat().st_mtime
                     if age > timeout * 2:
-                        lock_path.unlink(missing_ok=True)
-                        continue
+                        try:
+                            lock_path.unlink(missing_ok=True)
+                            continue
+                        except OSError:
+                            pass
                 except OSError:
                     pass
                 raise TimeoutError(
@@ -74,8 +82,18 @@ def _file_lock(lock_path: Path, timeout: float = 30.0) -> Iterator[None]:
         yield
     finally:
         if fd is not None:
-            os.close(fd)
-        lock_path.unlink(missing_ok=True)
+            try:
+                os.close(fd)
+            except OSError:
+                # fd déjà fermé ou invalide — pas critique
+                pass
+        # Windows peut lever PermissionError si un autre thread vient de réacquérir
+        # le lock juste après notre close. On accepte silencieusement : le détenteur
+        # courant sera responsable du cleanup à son tour.
+        try:
+            lock_path.unlink(missing_ok=True)
+        except (PermissionError, OSError):
+            pass
 
 
 class BudgetController:
@@ -123,7 +141,21 @@ class BudgetController:
     # Évite de laisser passer une mission alors que `remaining == 0` exactement.
     _MIN_HEADROOM_USD = 0.0001
 
+    @property
+    def is_disabled(self) -> bool:
+        """True si le BudgetController est en mode no-op (cap <= 0).
+
+        Cas typique post-ADR-025 (bascule Ollama local) : daily_budget_usd=0.0
+        par défaut, l'absence de coût USD rend le cap budget inopérant. Le
+        garde-fou existe toujours en code mais ne refuse jamais ; il pourra
+        être réactivé en mettant daily_budget_usd > 0.
+        """
+        return self.daily_budget <= 0
+
     def can_proceed(self, estimated_cost: float = 0.0) -> bool:
+        # Cap désactivé (Ollama local ou config explicite) → toujours OK.
+        if self.is_disabled:
+            return True
         threshold = max(estimated_cost, self._MIN_HEADROOM_USD)
         return self.remaining_today() >= threshold
 
@@ -143,9 +175,15 @@ class BudgetController:
 
         Le lock fichier élimine la race read-modify-write quand plusieurs
         sub-missions de la même meta-mission consomment leur budget en parallèle.
+
+        Quand le BudgetController est désactivé (cap <= 0, cas Ollama local) :
+        le record est un no-op silencieux. On évite de polluer le fichier
+        d'état avec des entrées 0.0 sans contre-partie.
         """
         if amount < 0:
             raise ValueError("amount doit être >= 0")
+        if self.is_disabled:
+            return self._load()
         with _file_lock(self._lock_path):
             data = self._load()
             data["spent_usd"] = round(float(data.get("spent_usd", 0.0)) + float(amount), 6)

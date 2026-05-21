@@ -112,11 +112,33 @@ Après `deploy_vps.sh`, édite `/opt/ia-expert-army/.env` :
 sudo -u iaa-army nano /opt/ia-expert-army/.env
 ```
 
-### Champs OBLIGATOIRES
+### Champs OBLIGATOIRES — Ollama doit tourner sur le VPS
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-api03-...   # https://console.anthropic.com
+# Installer Ollama sur le VPS (https://ollama.com/install.sh)
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Pull les 3 modèles par défaut (~50 Go disque + RAM)
+# ATTENTION : qwen2.5:32b nécessite ~24 Go RAM. Sur vps1 (8 Go), basculer
+# sur qwen2.5:14b (strategic) + qwen2.5-coder:7b (operational) + llama3.2:3b (bulk).
+ollama pull qwen2.5:32b
+ollama pull qwen2.5-coder:32b
+ollama pull qwen2.5:14b
+
+# Vérifier
+ollama list
 ```
+
+Puis dans `.env` (les défauts conviennent si tu as pullé les 3 modèles ci-dessus) :
+
+```bash
+OLLAMA_BASE_URL=http://localhost:11434/v1
+MODEL_STRATEGIC=qwen2.5:32b
+MODEL_OPERATIONAL=qwen2.5-coder:32b
+MODEL_BULK=qwen2.5:14b
+```
+
+**Sécurité** : par défaut Ollama bind `127.0.0.1:11434` (pas exposé hors localhost). NE PAS publier ce port sur l'extérieur sans reverse proxy + auth, sinon n'importe qui sur Internet utilise ton GPU.
 
 ### Champs RECOMMANDÉS pour autonomie sûre
 
@@ -340,20 +362,11 @@ sudo -u iaa-army bash -lc "cd /opt/ia-expert-army && uv run python scripts/daily
 
 Affiche : missions du jour, coût, verdicts, QG concerns, approvals pending.
 
-### Langfuse self-hosted (VPS-2+)
+### Langfuse self-hosted (⛔ non recommandé en l'état au 2026-05-21)
 
-```bash
-# Démarrage stack Langfuse + Postgres + ClickHouse + Redis
-cd /opt/ia-expert-army
-docker compose --profile langfuse up -d
+> Le profile observability du `docker-compose.yml` (6 containers) démarre mais la config v3 est incomplète : les migrations ClickHouse échouent au premier boot. À **ne pas activer** sur ce VPS tant qu'un sprint dédié n'a pas remis à jour la config (cf. note inline dans `docker-compose.yml`). **Utiliser Langfuse Cloud** (section suivante — gratuit ~1k traces/mois) ou simplement les logs `structlog` (toujours actifs).
 
-# Accès : http://VOTRE-VPS:3000
-# Récupère les keys Public + Secret dans .env
-```
-
-Mémoire requise : ~3 Go (PG + ClickHouse + Redis + Langfuse worker).
-
-### Langfuse Cloud (alternative gratuite)
+### Langfuse Cloud (recommandé, free tier)
 
 1. Crée un compte sur [cloud.langfuse.com](https://cloud.langfuse.com)
 2. Crée un projet

@@ -1,6 +1,6 @@
 # ADR-002 — Stack technique : Python + Claude Agent SDK + Chroma + Docker
 
-**Statut :** Accepted
+**Statut :** Partiellement superseded par [ADR-025](025-bascule-anthropic-to-ollama.md) — la dépendance SDK Anthropic / Claude API est retirée depuis v0.4.0 (bascule Ollama local via SDK `openai` pointé sur localhost:11434/v1). Le reste de la stack reste valide : Python 3.12+ / uv / Chroma / Docker / Pydantic v2 / structlog. Les mentions "Bus Redis pubsub Phase 3+" et "SQLite Phase 1 → PostgreSQL Phase 3+" sont restées à l'état de vision (cf. tableau État d'implémentation dans [architecture.md](../architecture.md)).
 **Date :** 2026-05-10
 
 ## Contexte

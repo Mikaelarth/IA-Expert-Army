@@ -4,15 +4,17 @@
 > mémoire partagée vivante, évolution par expérience, autonomie sécurisée.
 
 [![CI](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml/badge.svg)](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-573%20passing-brightgreen)](tests/)
-[![Coverage](https://img.shields.io/badge/coverage-93%25-brightgreen)](docs/adr/020-coverage-ci-automation.md)
+[![Version](https://img.shields.io/badge/version-0.4.0-blue)](CHANGELOG.md)
+[![Tests](https://img.shields.io/badge/tests-575%20passing-brightgreen)](tests/)
+[![Coverage](https://img.shields.io/badge/coverage-92.7%25-brightgreen)](docs/adr/020-coverage-ci-automation.md)
 [![Audit](https://img.shields.io/badge/audit-0%20findings-brightgreen)](docs/adr/022-codebase-audit-rules.md)
+[![Backend](https://img.shields.io/badge/LLM-Ollama%20local-purple)](docs/adr/025-bascule-anthropic-to-ollama.md)
 [![Python](https://img.shields.io/badge/python-3.12+-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![ADRs](https://img.shields.io/badge/ADRs-23-blueviolet)](docs/adr/)
+[![ADRs](https://img.shields.io/badge/ADRs-25-blueviolet)](docs/adr/)
 [![Skills](https://img.shields.io/badge/skills-16%20auto--générées-orange)](skills/)
 
-**Auteur :** MikaelArth (Mike Arthur) · **Démarré :** 2026-05-10
+**Auteur :** MikaelArth (Mike Arthur) · **Démarré :** 2026-05-10 · **v0.4.0** : 2026-05-21
 
 ---
 
@@ -24,7 +26,7 @@
 | **Tourner en autonome 24/7 sur VPS** | [docs/operations.md](docs/operations.md) |
 | **Comprendre l'architecture en 4 couches** | [docs/architecture.md](docs/architecture.md) |
 
-Et pour les décisions structurantes : [23 ADRs](docs/adr/) · pour les incidents : [docs/runbook.md](docs/runbook.md).
+Et pour les décisions structurantes : [25 ADRs](docs/adr/) · pour les incidents : [docs/runbook.md](docs/runbook.md) · pour l'historique des sessions de qualité v0.4.0 : [docs/sessions/](docs/sessions/).
 
 ---
 
@@ -37,31 +39,41 @@ Plutôt qu'**un** agent IA généraliste, **une équipe** d'agents spécialisés
 - ✅ **Autonomie sécurisée** : 5 garde-fous non-négociables (budget cap, killswitch, error rate, saturation, quality drift)
 - ✅ **Boucle qualité fermée** : code généré → écrit sur disque → validé en sandbox Docker isolé, en une commande
 
-**Promesse vérifiable** :
+**Promesse vérifiable** (mesurée Session 2 sur Qwen2.5 32B local) :
 
 ```bash
 uv run python scripts/run_mission.py \
-  --title "Endpoint /info diagnostic" \
-  --description "Crée un endpoint FastAPI..." \
-  --apply --validate
-# → mission APPROVED 0.93 → 2 fichiers écrits → 3/3 pytest dans sandbox PASSED
-# → "Boucle qualité fermée : mission APPROVED + apply OK + sandbox pytest OK."
+  --title "Crée la fonction slugify utilitaire" \
+  --description "Implémente slugify(text: str) -> str. Tests pytest pour cas canoniques + edge cases." \
+  --apply
+# → mission APPROVED 0.93 → 2 fichiers écrits sur disque → $0 (local)
+# → Reviewer v0.3.0 (Session 5) refuse même les tests buggy via exécution mentale obligatoire
 ```
 
-Une commande. Tout en ~100 secondes pour ~$0.50.
+Une commande. ~21 min sur Qwen2.5 32B local (vs 12 min sur Claude Sonnet, $0 vs $0.50).
+Validation sandbox Docker testée Session 6 : pytest exit 0 en 0.91 s en container isolé
+(`network=none`, `user=nobody`).
 
 ---
 
 ## Démarrage express
 
 ```bash
+# 1. Installer Ollama (backend LLM local, gratuit) : https://ollama.com
+ollama pull qwen2.5:32b              # model_strategic (~20 Go)
+ollama pull qwen2.5-coder:32b        # model_operational (~20 Go)
+ollama pull qwen2.5:14b              # model_bulk (~9 Go)
+
+# 2. Cloner + setup
 git clone https://github.com/MikaelArth/IA-Expert-Army.git
 cd IA-Expert-Army
-uv sync                      # installe toutes les dépendances Python (~30s)
-cp .env.example .env         # ajoute ANTHROPIC_API_KEY=sk-ant-...
+uv sync                              # installe les dépendances Python (~30s)
+cp .env.example .env                 # défauts Ollama OK out-of-the-box
 uv run python scripts/health_check.py --quick    # tout doit être vert/skip
 uv run pytest tests/integration/test_smoke_autonomous.py -v   # smoke E2E en 5s, $0
 ```
+
+Bascule **v0.4.0** (ADR-025) : plus de dépendance Anthropic, tout tourne en local.
 
 Pour démarrer une vraie mission : suivre [docs/getting-started.md](docs/getting-started.md).
 

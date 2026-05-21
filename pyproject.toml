@@ -1,6 +1,6 @@
 [project]
 name = "ia-expert-army"
-version = "0.2.0"
+version = "0.4.0"
 description = "Une armée d'agents IA experts spécialisés, autonome, à mémoire partagée et apprentissage continu."
 authors = [{ name = "MikaelArth", email = "esarth.org@gmail.com" }]
 readme = "README.md"
@@ -8,8 +8,11 @@ requires-python = ">=3.12"
 license = { text = "Proprietary" }
 
 # Dépendances Phase 0 — minimum viable pour démarrer
+# Bascule v0.4.0 (ADR-025) : LLM via Ollama local, OpenAI-compatible API.
+# Le SDK `openai` est utilisé comme client générique pointé sur
+# http://localhost:11434/v1 ; aucune dépendance à Anthropic.
 dependencies = [
-    "anthropic>=0.40.0",
+    "openai>=1.50.0",
     "pydantic>=2.9.0",
     "pydantic-settings>=2.6.0",
     "python-dotenv>=1.0.1",
@@ -25,10 +28,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Phase 1+ : Claude Agent SDK + orchestration
-agents = [
-    "claude-agent-sdk>=0.1.0",
-]
 
 # Phase 2+ : Mémoire intelligente
 memory = [

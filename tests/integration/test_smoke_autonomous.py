@@ -1,18 +1,18 @@
-"""Smoke tests E2E du mode autonome — Sprint OOO.
+"""Smoke tests E2E du mode autonome — Sprint OOO (adapté Ollama, ADR-025).
 
-Garantit que toute la chaîne autonomous_run fonctionne sans coût API :
+Garantit que toute la chaîne autonomous_run fonctionne sans appel LLM réel :
   router → workflow → agents → archivage → digest
 
-Le client AsyncAnthropic est mocké au niveau de src.orchestrator.base_agent
-(le seul endroit qui instancie un client par défaut). Un FakeAsyncAnthropic
-détecte l'agent appelant via son system prompt et renvoie une réponse canon
+Le client AsyncOpenAI (qui pointe sur Ollama localhost en prod) est mocké
+au niveau de src.orchestrator.base_agent. Un FakeAsyncOpenAI détecte
+l'agent appelant via son system prompt et renvoie une réponse canon
 réaliste (YAML/markdown au format attendu par chaque parser).
 
 Pourquoi ce test : avant Sprint OOO, on avait des tests unitaires par agent
 et par workflow, mais AUCUN test qui validait que la chaîne complète (de la
 création de la queue à l'archivage final) tourne sans crash. Une régression
 silencieuse au niveau du Router ou du Workflow ne se voyait qu'au moment de
-lancer une vraie mission (= dépense API).
+lancer une vraie mission.
 
 Ce test tourne en < 1 seconde et garantit l'intégrité du chemin E2E.
 
@@ -331,34 +331,53 @@ def _detect_agent_name(system_prompt: str) -> str:
 
 
 def _build_fake_response(agent_name: str, model: str) -> SimpleNamespace:
-    """Construit une réponse canon pour l'agent détecté."""
+    """Construit une réponse canon pour l'agent détecté (shape OpenAI/Ollama)."""
     response_text = CANON_RESPONSES.get(agent_name, "(no canon for this agent)")
     return SimpleNamespace(
-        content=[SimpleNamespace(type="text", text=response_text)],
-        usage=SimpleNamespace(input_tokens=500, output_tokens=300),
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content=response_text),
+                finish_reason="stop",
+            )
+        ],
+        usage=SimpleNamespace(prompt_tokens=500, completion_tokens=300),
         model=model,
-        stop_reason="end_turn",
     )
 
 
-class FakeAsyncAnthropic:
-    """Drop-in replacement pour AsyncAnthropic. Inspecte le system prompt
-    pour détecter l'agent et renvoie une réponse canon correspondante."""
-
-    def __init__(self, **kwargs: Any) -> None:
-        # On ignore tous les params (api_key, max_retries, timeout) — on
-        # ne fait pas de vrais appels.
-        self.messages = self  # alias pour que client.messages.create marche
+class _FakeChatCompletions:
+    """Sous-objet exposant `.create(...)` — clone du shape openai.chat.completions."""
 
     async def create(
         self,
         model: str,
         max_tokens: int,
-        system: str,
         messages: list[dict[str, str]],
+        **kwargs: Any,
     ) -> SimpleNamespace:
-        agent_name = _detect_agent_name(system)
+        # Shape OpenAI : le system prompt est le PREMIER message avec role="system".
+        # On l'extrait pour détecter l'agent (même heuristique qu'avec Anthropic
+        # où `system` était un param dédié).
+        system_content = ""
+        for msg in messages:
+            if msg.get("role") == "system":
+                system_content = msg.get("content", "")
+                break
+        agent_name = _detect_agent_name(system_content)
         return _build_fake_response(agent_name, model)
+
+
+class FakeAsyncOpenAI:
+    """Drop-in replacement pour AsyncOpenAI (le client utilisé pour parler à Ollama).
+
+    Expose `client.chat.completions.create(...)` qui inspecte le system prompt
+    du premier message et renvoie une réponse canon correspondante.
+    """
+
+    def __init__(self, **kwargs: Any) -> None:
+        # On ignore tous les params (base_url, api_key, max_retries, timeout) —
+        # on ne fait pas de vrais appels.
+        self.chat = SimpleNamespace(completions=_FakeChatCompletions())
 
 
 # ============================================================================
@@ -367,9 +386,12 @@ class FakeAsyncAnthropic:
 
 
 @pytest.fixture
-def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-smoke-test-12345")
-    monkeypatch.setenv("ENABLE_SANDBOX", "false")  # pas de Docker en smoke
+def settings() -> Settings:
+    # Backend Ollama local : aucune clé requise (placeholder par défaut suffit).
+    # On désactive le sandbox Docker pour les smoke tests.
+    import os
+
+    os.environ["ENABLE_SANDBOX"] = "false"
     from src.core.config import get_settings
 
     get_settings.cache_clear()  # type: ignore[attr-defined]
@@ -383,14 +405,17 @@ def memory(tmp_path: Path) -> FileMemory:
 
 @pytest.fixture
 def patch_anthropic(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Remplace AsyncAnthropic dans base_agent par notre FakeAsyncAnthropic.
+    """Remplace AsyncOpenAI dans base_agent par notre FakeAsyncOpenAI.
 
-    C'est le seul endroit où AsyncAnthropic est instancié quand client=None
+    C'est le seul endroit où AsyncOpenAI est instancié quand client=None
     est passé (cas par défaut quand le Workflow crée ses agents).
+
+    Le nom du fixture est gardé pour rétrocompat avec les tests existants,
+    mais en interne on patche bien AsyncOpenAI (ADR-025).
     """
     monkeypatch.setattr(
-        "src.orchestrator.base_agent.AsyncAnthropic",
-        FakeAsyncAnthropic,
+        "src.orchestrator.base_agent.AsyncOpenAI",
+        FakeAsyncOpenAI,
     )
 
 
@@ -449,9 +474,9 @@ def test_engineering_workflow_smoke_e2e(
     episodes = memory.list_episodes(result.mission_id)
     assert len(episodes) == 4, f"Attendu 4 épisodes, got {len(episodes)}"
 
-    # 5. Coût > 0 (mais petit, car on simule des tokens)
-    assert result.total_cost_usd > 0
-    assert result.total_cost_usd < 1.0  # smoke = pas une vraie mission $$$
+    # 5. Coût = 0 (bascule Ollama local, ADR-025) — on garde l'assertion
+    # pour détecter une régression où on rebranche un backend payant.
+    assert result.total_cost_usd == 0.0
 
     # 6. Mission archivée dans data/memory/missions/
     mission_record = memory.get_mission_summary(str(result.mission_id))

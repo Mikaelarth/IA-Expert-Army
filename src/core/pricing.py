@@ -1,7 +1,14 @@
-"""Pricing — calcul du coût d'un appel Claude.
+"""Pricing — calcul du coût d'un appel LLM.
 
-Tarifs par million de tokens (USD). À actualiser depuis https://www.anthropic.com/pricing.
-Dernière mise à jour : 2026-05-10 (estimations).
+Bascule v0.4.0 (ADR-025) : le backend tourne sur Ollama local, donc le
+coût USD par appel est structurellement 0. On garde la fonction
+`estimate_cost(model, tokens_in, tokens_out)` pour compatibilité avec
+l'interface BaseAgent (signature inchangée) et pour autoriser un retour
+à un backend payant sans toucher au wiring.
+
+Si tu veux re-câbler un cap budgétaire (ex. proxy d'un cap GPU
+temps/tokens, ou bascule cloud), édite `lookup_pricing` pour mapper
+les modèles vers un tarif effectif.
 """
 
 from __future__ import annotations
@@ -16,12 +23,11 @@ class ModelPricing:
     output_per_mtok: float
 
 
-_PRICING: tuple[ModelPricing, ...] = (
-    ModelPricing("claude-opus-4", 15.00, 75.00),
-    ModelPricing("claude-sonnet-4", 3.00, 15.00),
-    ModelPricing("claude-haiku-4", 0.80, 4.00),
-)
-_FALLBACK = ModelPricing("unknown", 5.00, 25.00)
+# Tarifs explicitement à 0 : Ollama tourne en local, pas de facturation
+# par token. Garder la structure permet de re-réactiver un pricing par
+# modèle (ex. mix local + cloud) sans toucher au reste du code.
+_PRICING: tuple[ModelPricing, ...] = ()
+_FALLBACK = ModelPricing("ollama-local", 0.0, 0.0)
 
 
 def lookup_pricing(model: str) -> ModelPricing:

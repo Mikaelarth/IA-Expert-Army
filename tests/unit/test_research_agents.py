@@ -31,12 +31,12 @@ def memory(tmp_path: Path) -> FileMemory:
 
 def test_research_lead_uses_strategic_model(settings: Settings, memory: FileMemory) -> None:
     agent = ResearchLead(memory=memory, settings=settings)
-    assert "opus" in agent.model.lower()
+    assert agent.model == settings.model_strategic
 
 
 def test_tech_watch_uses_bulk_model(settings: Settings, memory: FileMemory) -> None:
     agent = TechWatch(memory=memory, settings=settings)
-    assert "haiku" in agent.model.lower()
+    assert agent.model == settings.model_bulk
 
 
 def test_tech_watch_max_tokens_high_enough_for_multi_subquestion_plans(
@@ -57,7 +57,7 @@ def test_document_synthesizer_uses_operational_model(
     settings: Settings, memory: FileMemory
 ) -> None:
     agent = DocumentSynthesizer(memory=memory, settings=settings)
-    assert "sonnet" in agent.model.lower()
+    assert agent.model == settings.model_operational
 
 
 def test_document_synthesizer_max_tokens_high_enough_for_full_synthesis(
@@ -72,7 +72,7 @@ def test_document_synthesizer_max_tokens_high_enough_for_full_synthesis(
 
 def test_research_reviewer_uses_operational_model(settings: Settings, memory: FileMemory) -> None:
     agent = ResearchReviewer(memory=memory, settings=settings)
-    assert "sonnet" in agent.model.lower()
+    assert agent.model == settings.model_operational
 
 
 def test_research_reviewer_max_tokens_high_enough_for_detailed_reviews(

@@ -4,12 +4,23 @@ Cycle de vie d'un agent en Phase 1 :
 1. Charge son system prompt depuis `prompts/<path>.md` (avec frontmatter)
 2. Reçoit un AgentInput (mission_id + task + context)
 3. Construit les messages Claude (system + user contextualisé)
-4. Appelle Claude via AsyncAnthropic
+4. Appelle le LLM via AsyncOpenAI (Ollama OpenAI-compatible)
 5. Logue un episode dans la mémoire fichier
 6. Retourne un AgentOutput
 
 À partir de la Phase 2, on injectera des few-shot examples depuis Chroma.
 À partir de la Phase 5, on fera de l'A/B testing sur les prompts versionnés.
+
+Bascule v0.4.0 (ADR-025) : le backend LLM est passé d'AsyncAnthropic
+(API Claude payante) à AsyncOpenAI pointé sur Ollama local. L'interface
+expose la même surface aux agents (`run()` → `AgentOutput`), mais les
+mappings techniques changent :
+- `system=...` devient un message `{"role": "system", "content": ...}`
+- `response.content[0].text` devient `response.choices[0].message.content`
+- `response.usage.input_tokens` → `response.usage.prompt_tokens`
+- `response.usage.output_tokens` → `response.usage.completion_tokens`
+- `stop_reason="max_tokens"` (Anthropic) → `finish_reason="length"` (OpenAI)
+- coût USD systématiquement 0 (local)
 """
 
 from __future__ import annotations
@@ -20,7 +31,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
 from src.core.config import Settings, get_settings
@@ -49,10 +60,11 @@ class AgentOutput(BaseModel):
     success: bool = True
     error: str | None = None
     # Marqueur de saturation : True si la réponse a été coupée par max_tokens.
-    # Détecté soit explicitement (stop_reason == "max_tokens"), soit en garde-fou
-    # quand tokens_out atteint quasi le plafond. Une saturation invisible était la
-    # cause des incidents Tech Watch (mission 7b5759b1) et Research Reviewer
-    # (mission 359bfa08) : sortie tronquée → YAML cassé → verdict default REJECTED.
+    # Détecté soit explicitement (finish_reason == "length" côté OpenAI/Ollama,
+    # équivalent du "max_tokens" Anthropic), soit en garde-fou quand tokens_out
+    # atteint quasi le plafond. Une saturation invisible était la cause des
+    # incidents Tech Watch (mission 7b5759b1) et Research Reviewer (mission
+    # 359bfa08) : sortie tronquée → YAML cassé → verdict default REJECTED.
     saturated: bool = False
     stop_reason: str | None = None
 
@@ -67,7 +79,7 @@ class BaseAgent:
         model: str,
         memory: FileMemory,
         settings: Settings | None = None,
-        client: AsyncAnthropic | None = None,
+        client: AsyncOpenAI | None = None,
         max_tokens: int = 2048,
         vector_memory: VectorMemory | None = None,
         rag_top_k: int = 2,
@@ -91,18 +103,22 @@ class BaseAgent:
         if client is not None:
             self.client = client
         else:
-            # Retries explicites + timeout configurables (Sprint VV.1). Le SDK
-            # Anthropic fait du backoff exponentiel automatique entre les retries
-            # sur les 5xx / timeout / connection errors. Loggué pour traçabilité.
-            self.client = AsyncAnthropic(
-                api_key=self.settings.anthropic_api_key.get_secret_value(),
-                max_retries=self.settings.anthropic_max_retries,
-                timeout=self.settings.anthropic_timeout_seconds,
+            # Client OpenAI-compatible pointé sur Ollama (ADR-025). Ollama
+            # ignore l'api_key mais le SDK la requiert : on passe un
+            # placeholder. Retries + timeout configurables — généreux car
+            # un Qwen 32B local peut prendre plusieurs minutes à générer
+            # 16k tokens sans GPU costaud.
+            self.client = AsyncOpenAI(
+                base_url=self.settings.ollama_base_url,
+                api_key=self.settings.ollama_api_key,
+                max_retries=self.settings.ollama_max_retries,
+                timeout=self.settings.ollama_timeout_seconds,
             )
             self._log.debug(
                 "client.configured",
-                max_retries=self.settings.anthropic_max_retries,
-                timeout_s=self.settings.anthropic_timeout_seconds,
+                base_url=self.settings.ollama_base_url,
+                max_retries=self.settings.ollama_max_retries,
+                timeout_s=self.settings.ollama_timeout_seconds,
             )
 
         self.system_prompt = self._load_system_prompt()
@@ -182,11 +198,12 @@ class BaseAgent:
         """Vrai si la réponse a été coupée par max_tokens.
 
         Deux signaux convergents :
-        - stop_reason == "max_tokens" → l'API le dit explicitement (signal fort)
-        - tokens_out >= max_tokens × 0.99 → garde-fou si l'API a un stop_reason
+        - finish_reason == "length" → l'API OpenAI/Ollama le dit explicitement
+          (équivalent du "max_tokens" Anthropic, signal fort)
+        - tokens_out >= max_tokens × 0.99 → garde-fou si l'API a un finish_reason
           ambigu mais que le compteur est au taquet
         """
-        if stop_reason == "max_tokens":
+        if stop_reason == "length":
             return True
         return max_tokens > 0 and tokens_out >= int(max_tokens * self._SATURATION_TOKEN_RATIO)
 
@@ -237,16 +254,22 @@ class BaseAgent:
         started_at = datetime.now(UTC)
 
         try:
-            response = await self.client.messages.create(
+            # Chat completions OpenAI-compatible : le system devient un message
+            # avec role="system" en tête (Ollama suit la même convention).
+            response = await self.client.chat.completions.create(
                 model=self.model,
                 max_tokens=self.max_tokens,
-                system=self.system_prompt,
-                messages=[{"role": "user", "content": user_message}],
+                messages=[
+                    {"role": "system", "content": self.system_prompt},
+                    {"role": "user", "content": user_message},
+                ],
             )
-            raw = "".join(b.text for b in response.content if getattr(b, "type", None) == "text")
-            tokens_in = response.usage.input_tokens
-            tokens_out = response.usage.output_tokens
-            stop_reason = getattr(response, "stop_reason", None)
+            choice = response.choices[0]
+            raw = choice.message.content or ""
+            usage = response.usage
+            tokens_in = getattr(usage, "prompt_tokens", 0) if usage is not None else 0
+            tokens_out = getattr(usage, "completion_tokens", 0) if usage is not None else 0
+            stop_reason = choice.finish_reason
             cost = estimate_cost(self.model, tokens_in, tokens_out)
             duration = time.perf_counter() - started
             parsed = self.parse_output(raw, agent_input)

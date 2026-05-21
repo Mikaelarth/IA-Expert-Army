@@ -40,6 +40,45 @@ def test_record_negative_raises(state_path: Path) -> None:
         bc.record(-1.0)
 
 
+# ===== ADR-025 — BudgetController en mode no-op quand cap <= 0 =====
+
+
+def test_budget_disabled_when_cap_is_zero(state_path: Path) -> None:
+    """Bascule Ollama local : daily_budget_usd=0.0 par défaut. Le BudgetController
+    doit alors être no-op (toujours can_proceed=True, record() silencieux).
+
+    Régression : avant le fix v0.4.0, can_proceed(0) retournait False car le
+    seuil _MIN_HEADROOM_USD=0.0001 n'était jamais atteint avec un cap à 0 →
+    toute mission Ollama plantait avec FAILED:budget.exceeded."""
+    bc = BudgetController(state_path=state_path, daily_budget_usd=0.0)
+    assert bc.is_disabled is True
+    assert bc.can_proceed() is True
+    assert bc.can_proceed(estimated_cost=10.0) is True
+    # record() est silencieusement no-op : aucun fichier d'état créé
+    bc.record(2.5)
+    assert bc.spent_today == 0.0
+    assert not state_path.exists()  # pas pollué par des entrées vides
+    # assert_can_proceed ne doit jamais lever quand désactivé
+    bc.assert_can_proceed(estimated_cost=999.0)
+
+
+def test_budget_disabled_when_cap_is_negative(state_path: Path) -> None:
+    """Sécurité : cap négatif (= configuration invalide) → traité comme désactivé,
+    pas comme "déjà dépassé"."""
+    bc = BudgetController(state_path=state_path, daily_budget_usd=-1.0)
+    assert bc.is_disabled is True
+    assert bc.can_proceed() is True
+
+
+def test_budget_active_when_cap_is_positive(state_path: Path) -> None:
+    """Garde-fou : avec un cap > 0, le comportement reste strict (assert lève si dépassé)."""
+    bc = BudgetController(state_path=state_path, daily_budget_usd=1.0)
+    assert bc.is_disabled is False
+    bc.record(1.0)
+    with pytest.raises(BudgetExceeded):
+        bc.assert_can_proceed(estimated_cost=0.01)
+
+
 def test_can_proceed_within_budget(state_path: Path) -> None:
     bc = BudgetController(state_path=state_path, daily_budget_usd=10.0)
     bc.record(8.0)

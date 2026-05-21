@@ -1,11 +1,19 @@
 """health_check — diagnostic global de l'environnement IA-Expert-Army.
 
 En une commande, vérifie que toutes les couches sont opérationnelles :
-- Couche 1/2 : Settings + clé API Anthropic + 4 guildes importables
+- Couche 1/2 : Settings + daemon Ollama joignable + 4 guildes importables
 - Couche 3 : FileMemory accessible + Chroma fonctionnel + Sandbox Docker
 - Couche 4 : SkillsLibrary + PatternMiner whitelist complet
 - Garde-fous : BudgetController + Killswitch
 - Observabilité : Langfuse joignable + tracing détecté
+
+Bascule v0.4.0 (ADR-025) : le backend LLM est Ollama local — le check
+vérifie que le daemon répond et que les 3 modèles configurés sont pullés.
+
+# audit: ignore FILE_TOO_LONG -- ~510 lignes acceptées : 18 checks indépendants
+# regroupés dans un seul script CLI pour un usage `just health-quick`. Split
+# par couche fragmenterait l'output utilisateur (tableau unique avec 18 lignes)
+# sans gain de lisibilité.
 
 Usage:
     uv run python scripts/health_check.py
@@ -69,10 +77,53 @@ def check_settings() -> tuple[str, str]:
     from src.core.config import get_settings
 
     s = get_settings()
-    key = s.anthropic_api_key.get_secret_value()
-    if not key.startswith("sk-ant-"):
-        return _fail("ANTHROPIC_API_KEY absent ou invalide dans .env")
-    return _ok(f"Opus={s.model_strategic} · Sonnet={s.model_operational} · Haiku={s.model_bulk}")
+    if not s.ollama_base_url:
+        return _fail("OLLAMA_BASE_URL absent dans .env")
+    return _ok(
+        f"strategic={s.model_strategic} · operational={s.model_operational} "
+        f"· bulk={s.model_bulk}"
+    )
+
+
+def check_ollama_daemon() -> tuple[str, str]:
+    """Pingue le daemon Ollama et vérifie que les 3 modèles configurés sont pullés.
+
+    Endpoint natif `/api/tags` (pas /v1/...) — c'est la route Ollama-spécifique
+    qui liste les modèles locaux. Si le daemon n'est pas démarré, return FAIL
+    avec instruction.
+    """
+    import json
+    import urllib.error
+    import urllib.request
+
+    from src.core.config import get_settings
+
+    s = get_settings()
+    # Dérive l'URL native depuis ollama_base_url : retire /v1 et ajoute /api/tags
+    api_base = s.ollama_base_url.rstrip("/").removesuffix("/v1")
+    tags_url = f"{api_base}/api/tags"
+
+    try:
+        req = urllib.request.Request(tags_url)
+        with urllib.request.urlopen(req, timeout=5) as resp:  # noqa: S310 — localhost Ollama
+            payload = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.URLError as exc:
+        return _fail(
+            f"Daemon Ollama injoignable à {api_base} ({exc.reason if hasattr(exc, 'reason') else exc}). "
+            "Lance `ollama serve` ou installe https://ollama.com"
+        )
+    except Exception as exc:
+        return _fail(f"{type(exc).__name__}: {exc}")
+
+    installed = {m["name"] for m in payload.get("models", []) if isinstance(m, dict)}
+    expected = {s.model_strategic, s.model_operational, s.model_bulk}
+    missing = expected - installed
+    if missing:
+        return _warn(
+            f"Daemon OK ({len(installed)} modèles) mais manquants : "
+            f"{sorted(missing)} — `ollama pull <nom>`"
+        )
+    return _ok(f"daemon OK · 3 modèles configurés pullés · {len(installed)} dispos au total")
 
 
 def check_file_memory() -> tuple[str, str]:
@@ -188,7 +239,7 @@ def check_tracing() -> tuple[str, str]:
 
     s = get_settings()
     pk = s.langfuse_public_key
-    sk = s.langfuse_secret_key.get_secret_value()
+    sk = s.langfuse_secret_key
     if not pk or not sk:
         return _skipped("LANGFUSE_PUBLIC_KEY/SECRET_KEY absents — tracing en NO-OP")
     tracing.reset_for_tests()
@@ -308,13 +359,25 @@ def check_deploy_scripts() -> tuple[str, str]:
         return _warn("Scripts présents mais bash absent — syntaxe non vérifiée")
 
     for script in scripts:
-        result = subprocess.run(  # noqa: S603 — args contrôlés (paths du repo)
-            [bash, "-n", str(script)],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
+        try:
+            result = subprocess.run(  # noqa: S603 — args contrôlés (paths du repo)
+                [bash, "-n", str(script)],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            return _warn(f"bash trouvé mais inexécutable ({type(exc).__name__}) — syntaxe non vérifiée")
         if result.returncode != 0:
+            stderr = result.stderr.lower()
+            # Cas WSL Windows sans distribution installée : bash.EXE existe dans
+            # system32 mais le relai échoue. On le distingue d'une vraie erreur
+            # de syntaxe (WARN au lieu de FAIL — c'est un manque d'environnement,
+            # pas un bug du script).
+            if "wsl" in stderr or "createprocesscommon" in stderr or "no such file or directory" in stderr:
+                return _warn(
+                    f"bash trouvé mais relai WSL/exécution indisponible — syntaxe non vérifiée ({script.name})"
+                )
             return _fail(f"{script.name} : syntaxe invalide ({result.stderr[:100]})")
     return _ok(f"{len(scripts)} scripts syntaxe OK (deploy + migrate)")
 
@@ -376,7 +439,8 @@ def check(
 
     checks: list[tuple[str, str, Callable[[], tuple[str, str]]]] = [
         ("Setup", "Python 3.12+", check_python),
-        ("Setup", "Settings + clé API", check_settings),
+        ("Setup", "Settings + modèles configurés", check_settings),
+        ("Setup", "Ollama daemon + modèles pullés", check_ollama_daemon),
         # Sprint NNN : checks de config rapides toujours actifs
         ("Setup", "VPS profile + sandbox", check_vps_config),
         ("Setup", "Coverage gate config", check_coverage_config),

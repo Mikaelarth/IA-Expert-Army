@@ -121,13 +121,21 @@ Auto-détection du profil VPS depuis `/proc/meminfo` :
 ### Configuration `.env` recommandée pour autonome
 
 ```bash
-# Obligatoire
-ANTHROPIC_API_KEY=sk-ant-api03-...
+# Backend LLM Ollama local (ADR-025) — pré-requis : Ollama installé + modèles pullés
+OLLAMA_BASE_URL=http://localhost:11434/v1
+OLLAMA_API_KEY=ollama
+OLLAMA_TIMEOUT_SECONDS=900
+MODEL_STRATEGIC=qwen2.5:32b
+MODEL_OPERATIONAL=qwen2.5-coder:32b
+MODEL_BULK=qwen2.5:14b
 
-# Garde-fous serrés pour autonome (vs dev)
-DAILY_BUDGET_USD=20.0    # vs 50.0 par défaut
-ENABLE_QUALITY_GUARDIAN=true   # peer review méta cross-guilde (~$0.10-0.20/mission)
-ENABLE_SECURITY_AUDITOR=true   # audit OWASP/secrets (~$0.05-0.10/mission Eng)
+# Budget désactivé par défaut (Ollama gratuit). Réactivable en cap proxy
+# tokens/temps si besoin — mettre une valeur > 0.
+DAILY_BUDGET_USD=0.0
+
+# Garde-fous qualité opt-in (coûtent du temps de génération, pas de l'USD)
+ENABLE_QUALITY_GUARDIAN=true   # peer review méta cross-guilde (+1 appel Opus-équivalent)
+ENABLE_SECURITY_AUDITOR=true   # audit OWASP/secrets engineering (+1 appel Sonnet-équivalent)
 
 # Notifications mobiles (cf. §4)
 NOTIFY_WEBHOOK_URL=https://discord.com/api/webhooks/...
@@ -253,23 +261,13 @@ just health-quick   # skip Docker (pour CI)
 
 Affiche un tableau de 17 composants : Setup, Couches 2-4, Garde-fous, Notification, Déploiement, Documentation, Sandbox, Observabilité.
 
-### Langfuse self-hosted (VPS-2+)
+### Langfuse self-hosted (⛔ non recommandé en l'état au 2026-05-21)
 
-```bash
-docker compose --profile observability up -d
-# Accès : http://VOTRE-VPS:3000
-```
+> **Statut clarifié Session 6** : la stack 6 containers (`docker compose --profile observability up -d`) démarre, mais la config v3 du `docker-compose.yml` est incomplète — les migrations ClickHouse échouent au premier boot (env vars supplémentaires non mappées vs la doc officielle Langfuse v3). **Ne pas activer cette stack** tant qu'un sprint dédié n'a pas remis à jour la config (cf. note dans `docker-compose.yml` + ADR-025).
+>
+> En attendant, utilise **Langfuse Cloud** (section suivante) — c'est gratuit jusqu'à ~1k traces/mois — ou rien (`structlog` console/JSON suffit pour usage perso).
 
-Mémoire requise : ~3 Go (PostgreSQL + ClickHouse + Redis + Langfuse worker).
-
-Récupère les keys dans l'UI Langfuse → édite `.env` :
-```bash
-LANGFUSE_HOST=http://localhost:3000
-LANGFUSE_PUBLIC_KEY=pk-lf-...
-LANGFUSE_SECRET_KEY=sk-lf-...
-```
-
-### Langfuse Cloud (alternative gratuite, recommandée pour VPS-1)
+### Langfuse Cloud (recommandé, free tier)
 
 1. Crée compte sur [cloud.langfuse.com](https://cloud.langfuse.com)
 2. Crée un projet, récupère public + secret keys

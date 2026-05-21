@@ -78,32 +78,34 @@ ls data/*.lock 2>$null && rm data/*.lock
 
 ---
 
-## 3. Anthropic API down / 5xx persistants
+## 3. Daemon Ollama down / inaccessible
 
 **Symptômes :**
-- Logs : `HTTPStatusError 5xx` ou `APIConnectionError` répétés.
-- BaseAgent retourne `success=False` avec `error="..."` sur plusieurs agents consécutifs.
+- Logs : `APIConnectionError` ou `Connection refused` répétés.
+- `health_check.py` affiche `Ollama daemon FAIL`.
+- BaseAgent retourne `success=False` sur plusieurs agents consécutifs.
 - `autonomous_run` peut déclencher garde-fou #3 (error rate > 30%).
 
 **Diagnostic rapide :**
 
 ```powershell
 # Test direct sans passer par le projet :
-uv run python -c "from anthropic import Anthropic; c = Anthropic(); print(c.messages.create(model='claude-haiku-4-5-20251001', max_tokens=10, messages=[{'role':'user','content':'hi'}]))"
+ollama list                     # liste les modèles installés (et confirme que le daemon répond)
+curl http://localhost:11434/api/tags   # endpoint natif Ollama
 ```
 
 **Action :**
 
-1. **Vérifier le status Anthropic** : https://status.anthropic.com
-2. **Si transient** : le SDK fait 2 retries auto (Sprint VV.1) + le `autonomous_run` arrête après 30% d'erreurs sur 5 missions — on attend, on relance.
-3. **Si persistant** : engager le killswitch pour éviter de brûler du budget en retries inutiles :
+1. **Vérifier qu'Ollama tourne** : sur Windows/macOS, l'app Ollama Desktop doit être lancée ; sur Linux, `systemctl status ollama` (ou `ollama serve` manuel).
+2. **Vérifier que les modèles configurés dans `.env` (`MODEL_STRATEGIC/OPERATIONAL/BULK`) sont présents** via `ollama list`. Si manquants : `ollama pull <nom>`.
+3. **Si daemon down persistant** : engager le killswitch pour éviter les retries inutiles :
    ```powershell
    just killswitch engage
    ```
-4. Quand l'API est revenue : `just killswitch release` + relancer.
+4. Quand Ollama est revenu : `just killswitch release` + relancer.
 
 **Prévention :**
-- Settings configurables `ANTHROPIC_MAX_RETRIES=2` et `ANTHROPIC_TIMEOUT_SECONDS=300` (cf. Sprint VV.1).
+- Settings configurables `OLLAMA_MAX_RETRIES=2` et `OLLAMA_TIMEOUT_SECONDS=900` (cf. v0.4.0, [ADR-025](adr/025-bascule-anthropic-to-ollama.md)). Le timeout est généreux car la génération locale peut être lente (5-15 min sur 32B sans GPU haut de gamme).
 - Daily digest expose le coût quotidien — un pic anormal (10× la normale) en soirée = signe de retry storm, à investiguer.
 
 ---

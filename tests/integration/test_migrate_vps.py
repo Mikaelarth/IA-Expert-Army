@@ -26,11 +26,31 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MIGRATE_SCRIPT = REPO_ROOT / "scripts" / "migrate_vps.sh"
 
-# Skip toute la suite si bash absent
-bash_path = shutil.which("bash")
+
+def _bash_is_operational() -> bool:
+    """True si un bash exécutable est trouvé ET capable d'exécuter une commande
+    triviale. Évite le faux positif Windows `system32\\bash.exe` (relai WSL)
+    qui existe sans distribution installée — il échoue avec
+    "CreateProcessCommon:818: execvpe(/bin/bash) failed: No such file or directory"."""
+    bash = shutil.which("bash")
+    if bash is None:
+        return False
+    try:
+        result = subprocess.run(  # noqa: S603 — bash résolu via shutil.which
+            [bash, "-c", "echo ok"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0 and "ok" in result.stdout
+
+
+# Skip toute la suite si bash absent OU inopérant (WSL Windows sans distribution)
 pytestmark = pytest.mark.skipif(
-    bash_path is None,
-    reason="bash absent — test round-trip migrate_vps.sh nécessite Git Bash, WSL ou Linux",
+    not _bash_is_operational(),
+    reason="bash absent ou inopérant — test round-trip migrate_vps.sh nécessite Git Bash, WSL+distribution ou Linux",
 )
 
 

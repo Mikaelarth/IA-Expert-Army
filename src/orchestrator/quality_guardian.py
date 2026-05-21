@@ -16,7 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 from src.core.config import Settings, get_settings
@@ -63,7 +63,7 @@ class QualityGuardian(BaseAgent):
         self,
         memory: FileMemory,
         settings: Settings | None = None,
-        client: AsyncAnthropic | None = None,
+        client: AsyncOpenAI | None = None,
     ) -> None:
         s = settings or get_settings()
         super().__init__(

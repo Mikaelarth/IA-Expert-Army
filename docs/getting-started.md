@@ -45,13 +45,18 @@ cp .env.example .env
 copy .env.example .env
 ```
 
-Ouvre `.env` et remplis **uniquement** :
+Les défauts du `.env.example` sont sensés et marchent **out-of-the-box** dès qu'Ollama tourne. Pré-requis :
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-api03-...   # https://console.anthropic.com
+# 1. Installer Ollama (https://ollama.com)
+
+# 2. Pull les 3 modèles par défaut (~50 Go au total)
+ollama pull qwen2.5:32b           # model_strategic (Architect, ChiefOrch, QG, BA…)
+ollama pull qwen2.5-coder:32b     # model_operational (Developer, Reviewer…)
+ollama pull qwen2.5:14b           # model_bulk (TechWatch)
 ```
 
-Tout le reste a des valeurs par défaut sensées. Tu pourras revenir éditer plus tard.
+Aucune clé API à configurer — tout tourne en local, $0 par mission. Sur machine modeste, basculer `MODEL_STRATEGIC=qwen2.5:14b` et `MODEL_OPERATIONAL=qwen2.5-coder:7b` (qualité moindre, voir [ADR-025](adr/025-bascule-anthropic-to-ollama.md)).
 
 ---
 
@@ -151,10 +156,11 @@ Attendu (après ~2 min) :
 | Problème | Cause probable | Fix |
 |---|---|---|
 | `uv: command not found` | uv pas dans le PATH | Relancer le terminal après l'install ; ou `source ~/.bashrc` |
-| `health_check.py` → Settings + clé API : FAIL | `ANTHROPIC_API_KEY` absent ou invalide | Vérifier `.env`, format `sk-ant-api03-...` |
+| `health_check.py` → `Ollama daemon` FAIL | Daemon Ollama pas démarré | `ollama serve` (Linux) ou lancer Ollama Desktop (Windows/macOS) |
+| `health_check.py` → modèles manquants WARN | Modèle configuré pas pullé | `ollama pull <nom-du-modèle>` (cf. `.env` → `MODEL_*`) |
 | Smoke test échoue avec "ModuleNotFoundError" | `uv sync` n'a pas tourné | Relancer `uv sync` |
 | `--validate` skippé silencieusement | Docker pas installé / pas démarré | Démarrer Docker Desktop OU `ENABLE_SANDBOX=false` dans `.env` |
-| Mission échoue sur "BudgetExceeded" | Plafond `DAILY_BUDGET_USD` atteint | Augmenter dans `.env` (défaut 50€) ou attendre minuit UTC |
+| Mission échoue sur "BudgetExceeded" | Cap `DAILY_BUDGET_USD > 0` configuré et atteint | Mettre `DAILY_BUDGET_USD=0.0` (no-op, défaut Ollama) ou attendre minuit UTC |
 | Tests intégration `test_migrate_vps.py` skippés | bash absent (Windows pur sans Git Bash) | Comportement attendu — Git Bash livré avec Git suffit |
 
 Pour les incidents en production / mode autonome, voir [docs/runbook.md](runbook.md).

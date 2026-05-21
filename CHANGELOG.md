@@ -7,6 +7,84 @@ versioning [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-05-21 — Bascule Ollama local + contrat 7 critères validé
+
+**BREAKING CHANGE** : retrait complet de la dépendance Anthropic. Tous les
+appels LLM passent désormais par Ollama local via son endpoint OpenAI-
+compatible (`http://localhost:11434/v1`). Voir [ADR-025](docs/adr/025-bascule-anthropic-to-ollama.md)
+pour le rationale, le mapping de modèles et les trade-offs assumés.
+
+Cette version est livrée à l'issue de **6 sessions de travail rigoureux**
+(2026-05-20 → 2026-05-21) sur la branche `feat/ollama-backend`. Elle remplit
+le contrat **7 critères qualité Entreprise** négocié avec l'auteur en
+Session 0 — chaque critère validé par une mesure empirique reproductible
+et documentée dans `docs/sessions/`.
+
+### Sessions 1-6 — Synthèse
+
+| Session | Apport | Mesure / preuve |
+|---|---|---|
+| **1** — Suite verte post-bascule | 31 échecs initiaux → 0 en 7 lots de fix. Bug `BudgetController` Windows race corrigé. | 567 passed, coverage 92.7%, audit 0 finding |
+| **2** — Première mission réelle Ollama | Mission slugify exécutée end-to-end sur Qwen2.5 32B local. | APPROVED 0.93 en 21 min / $0 (baseline Claude : 0.94 en 12 min / $0.50) |
+| **3** — Nettoyage des fictions | `architecture.md` aligné avec le code : 8 agents fictifs + 4 MCP fictifs + Redis non-câblé + KG SQLite + Chief of Staff tagués `⏳ Planifié`. 5 docs annexes mises à jour. | mkdocs `--strict` 0 warning |
+| **4** — Prompt code_reviewer v0.2.0 | Section "Vérification des tests — exécution mentale obligatoire" + protocole 3 étapes. | Mission re-jouée APPROVED 0.95 ; Reviewer mentionne explicitement "Chaque test a été exécuté mentalement" |
+| **5** — Reviewer v0.3.0 + probe déterministe + HITL clarifié | Section "Conformité spec" ajoutée + nouveau `scripts/probe_reviewer.py` qui mesure directement la résorption du bug Session 2. ADR-014 amendé sur statut HITL. | Reviewer v0.3.0 retourne `NEEDS_CHANGES` 0.75 sur le code Session 2 inchangé (vs `APPROVED` 0.93 avant) — **preuve directe que la boucle d'amélioration des prompts fonctionne** |
+| **6** — Recovery + sandbox + Langfuse | Backup/restore testé bout en bout. SandboxRunner probé sur code réel. Statut Langfuse v3 clarifié partout. | backup+restore = 3.99 s (vs seuil 600 s), sandbox pytest exit 0 en 0.91 s, observabilité 3-niveaux ✅✅⛔ documentée |
+
+### Contrat 7 critères — état final
+
+| # | Critère | Statut | Session preuve |
+|---|---|---|---|
+| 1 | Aucune feature fictive en doc | ✅ | 3 |
+| 2 | Tests réellement verts | ✅ | 1+4+5 |
+| 3 | Aucun garde-fou neutralisé silencieusement | ✅ | 5 (HITL clarifié) |
+| 4 | Validation empirique avant promesse | ✅ | 2+4+5 (3 missions documentées + boucle prompt prouvée) |
+| 5 | Sécurité par défaut | ✅ | 6 (sandbox probe) |
+| 6 | Observable sans deviner | ✅ | 6 (Langfuse 3-niveaux) |
+| 7 | Recoverable en < 10 min | ✅ | 6 (3.99 s mesurées) |
+
+### Détail des changements techniques
+
+### Migration
+
+Pré-requis : installer Ollama (https://ollama.com) puis pull les 3 modèles
+par défaut :
+
+```bash
+ollama pull qwen2.5:32b           # model_strategic
+ollama pull qwen2.5-coder:32b     # model_operational
+ollama pull qwen2.5:14b           # model_bulk
+```
+
+Adapter `.env` (les variables `ANTHROPIC_*` deviennent `OLLAMA_*`, défauts
+sensés pour démarrer) — cf. `.env.example` regénéré.
+
+### Changed
+
+- `pyproject.toml` : `anthropic>=0.40.0` → `openai>=1.50.0`. Version `0.2.0` → `0.4.0`.
+- `src/core/config.py` : `anthropic_api_key/max_retries/timeout` → `ollama_base_url/api_key/max_retries/timeout`. Défauts modèles Qwen2.5. `daily_budget_usd` défaut `0.0` (Ollama gratuit).
+- `src/orchestrator/base_agent.py` : `AsyncAnthropic` → `AsyncOpenAI`. Adaptation du shape (`chat.completions.create`, `choices[0].message.content`, `usage.prompt_tokens/completion_tokens`, `finish_reason="length"` pour saturation).
+- 9 agents (`src/orchestrator/agents/*.py`, `src/guilds/*/agents.py`, `src/learning/skill_extractor.py`, `src/orchestrator/quality_guardian.py`, `src/orchestrator/meta_workflow.py`) : signature `client: AsyncAnthropic` → `AsyncOpenAI`.
+- `src/core/pricing.py` : `estimate_cost()` retourne toujours 0 (structure conservée pour retour cloud futur).
+- `src/core/audit.py` : règle `OPUS_WITHOUT_JUSTIFICATION` désactivée par défaut (plus de tier payant à protéger).
+- `scripts/hello_agent.py`, `scripts/check_setup.py`, `scripts/health_check.py` : adaptés. Nouveau check `check_ollama_daemon` qui ping `/api/tags` et vérifie que les 3 modèles configurés sont pullés.
+- `tests/integration/test_smoke_autonomous.py` : `FakeAsyncAnthropic` → `FakeAsyncOpenAI` (mock du shape `chat.completions.create`, détection d'agent par H1 inchangée).
+- `tests/unit/test_base_agent.py` et `tests/unit/test_config.py` : réécritures complètes.
+- `.github/workflows/ci.yml` : variable d'env `ANTHROPIC_API_KEY` retirée.
+
+### Removed
+
+- Dépendance `anthropic>=0.40.0`.
+- Settings `anthropic_api_key`, `anthropic_max_retries`, `anthropic_timeout_seconds`.
+- Pricing par token Claude (Opus/Sonnet/Haiku) — conservé code-wise mais retourne 0.
+
+### Trade-offs assumés (cf. ADR-025)
+
+- **Qualité** : QualityGuardian et BusinessAnalyst dégradés (qwen2.5:32b ≈ Sonnet, pas Opus). À valider sur 3-5 missions réelles ; fallback Llama 3.3 70B si besoin.
+- **Latence** : mission étalon attendue à 25-40 min vs 12 min Sonnet (selon hardware).
+- **Coût** : $0 par mission.
+- **Souveraineté** : 100% local.
+
 ### Technical debt
 
 - **Typage mypy** : `strict = true` génère 85 erreurs sur la base (passage à
