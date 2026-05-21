@@ -37,7 +37,14 @@ with col2:
 
 
 def _run_health(quick: bool) -> tuple[int, str, float]:
-    """Lance health_check.py et capture stdout. Retourne (exit_code, stdout, duration_s)."""
+    """Lance health_check.py et capture stdout. Retourne (exit_code, stdout, duration_s).
+
+    Robustesse Windows : `subprocess.run(capture_output=True, text=True)` peut
+    renvoyer `stdout=None` quand le pipe stdout du sous-process est fermé
+    prématurément (cas rich.Console + emojis sur certaines configs PowerShell).
+    On force une str vide dans ce cas — on perd la sortie détaillée mais le
+    rendu Streamlit ne crash plus avec `TypeError: NoneType`.
+    """
     cmd: list[str] = [
         sys.executable,
         str(_ROOT / "scripts" / "health_check.py"),
@@ -51,9 +58,19 @@ def _run_health(quick: bool) -> tuple[int, str, float]:
         text=True,
         timeout=120,
         cwd=str(_ROOT),
-        env={**__import__("os").environ, "PYTHONIOENCODING": "utf-8"},
+        env={
+            **__import__("os").environ,
+            "PYTHONIOENCODING": "utf-8",
+            # Force rich à émettre sans détecter le TTY (sinon il peut couper
+            # silencieusement la sortie quand stdout n'est pas un terminal).
+            "FORCE_COLOR": "0",
+            "NO_COLOR": "1",
+        },
     )
-    return proc.returncode, proc.stdout, time.perf_counter() - started
+    stdout = proc.stdout if proc.stdout is not None else ""
+    if proc.stderr:
+        stdout = f"{stdout}\n--- STDERR ---\n{proc.stderr}" if stdout else proc.stderr
+    return proc.returncode, stdout, time.perf_counter() - started
 
 
 if run_now:
@@ -77,6 +94,15 @@ if run_now:
 
     color = "green" if exit_code == 0 else "red"
     st.markdown(f"### Exit code : :{color}[**{exit_code}**] · durée {duration:.1f} s")
+
+    if not stdout:
+        st.warning(
+            "Sortie vide capturée. C'est un comportement connu de subprocess + rich.Console "
+            "sur certaines configs Windows/PowerShell. Le script s'est exécuté correctement "
+            "(cf. exit code ci-dessus). Pour voir la sortie complète, lance manuellement :\n\n"
+            "```powershell\nuv run python scripts/health_check.py --quick\n```"
+        )
+        st.stop()
 
     # Extrait la ligne de résumé "N OK · M WARN · K FAIL · L SKIP"
     summary_match = re.search(
