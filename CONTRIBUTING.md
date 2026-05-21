@@ -113,7 +113,7 @@ Index complet : [docs/adr/README.md](docs/adr/README.md) (24 ADRs).
 - **Pas de `print()`** : utiliser `structlog` via `get_logger()`.
 - **Erreurs explicites** : pas de `except: pass`. Un `except` attrape un
   type précis et logge ou re-raise.
-- **Tests > 0 assertions** : un test sans `assert` / `pytest.raises` / 
+- **Tests > 0 assertions** : un test sans `assert` / `pytest.raises` /
   `mock.assert_*` est détecté par l'audit (cf. ADR-022 règle TEST_NO_ASSERT).
 - **TODO avec référence** : `# TODO Sprint XXX:` ou `# TODO #42:` ou
   `# TODO @user 2026-06-01:`. Un TODO orphelin est détecté par l'audit
@@ -137,9 +137,9 @@ Index complet : [docs/adr/README.md](docs/adr/README.md) (24 ADRs).
    ne détectera pas l'agent).
 2. Subclass `BaseAgent` dans `src/guilds/<guild>/agents.py`. Set
    `DEFAULT_MAX_TOKENS` généreusement (8192 pour reviewers/synthesizers,
-   4096 pour planners, 16384 pour developers multi-fichiers). Cf. 
+   4096 pour planners, 16384 pour developers multi-fichiers). Cf.
    [ADR-005](docs/adr/005-saturation-detection-and-prevention.md).
-3. Ajoute le rôle à `PatternMiner.AGENT_WHITELIST` dans 
+3. Ajoute le rôle à `PatternMiner.AGENT_WHITELIST` dans
    `src/learning/pattern_miner.py` (régression test catch les oublis).
 4. Ajoute le rôle au `Workflow` correspondant et mets à jour le
    `MissionRouter` (keywords).
@@ -148,7 +148,7 @@ Index complet : [docs/adr/README.md](docs/adr/README.md) (24 ADRs).
 6. **Sprint OOO** — ajoute une entrée dans `CANON_RESPONSES` dans
    `tests/integration/test_smoke_autonomous.py` + entrée dans
    `_DISPLAY_NAME_TO_AGENT`. Sinon le smoke E2E aura un "unknown agent".
-7. **Sprint EEE** — si tu utilises Opus, ajoute un commentaire 
+7. **Sprint EEE** — si tu utilises Opus, ajoute un commentaire
    `# Opus : ...` à proximité de `model=s.model_strategic`. Et si tu
    dépasses 7 agents Opus au total, **change-en un en Sonnet d'abord**
    (cf. test `test_opus_agent_count_under_threshold`).
@@ -184,7 +184,7 @@ Comme pour les agents, plus :
 
 ## Mining policy
 
-Le PatternMiner a 5 filtres d'éligibilité stricts (cf. 
+Le PatternMiner a 5 filtres d'éligibilité stricts (cf.
 [ADR-006](docs/adr/006-mining-strategy-and-eligibility.md)). **Don't lower
 them.** Si ton rôle ne peut pas encore être miné, c'est un signal que tu as
 besoin de plus de missions APPROVED, pas de filtres plus laxes.
@@ -209,7 +209,7 @@ doivent être justifiés par commentaire `# Opus : ...`. L'audit le vérifie.
 
 ## Documentation site
 
-Le projet a un site doc déployé sur GitHub Pages 
+Le projet a un site doc déployé sur GitHub Pages
 (https://mikaelarth.github.io/IA-Expert-Army/, à activer côté Settings).
 Sources : `docs/**/*.md` + `mkdocs.yml`.
 
@@ -233,7 +233,7 @@ Open a GitHub issue with :
 4. Output of `just health` (pour les bugs d'environnement).
 5. Output of `just audit-strict` (pour les bugs de qualité code).
 
-Pour les **incidents en mode autonome** sur VPS : 
+Pour les **incidents en mode autonome** sur VPS :
 [docs/runbook.md](docs/runbook.md) couvre 14 cas observés en condition
 réelle.
 
@@ -242,7 +242,7 @@ réelle.
 ## Workflow de release
 
 1. Mettre à jour `[Unreleased]` dans `CHANGELOG.md` au fur et à mesure.
-2. À la release, déplacer le contenu de `[Unreleased]` vers 
+2. À la release, déplacer le contenu de `[Unreleased]` vers
    `[X.Y.Z] — YYYY-MM-DD`.
 3. Bumper `version` dans `pyproject.toml`.
 4. MAJ badges README (tests count, coverage %).

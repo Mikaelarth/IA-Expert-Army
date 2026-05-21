@@ -232,8 +232,8 @@ anti-pattern AST-based, doc utilisateur consolidée, site mkdocs déployé.
 - Intégration `daily_digest.py --notify` + `autonomous_run.py --notify`.
 - Test round-trip `tests/integration/test_migrate_vps.py` (6 tests E2E).
 - **3 bugs critiques fixés dans `migrate_vps.sh`** révélés par le test :
-  manifest JSON cassé par paths Windows (`C:\...`), `tar` interprétait `C:` 
-  comme host SSH (fix `--force-local`), `sha256sum` mode texte/binaire 
+  manifest JSON cassé par paths Windows (`C:\...`), `tar` interprétait `C:`
+  comme host SSH (fix `--force-local`), `sha256sum` mode texte/binaire
   incohérent sur Windows (fix génération via python3).
 - ADR-018 documente design notifications + 5 alternatives écartées.
 

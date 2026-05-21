@@ -115,7 +115,7 @@ Business selon les mots-clés.
   ```bash
   uv run python scripts/autonomous_run.py --queue data/example_queues/01-... --max-missions 1
   ```
-- **`--budget-floor` strict** pour les stress tests : 
+- **`--budget-floor` strict** pour les stress tests :
   `--budget-floor 5.0` stoppe gracieusement si reste < $5 dans le cap journalier.
 - **`--dry-run`** : parse la queue, n'exécute aucune mission. Utile pour
   valider un YAML avant de payer.

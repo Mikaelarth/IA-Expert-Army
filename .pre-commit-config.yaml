@@ -17,6 +17,11 @@ repos:
     rev: v5.0.0
     hooks:
       - id: check-yaml             # YAML valide (les prompts + docker-compose + ce fichier)
+        # mkdocs.yml utilise des tags Python (!!python/name:...) légitimes
+        # pour le plugin mermaid2 et l'extension emoji — pas safe-loadable
+        # par défaut. --unsafe charge avec yaml.unsafe_load mais reste
+        # défensif contre les vraies erreurs YAML (indent, parens, etc.).
+        args: ["--unsafe"]
       - id: check-toml             # pyproject.toml valide
       - id: check-merge-conflict   # pas de marqueurs <<<<<<< restants
       - id: check-added-large-files
