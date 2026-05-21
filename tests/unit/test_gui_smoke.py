@@ -133,3 +133,31 @@ def test_memory_browser_list_skills_returns_dict() -> None:
     for agent, items in skills.items():
         assert isinstance(agent, str)
         assert isinstance(items, list)
+
+
+def test_health_runner_captures_output_via_clirunner() -> None:
+    """Sanity check du service health_runner (v0.5.1) : run_health(quick=True)
+    doit retourner exit_code=0 et stdout non-vide.
+
+    Régression : avant le fix v0.5.1, subprocess capture_output sur Windows
+    retournait stdout='' silencieusement (rich.Console + sys.stdout.reconfigure()
+    sur pipe non-TTY). La version CliRunner capture via StringIO en mémoire,
+    ce qui élimine ce problème — ce test confirme que la sortie est bien
+    récupérée (peu importe le contenu, on veut juste len > 0).
+    """
+    from src.gui.services.health_runner import run_health
+
+    result = run_health(quick=True)
+    assert result.exit_code == 0, (
+        f"health_check --quick devrait retourner exit 0, got {result.exit_code}. "
+        f"Stdout : {result.stdout[:500]}"
+    )
+    assert len(result.stdout) > 100, (
+        f"Sortie capturée trop courte ({len(result.stdout)} chars) — "
+        f"la régression Windows subprocess est revenue ? Stdout : {result.stdout!r}"
+    )
+    # Le tableau health check contient typiquement "Python" + "Settings" + "OK"
+    assert "OK" in result.stdout or "FAIL" in result.stdout or "WARN" in result.stdout, (
+        f"Sortie ne contient aucun marqueur OK/FAIL/WARN : {result.stdout[:200]}"
+    )
+    assert result.duration_seconds > 0
