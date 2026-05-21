@@ -6,13 +6,13 @@
 [![CI](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml/badge.svg)](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/badge/version-0.5.0-blue)](CHANGELOG.md)
 [![GUI](https://img.shields.io/badge/GUI-Streamlit-FF4B4B)](docs/adr/026-gui-streamlit.md)
-[![Tests](https://img.shields.io/badge/tests-575%20passing-brightgreen)](tests/)
-[![Coverage](https://img.shields.io/badge/coverage-92.7%25-brightgreen)](docs/adr/020-coverage-ci-automation.md)
+[![Tests](https://img.shields.io/badge/tests-583%20passing-brightgreen)](tests/)
+[![Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen)](docs/adr/020-coverage-ci-automation.md)
 [![Audit](https://img.shields.io/badge/audit-0%20findings-brightgreen)](docs/adr/022-codebase-audit-rules.md)
 [![Backend](https://img.shields.io/badge/LLM-Ollama%20local-purple)](docs/adr/025-bascule-anthropic-to-ollama.md)
 [![Python](https://img.shields.io/badge/python-3.12+-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![ADRs](https://img.shields.io/badge/ADRs-25-blueviolet)](docs/adr/)
+[![ADRs](https://img.shields.io/badge/ADRs-26-blueviolet)](docs/adr/)
 [![Skills](https://img.shields.io/badge/skills-16%20auto--générées-orange)](skills/)
 
 **Auteur :** MikaelArth (Mike Arthur) · **Démarré :** 2026-05-10 · **v0.5.0** : 2026-05-21
@@ -27,7 +27,7 @@
 | **Tourner en autonome 24/7 sur VPS** | [docs/operations.md](docs/operations.md) |
 | **Comprendre l'architecture en 4 couches** | [docs/architecture.md](docs/architecture.md) |
 
-Et pour les décisions structurantes : [25 ADRs](docs/adr/) · pour les incidents : [docs/runbook.md](docs/runbook.md) · pour l'historique des sessions de qualité v0.4.0 : [docs/sessions/](docs/sessions/).
+Et pour les décisions structurantes : [26 ADRs](docs/adr/) · pour les incidents : [docs/runbook.md](docs/runbook.md) · pour l'historique des sessions de qualité v0.4.0 → v0.5.0 : [docs/sessions/](docs/sessions/).
 
 ---
 
@@ -89,15 +89,16 @@ just gui                # http://127.0.0.1:8501
 
 ---
 
-## Zone de confort empiriquement validée (v0.2.0)
+## Zone de confort empiriquement validée
 
 | Type de mission | État | Preuve |
 |---|---|---|
-| Engineering simple (50-200 lignes) | ✅ converge confortablement | slugify, /ping, /version, /info — APPROVED 0.91-0.97 |
-| Research / Creative / Business | ✅ converge | Pydantic v1 vs v2, water-tracker landing, roadmap |
-| Cross-guildes meta-missions | ✅ converge | water-tracker APPROVED 0.92 (3 sous-missions) |
-| **Engineering 400-500 lignes multi-fichiers** | ✅ converge (avec QG + SecurityAuditor) | **mini-API FastAPI complète (JWT + CRUD + tests + Docker) — APPROVED 0.93 en 12 min / $1.74** ([Sprint DDD.ter](docs/adr/015-etalon-mission-findings.md)) |
-| Engineering > 1000 lignes | ⏳ Sprint FFF (décomposition livraison) | non testé, dette tracée |
+| Engineering simple (50-200 lignes) | ✅ converge confortablement | slugify (Session 2 Ollama APPROVED 0.93), /ping, /version, /info — historique baseline Claude APPROVED 0.91-0.97 |
+| Research / Creative / Business | ✅ converge | Pydantic v1 vs v2, water-tracker landing, roadmap (baseline Claude — non re-mesuré post-bascule Ollama) |
+| Cross-guildes meta-missions | ✅ converge | water-tracker APPROVED 0.92 (3 sous-missions, baseline Claude) |
+| **Engineering 400-500 lignes multi-fichiers** | ✅ converge sur baseline Claude (avec QG + SecurityAuditor) | **mini-API FastAPI complète (JWT + CRUD + tests + Docker) — APPROVED 0.93 en 12 min / $1.74** ([ADR-015 Sprint DDD.ter](docs/adr/015-etalon-mission-findings.md)). Non re-mesuré sur Ollama 32B local — durée estimée ×2-3. |
+| Engineering > 1000 lignes | ⏳ Non testé, dette tracée | Sprint FFF planifié (décomposition livraison automatique) |
+| **Probe Reviewer déterministe (Session 5 v0.3.0)** | ✅ Bug Session 2 détecté en `NEEDS_CHANGES 0.75` en 7 min 30 | [Probe Session 5](docs/sessions/session-5-reviewer-v0-3-0-probe-hitl.md) — preuve reproductible via `scripts/probe_reviewer.py` |
 
 ---
 
@@ -207,26 +208,32 @@ IA-Expert-Army/
 
 ---
 
-## État du projet (v0.2.0+)
+## État du projet (v0.5.0)
 
 | Capacité | Statut | Détails |
 |---|---|---|
+| Backend LLM local (Ollama) | ✅ v0.4.0 | `qwen2.5:32b` + `qwen2.5-coder:32b` + `qwen2.5:14b`, $0/mission |
 | 4 guildes avec boucle d'apprentissage | ✅ | Engineering, Research, Creative, Business |
-| Sandbox Docker validé en réel | ✅ | `run_mission --apply --validate` end-to-end |
+| Sandbox Docker validé en réel | ✅ Session 6 | pytest exit 0 en 0.91 s, isolation `network=none` + `user=nobody` prouvée |
 | Quality Guardian (peer review méta) | ✅ | Opt-in `ENABLE_QUALITY_GUARDIAN=true` |
 | Security Auditor (OWASP) | ✅ | Opt-in `ENABLE_SECURITY_AUDITOR=true` |
-| BudgetController prouvé en condition réelle | ✅ | Refus mission en cap atteint |
+| CodeReviewer v0.3.0 (exécution mentale + conformité spec) | ✅ Session 5 | Mesure directe : refuse les tests buggy là où v0.1.0 validait |
+| HITL approvals | ✅ Primitive livrée, ⛔ pas un garde-fou auto | Cf. [ADR-014](docs/adr/014-hitl-approvals.md) amendement Session 5 |
+| BudgetController | ✅ No-op si cap≤0 (Ollama gratuit) | Explicite via property `is_disabled`, sortie de doute |
 | Notifier mobile multi-backend | ✅ | Discord/Slack/Telegram/generic |
 | Toolkit VPS (deploy + migrate) | ✅ | Round-trip testé + bugs Windows fixés |
-| Coverage gardé par CI | ✅ | 93% / fail_under=90 |
+| Backup + Restore < 10 min | ✅ Session 6 | Mesuré 3.99 s (~150× sous seuil) |
+| Coverage gardé par CI | ✅ | 91% / fail_under=90 |
 | Audit anti-patterns en CI + pre-commit | ✅ | 5 règles, 0 finding actuel |
-| Smoke tests E2E sans coût API | ✅ | 11 tests, 5s |
-| Langfuse v3 self-hosted ou cloud | ✅ | Stack démarrable, opt-in |
+| Smoke tests E2E sans LLM réel | ✅ | 11 tests Engineering + Research |
+| Smoke tests GUI Streamlit | ✅ v0.5.0 | 8 tests `AppTest`, chaque page render sans crash |
+| Langfuse | ✅ Cloud opt-in / ⛔ self-hosted v3 incomplet | Cf. [architecture.md](docs/architecture.md) section Observabilité |
 | MCP server `memory_search` (6 tools) | ✅ | Exposable à Claude Desktop / Cursor |
-| Tests régression | ✅ | **573 verts** (93% coverage mesurée) |
-| ADRs documentés | ✅ | **23 ADRs** structurants |
+| **GUI Streamlit** | ✅ v0.5.0 | 5 pages : Mission / Historique / Skills / Health / Probes — `just gui` |
+| Tests régression | ✅ | **583 verts** (91% coverage mesurée) |
+| ADRs documentés | ✅ | **26 ADRs** structurants |
 
-**~$19 d'API consommés** sur 16 missions APPROVED en mode dev (score moyen 0.89). Le système est opérationnel pour de l'usage réel sur VPS, pas juste de la démo.
+**Coût total API consommé** : ~$19 sur les 16 missions Claude pré-bascule (score moyen 0.89). **Depuis Ollama (v0.4.0)** : $0. Le système est opérationnel pour de l'usage perso quotidien via GUI.
 
 ---
 
