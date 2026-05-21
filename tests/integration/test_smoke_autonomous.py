@@ -386,12 +386,15 @@ class FakeAsyncOpenAI:
 
 
 @pytest.fixture
-def settings() -> Settings:
+def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
     # Backend Ollama local : aucune clé requise (placeholder par défaut suffit).
     # On désactive le sandbox Docker pour les smoke tests.
-    import os
-
-    os.environ["ENABLE_SANDBOX"] = "false"
+    # Note : on passe par monkeypatch.setenv (et non `os.environ[]`) pour que
+    # la modification soit restaurée au teardown. Avant ce fix, ENABLE_SANDBOX=false
+    # restait positionné jusqu'à la fin du process pytest et polluait
+    # `test_apply_mission_validate.*` + `test_config::test_settings_enable_sandbox_default_true`
+    # qui lisent l'env var via `Settings(_env_file=None)`.
+    monkeypatch.setenv("ENABLE_SANDBOX", "false")
     from src.core.config import get_settings
 
     get_settings.cache_clear()  # type: ignore[attr-defined]
