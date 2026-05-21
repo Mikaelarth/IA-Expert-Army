@@ -415,7 +415,7 @@ Garde-fous infrastructure complémentaires :
 | Sandbox Docker (network=none, user=nobody, mem/cpu/pids limits, timeout 30s) | ✅ Livré | `src/sandbox/runner.py` ([ADR-008](adr/008-sandbox-readonly-tradeoff.md)) |
 | `apply_files` (whitelist dirs + path traversal regex + chars interdits) | ✅ Livré | `src/tools/apply_files.py` |
 | Audit anti-patterns AST (5 règles, CI + pre-commit) | ✅ Livré | `src/core/audit.py` ([ADR-022](adr/022-codebase-audit-rules.md) + [ADR-023](adr/023-audit-ci-pre-commit-integration.md)) |
-| HITL approvals (primitive store YAML + CLI) | ⚠️ Livré mais non wiré aux workflows | `src/core/approvals.py` ([ADR-014](adr/014-hitl-approvals.md)) — Vague 2 prévue pour brancher |
+| HITL approvals (primitive store YAML + CLI) | ✅ Livré pour usage manuel · ⛔ **PAS un garde-fou auto** | `src/core/approvals.py` ([ADR-014](adr/014-hitl-approvals.md) — amendement Session 5 clarifie : aucun workflow ne déclenche `request_approval` automatiquement aujourd'hui. Wiring possible en ~2h si besoin concret apparaît.) |
 | Daily digest (cron) | ✅ Livré | `scripts/daily_digest.py` |
 | Backups atomiques (ZIP + sha256 + rotation 7) | ✅ Livré | `scripts/backup.py` ([ADR-013](adr/013-backup-and-disaster-recovery.md)) |
 | Logs structurés structlog | ✅ Livré | partout via `get_logger()` |

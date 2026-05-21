@@ -1,8 +1,29 @@
 # ADR-014 — HITL formalisé (Human-In-The-Loop approvals)
 
-**Statut :** Accepted (mécanisme livré v1, wiring dans les call sites suivra)
+**Statut :** Accepted — **primitive livrée v1, wiring auto explicitement reporté (cf. amendement Session 5 ci-dessous).**
 **Date :** 2026-05-14
 **Commits associés :** Sprint CCC
+
+## Amendement Session 5 (2026-05-21) — statut wiring clarifié
+
+Les sprints DDD/EEE/FFF mentionnés en bas de cet ADR (wiring `apply_files` / `autonomous_run` / `killswitch`) n'ont jamais été exécutés. Le projet est passé en mode "outil perso" (cf. choix utilisateur Session 0 et [ADR-025](025-bascule-anthropic-to-ollama.md)) — le besoin de garde-fou HITL automatique sur chaque call site est moins critique que dans un scénario multi-utilisateur. **Décision** :
+
+1. **La primitive `request_approval` reste livrée et testée** (24 tests dans `tests/unit/test_approvals.py`).
+2. **Aucun wiring auto-déclenché dans les workflows livrés ce jour.** Le mode `--apply` écrit directement sur disque (avec whitelist + path traversal défense de `src/tools/apply_files.py`), sans pré-approbation HITL. Idem `autonomous_run.py`, `killswitch.py`.
+3. **Usage actuel = manuel**, via la CLI :
+   ```bash
+   just approvals               # liste pending
+   just approval-show <id>      # détail
+   just approve <id> "raison"   # approuve
+   just reject <id> "raison"    # rejette
+   ```
+   Un script tiers peut créer un `request_approval()` programmatiquement s'il veut imposer un point de contrôle, mais aucun script du repo ne le fait nativement.
+4. **Conséquence assumée** : HITL est listé dans la doc d'architecture comme « **livré, usage manuel uniquement, garde-fou automatique non opérationnel** » — pas comme un garde-fou actif des 5 garde-fous autonomes. Le mode autonome 24/7 reste protégé par les 5 garde-fous existants (budget, killswitch, error rate, saturation, quality drift) qui sont eux opérationnels.
+5. **Réactivation possible** : si un besoin concret apparaît (ex : un agent qui veut écrire dans `src/api/main.py` existant en production), wirer une instrumentation HITL dans `apply_files.py` est un sprint de ~2h. La primitive est prête.
+
+Cette honnêteté épistémique évite la fiction d'un garde-fou actif qui ne l'est pas. Le contrat critère #3 (« aucun garde-fou neutralisé silencieusement ») est ainsi respecté par la transparence du statut.
+
+---
 
 ## Contexte
 
