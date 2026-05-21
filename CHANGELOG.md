@@ -7,6 +7,57 @@ versioning [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-05-21 — Interface GUI Streamlit (ADR-026)
+
+Première version avec interface graphique. Le projet reste 100 % utilisable
+en CLI ; la GUI est une couche **opt-in** qui n'ajoute aucune dépendance au
+parcours utilisateur par défaut.
+
+### Added
+
+- **5 pages Streamlit multipages** dans `src/gui/pages/` :
+  - 🚀 **Mission** — formulaire (titre + description + guild override + `--apply` + `--validate` + `--force`) avec spinner pendant les 20-40 min de génération Qwen 32B local, affichage du verdict, score, fichiers écrits, résultat sandbox.
+  - 📜 **Historique** — liste filtrable (par guilde, par verdict) des missions archivées dans `data/memory/missions/*.md`, avec détail au clic.
+  - 🧠 **Skills** — explorateur des skills auto-extraites par agent, avec body markdown complet.
+  - 🏥 **Health** — lance `scripts/health_check.py --quick` (ou complet avec Docker+Ollama) en subprocess + affichage table OK/WARN/FAIL/SKIP.
+  - 🔬 **Probes** — lance `probe_reviewer.py` et `probe_sandbox.py` à la demande + browser des probes archivées dans `data/probes/`.
+- **2 services partagés** dans `src/gui/services/` :
+  - `memory_browser.py` — wrappers FileMemory pour list/detail missions+skills, parsing frontmatter YAML, formatage durée/datetime.
+  - `mission_runner.py` — wrap MissionRouter avec `MissionRunRequest` / `MissionRunOutcome` consolidé (incl. apply + sandbox).
+- **`scripts/run_gui.py`** — launcher qui invoque `streamlit run src/gui/app.py` en subprocess (Streamlit a besoin du fichier app comme entry direct pour découvrir le dossier `pages/`).
+- **`just gui`** — recipe pour lancer la GUI en une commande.
+- **8 smoke tests** dans `tests/unit/test_gui_smoke.py` via `streamlit.testing.v1.AppTest` — chaque page render sans exception + services partagés valident leur output.
+- **ADR-026** — décision d'adopter Streamlit (alternatives évaluées : FastAPI+React, Gradio, Textual, tkinter).
+
+### Changed
+
+- `pyproject.toml` : nouveau groupe `[dependency-groups].gui` avec `streamlit>=1.40.0`. Opt-in via `uv sync --group gui` (~30 packages, ~50 Mo). La CLI fonctionne sans Streamlit installé.
+- `justfile` : recipe `gui` ajoutée.
+- Version `0.4.1` → `0.5.0` (minor : nouvelle feature majeure, pas de breaking change).
+
+### Usage
+
+```bash
+uv sync --group gui                  # installe streamlit + deps (à faire une fois)
+just gui                              # ou: uv run python scripts/run_gui.py
+# Ouvre http://127.0.0.1:8501 dans le navigateur
+```
+
+### Architecture & sécurité
+
+- **Pas de couche REST** entre GUI et backend. Streamlit tourne dans le même process Python, importe directement `MissionRouter`, `FileMemory`, `SkillsLibrary`. Choix assumé pour usage perso (cf. ADR-026).
+- **Bind localhost only** par défaut (`--server.address 127.0.0.1`). Pas d'auth (usage perso).
+- **Pas de streaming live des logs en MVP** : spinner bloquant pendant les 20-40 min de génération. Phase 2 ajoutera `st.status` + log streaming si besoin (action tracée dans ADR-026).
+
+### Limites connues / Phase 2
+
+- Le formulaire Mission bloque l'UI pendant la génération (spinner). Tu peux ouvrir un autre onglet entre-temps, mais pas relancer une mission tant que la première n'a pas fini.
+- Pas d'édition de prompts depuis l'UI (faut éditer `prompts/**/*.md` à la main).
+- Pas de mode autonome (queue) dans l'UI — faut continuer à utiliser `scripts/autonomous_run.py`.
+- Pas d'auth multi-utilisateur.
+
+Toutes adressables si un besoin concret apparaît.
+
 ## [0.4.1] — 2026-05-21 — Correctif dette CI tooling (post-livraison v0.4.0)
 
 Patch release qui adresse la cause racine des 3 runs CI échoués

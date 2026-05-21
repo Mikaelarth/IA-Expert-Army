@@ -1,6 +1,6 @@
 [project]
 name = "ia-expert-army"
-version = "0.4.1"
+version = "0.5.0"
 description = "Une armée d'agents IA experts spécialisés, autonome, à mémoire partagée et apprentissage continu."
 authors = [{ name = "MikaelArth", email = "esarth.org@gmail.com" }]
 readme = "README.md"
@@ -120,6 +120,17 @@ branch = false  # on reste sur statement coverage pour éviter le bruit
 omit = [
     "*/__init__.py",
     "*/conftest.py",
+    # GUI Streamlit (v0.5.0, ADR-026) : les pages contiennent surtout des
+    # button handlers et logique UI qui ne sont pas testables hors
+    # interaction utilisateur réelle. La validation se fait via les smoke
+    # tests AppTest dans tests/unit/test_gui_smoke.py qui vérifient que
+    # chaque page render sans exception. Les SERVICES partagés
+    # (src/gui/services/) restent inclus dans le coverage — ils contiennent
+    # la logique métier (memory_browser, mission_runner).
+    "*/gui/app.py",
+    "*/gui/pages/*",
+    # Le launcher subprocess est trivial et délègue à streamlit
+    "*/scripts/run_gui.py",
 ]
 
 [tool.coverage.report]
@@ -162,6 +173,13 @@ no_implicit_optional = true
 check_untyped_defs = true
 
 [dependency-groups]
+
+# Interface GUI Streamlit (ADR-026) — opt-in, ~30 packages additionnels.
+# Activation : uv sync --group gui  puis  just gui  (ou streamlit run scripts/run_gui.py)
+gui = [
+    "streamlit>=1.40.0",
+]
+
 dev = [
     "fastapi>=0.136.1",
     "mypy>=1.13",

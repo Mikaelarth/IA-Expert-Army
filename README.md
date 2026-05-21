@@ -4,7 +4,8 @@
 > mémoire partagée vivante, évolution par expérience, autonomie sécurisée.
 
 [![CI](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml/badge.svg)](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.4.1-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.5.0-blue)](CHANGELOG.md)
+[![GUI](https://img.shields.io/badge/GUI-Streamlit-FF4B4B)](docs/adr/026-gui-streamlit.md)
 [![Tests](https://img.shields.io/badge/tests-575%20passing-brightgreen)](tests/)
 [![Coverage](https://img.shields.io/badge/coverage-92.7%25-brightgreen)](docs/adr/020-coverage-ci-automation.md)
 [![Audit](https://img.shields.io/badge/audit-0%20findings-brightgreen)](docs/adr/022-codebase-audit-rules.md)
@@ -14,7 +15,7 @@
 [![ADRs](https://img.shields.io/badge/ADRs-25-blueviolet)](docs/adr/)
 [![Skills](https://img.shields.io/badge/skills-16%20auto--générées-orange)](skills/)
 
-**Auteur :** MikaelArth (Mike Arthur) · **Démarré :** 2026-05-10 · **v0.4.1** : 2026-05-21
+**Auteur :** MikaelArth (Mike Arthur) · **Démarré :** 2026-05-10 · **v0.5.0** : 2026-05-21
 
 ---
 
@@ -76,6 +77,15 @@ uv run pytest tests/integration/test_smoke_autonomous.py -v   # smoke E2E en 5s,
 Bascule **v0.4.0** (ADR-025) : plus de dépendance Anthropic, tout tourne en local.
 
 Pour démarrer une vraie mission : suivre [docs/getting-started.md](docs/getting-started.md).
+
+**Préférence GUI** ? Depuis v0.5.0 ([ADR-026](docs/adr/026-gui-streamlit.md)) :
+
+```bash
+uv sync --group gui     # installe Streamlit (~50 Mo, opt-in)
+just gui                # http://127.0.0.1:8501
+```
+
+5 pages : 🚀 Mission · 📜 Historique · 🧠 Skills · 🏥 Health · 🔬 Probes.
 
 ---
 

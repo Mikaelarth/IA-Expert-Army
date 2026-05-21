@@ -91,6 +91,13 @@ test-one PATTERN:
 hello:
     uv run python scripts/hello_agent.py
 
+# === GUI Streamlit (ADR-026, v0.5.0) ===
+
+# Lance la GUI Streamlit sur http://127.0.0.1:8501
+# Pré-requis : `uv sync --group gui` une fois (installe streamlit)
+gui:
+    uv run python scripts/run_gui.py
+
 # === Missions ===
 
 # Lance une mission interactive (prompt pour titre + description)

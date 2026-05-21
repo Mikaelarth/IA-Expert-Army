@@ -161,6 +161,7 @@ nav:
     - "023 — Audit en CI + pre-commit": adr/023-audit-ci-pre-commit-integration.md
     - "024 — Site mkdocs sur GitHub Pages": adr/024-mkdocs-site-deployment.md
     - "025 — Bascule Anthropic → Ollama local": adr/025-bascule-anthropic-to-ollama.md
+    - "026 — Interface GUI Streamlit": adr/026-gui-streamlit.md
 
   - Sessions:
     - "Session 2 — Première mission Ollama (slugify)": sessions/session-2-mission-slugify.md
