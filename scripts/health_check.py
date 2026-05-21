@@ -445,7 +445,6 @@ def check(
     checks: list[tuple[str, str, Callable[[], tuple[str, str]]]] = [
         ("Setup", "Python 3.12+", check_python),
         ("Setup", "Settings + modèles configurés", check_settings),
-        ("Setup", "Ollama daemon + modèles pullés", check_ollama_daemon),
         # Sprint NNN : checks de config rapides toujours actifs
         ("Setup", "VPS profile + sandbox", check_vps_config),
         ("Setup", "Coverage gate config", check_coverage_config),
@@ -463,9 +462,14 @@ def check(
         ("Documentation", "ADRs index cohérent", check_adrs_index),
         ("Observabilité", "Tracing Langfuse", check_tracing),
     ]
+    # Le check Ollama appelle un daemon localhost externe (cf. ADR-025).
+    # Comme Docker, c'est un pré-requis runtime qu'on saute en mode --quick
+    # (utilisé en CI sur des runners qui n'ont pas Ollama installé). En
+    # mode normal il reste actif pour le diagnostic local.
     if not quick:
         checks.extend(
             [
+                ("Setup", "Ollama daemon + modèles pullés", check_ollama_daemon),
                 ("Sandbox", "Docker daemon", check_docker),
                 ("Sandbox", "Image iaa-sandbox", check_sandbox_image),
                 ("Observabilité", "Langfuse HTTP :3000", check_langfuse_http),
