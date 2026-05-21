@@ -10,18 +10,28 @@ documented in an ADR.
 ## Quick start (5 min)
 
 ```bash
-git clone https://github.com/MikaelArth/IA-Expert-Army.git
+git clone https://github.com/Mikaelarth/IA-Expert-Army.git
 cd IA-Expert-Army
 uv sync                                        # installs deps + Python 3.12+
-cp .env.example .env                           # then edit ANTHROPIC_API_KEY
+uv run pre-commit install                      # ⚠️ OBLIGATOIRE : active les hooks Git
+cp .env.example .env                           # défauts Ollama OK out-of-the-box (cf. ADR-025)
 uv run python scripts/health_check.py --quick  # tous les checks verts/skip
-uv run pytest tests/unit/                      # all 573 tests must pass
+uv run pytest tests/unit/                      # 575 tests doivent passer
 ```
 
-Pas envie de configurer une clé API ? Smoke test E2E **sans coût** :
+> **`uv run pre-commit install` n'est PAS optionnel.** Sans cette commande,
+> les hooks ne tournent pas à `git commit` localement → tu peux pousser
+> du code qui casse la CI sans le savoir. C'est exactement ce qui s'est
+> passé au merge v0.4.0 (3 runs CI échoués) avant que la dette tooling
+> soit corrigée en v0.4.1. Configure le hook une fois par clone.
+
+Pré-requis runtime pour lancer des vraies missions : Ollama installé +
+modèles pullés. Cf. [docs/getting-started.md](docs/getting-started.md).
+
+Pas envie d'installer Ollama ? Smoke test E2E **sans LLM réel** :
 
 ```bash
-uv run pytest tests/integration/test_smoke_autonomous.py -v   # 5s, $0
+uv run pytest tests/integration/test_smoke_autonomous.py -v   # 5s, mock Ollama
 ```
 
 ---

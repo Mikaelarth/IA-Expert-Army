@@ -10,7 +10,7 @@
 - **Python 3.12+** (sera installé par `uv` si absent)
 - **Git**
 - **Docker Desktop** *(optionnel, requis seulement pour `--validate` qui lance pytest dans un sandbox Docker)*
-- **Une clé API Anthropic** ([console.anthropic.com](https://console.anthropic.com))
+- **Ollama** ([ollama.com](https://ollama.com)) — backend LLM 100% local depuis v0.4.0 ([ADR-025](adr/025-bascule-anthropic-to-ollama.md))
 
 ---
 
@@ -18,7 +18,7 @@
 
 ```bash
 # 1. Clone le repo
-git clone https://github.com/MikaelArth/IA-Expert-Army.git
+git clone https://github.com/Mikaelarth/IA-Expert-Army.git
 cd IA-Expert-Army
 
 # 2. Installe uv (le package manager Python ultra-rapide)
@@ -27,11 +27,18 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # Windows PowerShell :
 powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 
-# 3. Installe les dépendances Python
+# 3. Installe les dépendances Python (inclut ruff, pre-commit, etc. v0.4.1+)
 uv sync
+
+# 4. ⚠️ OBLIGATOIRE : active les hooks Git pour ne pas pousser de code qui casse la CI
+uv run pre-commit install
 ```
 
-`uv sync` télécharge ~80 packages en 30-60 secondes.
+`uv sync` télécharge ~80 packages en 30-60 secondes. `pre-commit install` ajoute un hook
+`git/hooks/pre-commit` qui exécute ruff + check-yaml + pytest avant chaque commit local —
+si tu skipes cette étape, tu pousseras des erreurs qui auraient été catchées localement
+(c'est exactement ce qui s'est passé au merge v0.4.0 sur main : 3 runs CI échoués
+résolus en 4ᵉ tour, cf. CHANGELOG v0.4.1).
 
 ---
 

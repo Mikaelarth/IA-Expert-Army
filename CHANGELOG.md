@@ -7,6 +7,41 @@ versioning [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-05-21 — Correctif dette CI tooling (post-livraison v0.4.0)
+
+Patch release qui adresse la cause racine des 3 runs CI échoués
+immédiatement après le merge `feat/ollama-backend` → `main` :
+
+- Ruff vivait dans `[project.optional-dependencies].dev` (PEP 621 legacy)
+  mais PAS dans `[dependency-groups].dev` (PEP 735, ce qu'`uv sync`
+  utilise par défaut). Conséquence : pour un nouveau clone du repo,
+  `uv sync` n'installait pas ruff → le pre-commit local échouait
+  silencieusement (hook skip) → le dev poussait du code mal formaté
+  / avec violations lint que la CI rejetait.
+- `pre-commit install` n'était pas explicitement marqué obligatoire
+  dans les onboarding docs.
+
+### Changed
+
+- `pyproject.toml` : `ruff>=0.15.12` ajouté dans `[dependency-groups].dev`.
+  `uv sync` (sans `--extra dev`) installe désormais ruff automatiquement.
+- `CONTRIBUTING.md` : section "Quick start" enrichie d'une commande
+  obligatoire `uv run pre-commit install` avec encadré explicatif
+  référençant les 3 runs CI échoués de v0.4.0.
+- `docs/getting-started.md` : étape 1 enrichie de `pre-commit install`
+  marquée OBLIGATOIRE + URL du repo passée à la casse canonique
+  (`Mikaelarth` au lieu de `MikaelArth`).
+- Version bumpée 0.4.0 → 0.4.1.
+
+### Why v0.4.1 ne couvre pas plus
+
+L'incident CI a aussi révélé 5 violations ruff accumulées Sessions 4-6
+(S310, SIM102, 2× SIM105, UP042) + 1 fail check-yaml (mkdocs.yml tags
+Python) + 4 trailing whitespace + 1 fail check_ollama_daemon en CI.
+Tous ces fixes sont déjà sur main dans les commits `fa2c9ec`, `2d48061`,
+`fac58f9`. La v0.4.1 retient juste le correctif tooling **préventif** qui
+empêche la récurrence pour tout futur contributeur.
+
 ## [0.4.0] — 2026-05-21 — Bascule Ollama local + contrat 7 critères validé
 
 **BREAKING CHANGE** : retrait complet de la dépendance Anthropic. Tous les

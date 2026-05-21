@@ -1,6 +1,6 @@
 [project]
 name = "ia-expert-army"
-version = "0.4.0"
+version = "0.4.1"
 description = "Une armée d'agents IA experts spécialisés, autonome, à mémoire partagée et apprentissage continu."
 authors = [{ name = "MikaelArth", email = "esarth.org@gmail.com" }]
 readme = "README.md"
@@ -169,6 +169,13 @@ dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
     "pytest-cov>=7.1.0",
+    # Sprint v0.4.1 — ruff DOIT être dans dependency-groups.dev (PEP 735,
+    # auto-installé par `uv sync`). Avant ce déplacement, ruff vivait
+    # uniquement dans [project.optional-dependencies].dev (PEP 621 legacy)
+    # qui nécessite `uv sync --extra dev` explicite. Conséquence : le
+    # pre-commit local ne tournait pas faute de ruff → 3 runs CI échoués
+    # au merge v0.4.0 (cf. commits fa2c9ec, 2d48061, fac58f9 sur main).
+    "ruff>=0.15.12",
     "types-pyyaml>=6.0.12.20260510",
     # Sprint RRR — site docs déployable sur GitHub Pages
     "mkdocs-material>=9.5.0",

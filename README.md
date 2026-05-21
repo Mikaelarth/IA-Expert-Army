@@ -4,7 +4,7 @@
 > mémoire partagée vivante, évolution par expérience, autonomie sécurisée.
 
 [![CI](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml/badge.svg)](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.4.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.1-blue)](CHANGELOG.md)
 [![Tests](https://img.shields.io/badge/tests-575%20passing-brightgreen)](tests/)
 [![Coverage](https://img.shields.io/badge/coverage-92.7%25-brightgreen)](docs/adr/020-coverage-ci-automation.md)
 [![Audit](https://img.shields.io/badge/audit-0%20findings-brightgreen)](docs/adr/022-codebase-audit-rules.md)
@@ -14,7 +14,7 @@
 [![ADRs](https://img.shields.io/badge/ADRs-25-blueviolet)](docs/adr/)
 [![Skills](https://img.shields.io/badge/skills-16%20auto--générées-orange)](skills/)
 
-**Auteur :** MikaelArth (Mike Arthur) · **Démarré :** 2026-05-10 · **v0.4.0** : 2026-05-21
+**Auteur :** MikaelArth (Mike Arthur) · **Démarré :** 2026-05-10 · **v0.4.1** : 2026-05-21
 
 ---
 
