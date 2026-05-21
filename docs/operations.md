@@ -261,23 +261,13 @@ just health-quick   # skip Docker (pour CI)
 
 Affiche un tableau de 17 composants : Setup, Couches 2-4, Garde-fous, Notification, Déploiement, Documentation, Sandbox, Observabilité.
 
-### Langfuse self-hosted (VPS-2+)
+### Langfuse self-hosted (⛔ non recommandé en l'état au 2026-05-21)
 
-```bash
-docker compose --profile observability up -d
-# Accès : http://VOTRE-VPS:3000
-```
+> **Statut clarifié Session 6** : la stack 6 containers (`docker compose --profile observability up -d`) démarre, mais la config v3 du `docker-compose.yml` est incomplète — les migrations ClickHouse échouent au premier boot (env vars supplémentaires non mappées vs la doc officielle Langfuse v3). **Ne pas activer cette stack** tant qu'un sprint dédié n'a pas remis à jour la config (cf. note dans `docker-compose.yml` + ADR-025).
+>
+> En attendant, utilise **Langfuse Cloud** (section suivante) — c'est gratuit jusqu'à ~1k traces/mois — ou rien (`structlog` console/JSON suffit pour usage perso).
 
-Mémoire requise : ~3 Go (PostgreSQL + ClickHouse + Redis + Langfuse worker).
-
-Récupère les keys dans l'UI Langfuse → édite `.env` :
-```bash
-LANGFUSE_HOST=http://localhost:3000
-LANGFUSE_PUBLIC_KEY=pk-lf-...
-LANGFUSE_SECRET_KEY=sk-lf-...
-```
-
-### Langfuse Cloud (alternative gratuite, recommandée pour VPS-1)
+### Langfuse Cloud (recommandé, free tier)
 
 1. Crée compte sur [cloud.langfuse.com](https://cloud.langfuse.com)
 2. Crée un projet, récupère public + secret keys

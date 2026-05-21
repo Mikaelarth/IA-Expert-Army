@@ -362,20 +362,11 @@ sudo -u iaa-army bash -lc "cd /opt/ia-expert-army && uv run python scripts/daily
 
 Affiche : missions du jour, coût, verdicts, QG concerns, approvals pending.
 
-### Langfuse self-hosted (VPS-2+)
+### Langfuse self-hosted (⛔ non recommandé en l'état au 2026-05-21)
 
-```bash
-# Démarrage stack Langfuse + Postgres + ClickHouse + Redis
-cd /opt/ia-expert-army
-docker compose --profile langfuse up -d
+> Le profile observability du `docker-compose.yml` (6 containers) démarre mais la config v3 est incomplète : les migrations ClickHouse échouent au premier boot. À **ne pas activer** sur ce VPS tant qu'un sprint dédié n'a pas remis à jour la config (cf. note inline dans `docker-compose.yml`). **Utiliser Langfuse Cloud** (section suivante — gratuit ~1k traces/mois) ou simplement les logs `structlog` (toujours actifs).
 
-# Accès : http://VOTRE-VPS:3000
-# Récupère les keys Public + Secret dans .env
-```
-
-Mémoire requise : ~3 Go (PG + ClickHouse + Redis + Langfuse worker).
-
-### Langfuse Cloud (alternative gratuite)
+### Langfuse Cloud (recommandé, free tier)
 
 1. Crée un compte sur [cloud.langfuse.com](https://cloud.langfuse.com)
 2. Crée un projet

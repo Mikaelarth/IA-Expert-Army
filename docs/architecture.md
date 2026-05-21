@@ -183,7 +183,9 @@ sequenceDiagram
 | C3 | SandboxRunner Docker | ✅ Livré | `src/sandbox/runner.py` ([ADR-008](adr/008-sandbox-readonly-tradeoff.md)) |
 | C3 | apply_files (whitelist + path traversal) | ✅ Livré | `src/tools/apply_files.py` |
 | C3 | Notifier mobile (Discord/Slack/Telegram/generic) | ✅ Livré | `src/core/notifier.py` ([ADR-018](adr/018-mobile-notifications.md)) |
-| C3 | Langfuse self-hosted v3 | ⚠️ Stack démarre mais migration ClickHouse échoue | Workaround : structlog + Langfuse cloud |
+| C3 | Tracing structlog (toujours actif) | ✅ Livré | `src/core/tracing.py` — logs JSON ou console, `@observe` no-op gracieux si Langfuse pas configuré |
+| C3 | Langfuse cloud (opt-in) | ✅ Livré | Config via `LANGFUSE_HOST=https://cloud.langfuse.com` + `LANGFUSE_PUBLIC_KEY` + `LANGFUSE_SECRET_KEY` dans `.env`. Free tier ~1k traces/mois. |
+| C3 | Langfuse self-hosted v3 | ⛔ Non recommandé en l'état | Config v3 incomplète dans `docker-compose.yml` (migrations ClickHouse échouent au premier boot). Sprint dédié à prévoir si besoin. **Utiliser cloud OU structlog en attendant.** |
 | **C4** | PatternMiner + SkillExtractor | ✅ Livré | `src/learning/` ([ADR-006](adr/006-mining-strategy-and-eligibility.md)) |
 | C4 | SkillsLibrary + RAG injection à chaque appel | ✅ Livré | 16 skills auto-générées, citation observée en prod |
 | C4 | Prompt A/B testing | ⏳ Planifié | [ADR-007](adr/007-prompt-ab-testing-strategy.md) Proposed — code non écrit |
@@ -324,8 +326,9 @@ Le `docker-compose.yml` démarre un container `iaa-redis` par défaut, **mais au
 
 ### Observabilité
 
-- ⚠️ **Langfuse self-hosted (port 3000)** : stack 6 containers démarrable via `just langfuse-up`, mais la config v3 a évolué et les migrations ClickHouse échouent au premier boot. **Workaround actuel** : `structlog` console ou JSON (toujours actif), OU Langfuse cloud (langfuse.com hosted) si besoin de traces visuelles. Cf. note dans `docker-compose.yml`.
-- ✅ **Logs structurés** structlog : tous les événements importants (`agent.run.ok`, `workflow.budget.refused`, `rag.precedents.injected`, etc.)
+- ✅ **Logs structurés `structlog`** (toujours actif) : tous les événements importants (`agent.run.ok`, `workflow.budget.refused`, `rag.precedents.injected`, etc.) — sortie console (dev) ou JSON (prod). C'est la base d'observabilité par défaut, suffit pour usage perso. Pas de config requise.
+- ✅ **Tracing Langfuse cloud** (opt-in) : si tu veux des traces visuelles avec waterfall + filtres + analytics, crée un compte gratuit sur [langfuse.com](https://langfuse.com), récupère `LANGFUSE_PUBLIC_KEY` + `LANGFUSE_SECRET_KEY` + `LANGFUSE_HOST=https://cloud.langfuse.com` dans `.env`. Le décorateur `@observe` (`src/core/tracing.py`) bascule automatiquement de no-op à actif. Free tier ~1k traces/mois.
+- ⛔ **Langfuse self-hosted v3** : la stack 6 containers du `docker-compose.yml` démarre, mais la config v3 a évolué (env vars supplémentaires non mappées, migrations ClickHouse incomplètes au premier boot). **Ne pas activer cette stack tant qu'un sprint dédié n'a pas remis à jour la config.** Utiliser cloud OU structlog seul en attendant. Le service `iaa-redis` reste utile pour les sprints futurs (bus pubsub), pas pour Langfuse seul.
 - ⏳ **Dashboards Grafana** : non livrés. Pour analyse, lire directement `data/memory/missions/*.md` (un fichier par mission avec score, coût, durée, fichiers produits) ou `scripts/daily_digest.py`.
 
 ---

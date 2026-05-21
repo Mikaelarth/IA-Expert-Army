@@ -166,3 +166,4 @@ nav:
     - "Session 2 — Première mission Ollama (slugify)": sessions/session-2-mission-slugify.md
     - "Session 4 — Prompt code_reviewer v0.2.0": sessions/session-4-prompt-improvement.md
     - "Session 5 — Reviewer v0.3.0 + probe + HITL": sessions/session-5-reviewer-v0-3-0-probe-hitl.md
+    - "Session 6 — Recovery + sandbox + Langfuse": sessions/session-6-recovery-sandbox-langfuse.md
