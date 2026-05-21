@@ -7,12 +7,43 @@ versioning [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.4.0] — 2026-05-20 — Bascule du backend LLM vers Ollama local (ADR-025)
+## [0.4.0] — 2026-05-21 — Bascule Ollama local + contrat 7 critères validé
 
 **BREAKING CHANGE** : retrait complet de la dépendance Anthropic. Tous les
 appels LLM passent désormais par Ollama local via son endpoint OpenAI-
 compatible (`http://localhost:11434/v1`). Voir [ADR-025](docs/adr/025-bascule-anthropic-to-ollama.md)
 pour le rationale, le mapping de modèles et les trade-offs assumés.
+
+Cette version est livrée à l'issue de **6 sessions de travail rigoureux**
+(2026-05-20 → 2026-05-21) sur la branche `feat/ollama-backend`. Elle remplit
+le contrat **7 critères qualité Entreprise** négocié avec l'auteur en
+Session 0 — chaque critère validé par une mesure empirique reproductible
+et documentée dans `docs/sessions/`.
+
+### Sessions 1-6 — Synthèse
+
+| Session | Apport | Mesure / preuve |
+|---|---|---|
+| **1** — Suite verte post-bascule | 31 échecs initiaux → 0 en 7 lots de fix. Bug `BudgetController` Windows race corrigé. | 567 passed, coverage 92.7%, audit 0 finding |
+| **2** — Première mission réelle Ollama | Mission slugify exécutée end-to-end sur Qwen2.5 32B local. | APPROVED 0.93 en 21 min / $0 (baseline Claude : 0.94 en 12 min / $0.50) |
+| **3** — Nettoyage des fictions | `architecture.md` aligné avec le code : 8 agents fictifs + 4 MCP fictifs + Redis non-câblé + KG SQLite + Chief of Staff tagués `⏳ Planifié`. 5 docs annexes mises à jour. | mkdocs `--strict` 0 warning |
+| **4** — Prompt code_reviewer v0.2.0 | Section "Vérification des tests — exécution mentale obligatoire" + protocole 3 étapes. | Mission re-jouée APPROVED 0.95 ; Reviewer mentionne explicitement "Chaque test a été exécuté mentalement" |
+| **5** — Reviewer v0.3.0 + probe déterministe + HITL clarifié | Section "Conformité spec" ajoutée + nouveau `scripts/probe_reviewer.py` qui mesure directement la résorption du bug Session 2. ADR-014 amendé sur statut HITL. | Reviewer v0.3.0 retourne `NEEDS_CHANGES` 0.75 sur le code Session 2 inchangé (vs `APPROVED` 0.93 avant) — **preuve directe que la boucle d'amélioration des prompts fonctionne** |
+| **6** — Recovery + sandbox + Langfuse | Backup/restore testé bout en bout. SandboxRunner probé sur code réel. Statut Langfuse v3 clarifié partout. | backup+restore = 3.99 s (vs seuil 600 s), sandbox pytest exit 0 en 0.91 s, observabilité 3-niveaux ✅✅⛔ documentée |
+
+### Contrat 7 critères — état final
+
+| # | Critère | Statut | Session preuve |
+|---|---|---|---|
+| 1 | Aucune feature fictive en doc | ✅ | 3 |
+| 2 | Tests réellement verts | ✅ | 1+4+5 |
+| 3 | Aucun garde-fou neutralisé silencieusement | ✅ | 5 (HITL clarifié) |
+| 4 | Validation empirique avant promesse | ✅ | 2+4+5 (3 missions documentées + boucle prompt prouvée) |
+| 5 | Sécurité par défaut | ✅ | 6 (sandbox probe) |
+| 6 | Observable sans deviner | ✅ | 6 (Langfuse 3-niveaux) |
+| 7 | Recoverable en < 10 min | ✅ | 6 (3.99 s mesurées) |
+
+### Détail des changements techniques
 
 ### Migration
 
