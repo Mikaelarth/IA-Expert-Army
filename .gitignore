@@ -28,6 +28,12 @@ data/backups/
 # Note : la policy.yml SI on la commit ferait sens (politique partagée équipe),
 # mais pour v1 chacun la sienne en local.
 data/approvals/
+# Probes (Session 5, v0.5.0) — les fichiers .md de probes sont des artefacts
+# pédagogiques qu'on commit (1 par probe). Le sous-dossier _tmp_memory/ que
+# probe_reviewer.py crée pour isolation est un déchet runtime — pas commit.
+data/probes/_tmp_memory/
+# GUI Streamlit (Session 8) — log capturé localement quand on debug le serveur.
+gui-server.log
 *.log
 logs/
 
