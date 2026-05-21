@@ -7,6 +7,68 @@ versioning [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-05-21 — Setup Wizard click-to-go (ADR-027)
+
+Onboarding zéro-terminal : tout le diagnostic + tous les fixes faisables sans
+élévation administrateur sont accessibles depuis une nouvelle page GUI
+**🛠 Setup**. Pour les composants qui exigent un installeur système (Ollama,
+Docker Desktop, uv), un bouton ouvre la page de téléchargement officielle —
+on guide, on n'installe pas à la place de l'OS.
+
+### Added
+
+- **Page `0_🛠_Setup.py`** (premier élément de la sidebar Streamlit, préfixe `0_`)
+  qui affiche en temps réel l'état de 10 composants et propose une action
+  par composant manquant/arrêté :
+  1. Python ≥ 3.12 (toujours OK puisque la GUI tourne)
+  2. `uv` (bouton **Télécharger uv** → URL officielle)
+  3. Ollama installé (bouton **Télécharger Ollama**)
+  4. Ollama daemon démarré (bouton **▶ Démarrer le daemon** → fork `ollama serve` détaché)
+  5-7. 3 modèles Qwen2.5 (bouton **⬇ Pull `<nom>`** → `POST /api/pull` en streaming avec barre de progression)
+  8. Docker daemon (bouton **▶ Démarrer Docker Desktop** sur Windows)
+  9. Image sandbox `iaa-sandbox:latest` (bouton **🐳 Build l'image** → `docker build` avec log live)
+  10. Fichier `.env` (bouton **📄 Créer `.env`** → copie depuis `.env.example`)
+- **Service `src/gui/services/setup_runner.py`** qui concentre toute la logique
+  hors-UI : 10 détections (`detect_all()`), 5 actions (`start_ollama_daemon`,
+  `pull_model` streaming, `build_sandbox_image` streaming, `create_env_from_example`,
+  `start_docker_desktop`), helpers `read_env_content` / `write_env_content` pour
+  l'éditeur inline.
+- **Éditeur `.env` inline** dans la page Setup — modifier `MODEL_STRATEGIC` ou
+  `DAILY_BUDGET_USD` sans quitter la GUI (relance Streamlit pour appliquer).
+- **18 tests unitaires** dans `tests/unit/test_setup_runner.py` couvrant chaque
+  détecteur en mockant `urlopen` et `shutil.which` (jamais de subprocess
+  réel ni de pull Ollama dans les tests).
+- **1 smoke test AppTest** dans `tests/unit/test_gui_smoke.py::test_page_setup_renders`
+  qui vérifie que la page render même sur une machine sans Ollama/Docker.
+- **ADR-027** documentant la décision, le scope réaliste (auto-pull, build,
+  start daemon faisable sans UAC) vs hors-périmètre (auto-install Ollama
+  ou Docker Desktop = UAC requis, donc on délègue à l'URL officielle).
+
+### Changed
+
+- Version `0.5.0` → `0.6.0` (minor : nouvelle feature majeure, pas de breaking).
+- `mkdocs.yml` : nav enrichie avec ADR-027.
+
+### Comment l'utiliser
+
+```bash
+uv sync --group gui      # une seule fois
+just gui                 # lance Streamlit
+```
+
+Puis ouvre `http://127.0.0.1:8501/Setup` — la page Setup montre directement
+ce qui manque et propose les actions adaptées.
+
+### Limites connues / Phase 2
+
+- Pas d'auto-install d'Ollama ni de Docker Desktop : requiert UAC sur Windows,
+  fragile cross-version. Le bouton **Télécharger** ouvre l'URL officielle.
+- Le pull d'un modèle 32B (~20 Go) prend plusieurs heures sur ADSL. Fermer
+  la page Streamlit **n'interrompt pas** le pull côté daemon Ollama — il
+  faut `ollama stop` dans un terminal pour annuler proprement.
+- Après édition de `.env`, il faut relancer Streamlit pour que
+  `get_settings()` recharge (`@lru_cache` ne se purge pas tout seul).
+
 ## [0.5.0] — 2026-05-21 — Interface GUI Streamlit (ADR-026)
 
 Première version avec interface graphique. Le projet reste 100 % utilisable
