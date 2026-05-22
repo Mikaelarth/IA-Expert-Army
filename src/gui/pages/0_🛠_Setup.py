@@ -37,6 +37,7 @@ from src.gui.services.setup_runner import (  # noqa: E402
     build_sandbox_image,
     create_env_from_example,
     detect_all,
+    is_running_in_container,
     pull_model,
     read_env_content,
     start_docker_desktop,
@@ -51,6 +52,23 @@ st.caption(
     "Pour les composants qui exigent un installeur système (Ollama, Docker Desktop), "
     "un bouton ouvre la page de téléchargement officielle."
 )
+
+# v0.9.2 — Bannière contextuelle si la GUI tourne dans un container Docker.
+# Le poste distant qui consulte la GUI n'a PAS besoin d'installer Ollama,
+# Docker, etc. — c'est le PC host qui gère ces composants.
+if is_running_in_container():
+    st.info(
+        "🐳 **Mode conteneurisé détecté** — cette GUI tourne dans un container "
+        "Docker (image `iaa-app`). Les composants ci-dessous sont vérifiés "
+        "**côté serveur** (le PC qui héberge le container), pas côté poste qui "
+        "consulte la GUI.\n\n"
+        "**Si tu consultes la GUI depuis un autre PC du LAN :** tu n'as **rien** "
+        "à installer — juste un navigateur. Le PC host gère Ollama et les modèles.\n\n"
+        "**Composants en `SKIPPED` ci-dessous** : c'est volontaire. Le binaire "
+        "Ollama n'est pas dans l'image (le daemon tourne sur le host via "
+        "`host.docker.internal`), et Docker n'est pas exposé au container "
+        "(sandbox désactivé par défaut, cf. `docs/deploy-lan.md` §4)."
+    )
 
 
 _STATUS_BADGES = {

@@ -83,6 +83,54 @@ URL_UV = "https://docs.astral.sh/uv/getting-started/installation/"
 
 
 # ============================================================================
+# Détection du mode d'exécution (host vs conteneurisé) — v0.9.2
+# ============================================================================
+#
+# Quand la GUI tourne dans un container Docker (`iaa-app:latest`), certaines
+# détections n'ont pas de sens :
+# - Le binaire `ollama` n'est PAS dans le container (volontaire — Ollama
+#   tourne sur le host via `host.docker.internal:11434`). MISSING serait
+#   trompeur, on retourne SKIPPED.
+# - Le binaire `docker` n'est PAS dans le container (volontaire — sandbox
+#   désactivé par défaut, cf. docs/deploy-lan.md §4).
+# - L'installation `uv` n'est pas nécessaire (les deps sont gelées dans
+#   l'image au build).
+#
+# La détection se fait via la sentinelle `/.dockerenv` (présente dans tous
+# les containers Docker depuis 2014) ou via la variable d'env explicite
+# `IAA_DEPLOYMENT_MODE=container` qu'on peut forcer.
+
+
+def is_running_in_container() -> bool:
+    """True si la GUI tourne dans un container Docker.
+
+    Détection cumulative :
+    1. Variable d'env `IAA_DEPLOYMENT_MODE=container` — override explicite.
+    2. Présence du fichier `/.dockerenv` (créé par Docker dans tout container).
+    3. Présence de `docker` ou `containerd` dans `/proc/1/cgroup` (Linux).
+
+    Best-effort : si la détection plante (Windows host sans /proc, etc.),
+    on retourne False (mode "host").
+    """
+    if os.environ.get("IAA_DEPLOYMENT_MODE") == "container":
+        return True
+    try:
+        if Path("/.dockerenv").exists():
+            return True
+    except OSError:
+        pass
+    try:
+        cgroup = Path("/proc/1/cgroup")
+        if cgroup.exists():
+            content = cgroup.read_text(encoding="utf-8")
+            if "docker" in content or "containerd" in content:
+                return True
+    except OSError:
+        pass
+    return False
+
+
+# ============================================================================
 # Détections — chaque fonction retourne ComponentStatus, ne lève jamais
 # ============================================================================
 
@@ -128,6 +176,16 @@ def detect_python() -> ComponentStatus:
 
 
 def detect_uv() -> ComponentStatus:
+    # v0.9.2 — En container, les deps sont gelées dans l'image au build,
+    # uv n'est pas requis runtime → SKIPPED plutôt que MISSING (trompeur).
+    if is_running_in_container():
+        return ComponentStatus(
+            key="uv",
+            label="uv (package manager)",
+            status=Status.SKIPPED,
+            detail="Non requis : deps gelées dans l'image Docker au build.",
+            is_required=False,
+        )
     path = shutil.which("uv")
     if path is None:
         return ComponentStatus(
@@ -148,6 +206,20 @@ def detect_uv() -> ComponentStatus:
 
 
 def detect_ollama_installed() -> ComponentStatus:
+    # v0.9.2 — En container, le binaire `ollama` n'est PAS dans l'image
+    # (volontaire — Ollama tourne sur le host via host.docker.internal).
+    # SKIPPED car ce qui compte c'est que le daemon réponde, vérifié plus loin.
+    if is_running_in_container():
+        return ComponentStatus(
+            key="ollama_installed",
+            label="Ollama installé",
+            status=Status.SKIPPED,
+            detail=(
+                "Mode container : le binaire local n'est pas requis. "
+                "Le daemon doit tourner sur le host (vérifié ci-dessous)."
+            ),
+            is_required=False,
+        )
     path = shutil.which("ollama")
     if path is None:
         return ComponentStatus(
