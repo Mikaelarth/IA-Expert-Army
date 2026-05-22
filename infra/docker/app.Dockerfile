@@ -74,7 +74,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH=/app
 
 # Copier le code source (les volumes en runtime peuvent overrider data/, etc.)
-COPY pyproject.toml uv.lock README.md ./
+COPY pyproject.toml uv.lock README.md .env.example ./
 COPY src ./src
 COPY scripts ./scripts
 COPY prompts ./prompts
