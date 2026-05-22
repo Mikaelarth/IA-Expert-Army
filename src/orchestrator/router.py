@@ -18,10 +18,12 @@ from __future__ import annotations
 
 import re
 from typing import Any, Protocol
+from uuid import UUID
 
 from pydantic import BaseModel
 
 from src.core.budget import BudgetController
+from src.core.checkpoint import CheckpointStore
 from src.core.config import Settings, get_settings
 from src.core.killswitch import Killswitch
 from src.core.logging import get_logger
@@ -426,6 +428,7 @@ class MissionRouter:
         budget: BudgetController | None = None,
         killswitch: Killswitch | None = None,
         classifier: _GuildClassifier | None = None,
+        checkpoint_store: CheckpointStore | None = None,
     ) -> None:
         self.memory = memory
         self.settings = settings or get_settings()
@@ -433,6 +436,12 @@ class MissionRouter:
         self.skills_library = skills_library
         self.budget = budget
         self.killswitch = killswitch
+        # v0.8.0 F1 — store de checkpoints pour resume après crash. Si fourni
+        # ET un mission_id est passé à run(), le Workflow Engineering reprend
+        # depuis le dernier agent terminé. Pour l'instant, seul le workflow
+        # Engineering supporte le resume — étendable aux autres guildes
+        # ultérieurement si le besoin émerge.
+        self.checkpoint_store = checkpoint_store
         # v0.7.0 — classifier LLM opt-in via Settings.use_llm_classifier.
         # Si l'utilisateur a passé un classifier explicite, on respecte son
         # choix. Sinon : LLM si activé, héuristique sinon.
@@ -462,7 +471,17 @@ class MissionRouter:
         title: str,
         description: str,
         force_guild: str | None = None,
+        *,
+        mission_id: UUID | None = None,
     ) -> UnifiedMissionResult:
+        """Lance une mission via la guilde sélectionnée.
+
+        v0.8.0 F1 — `mission_id` permet de reprendre une mission interrompue
+        (resume). Cf. `scripts/run_mission.py --resume <id>`. Si None, un
+        nouveau mission_id est généré (cas nominal). Le resume ne fonctionne
+        actuellement que pour la guilde Engineering ; les autres guildes
+        ignorent silencieusement le mission_id et en génèrent un nouveau.
+        """
         decision = self.decide(title, description, force_guild=force_guild)
         log.info("router.dispatch", guild=decision.guild, reason=decision.reason, title=title)
 
@@ -525,9 +544,13 @@ class MissionRouter:
                 raw_result=biz_result.model_dump(mode="json"),
             )
         else:
-            # Default = engineering
-            wf_eng = Workflow(**common)
-            eng_result: MissionResult = await wf_eng.run(title=title, description=description)
+            # Default = engineering — la seule guilde qui supporte le resume
+            # via checkpoint_store (v0.8.0 F1). Si mission_id fourni → reprend
+            # depuis le dernier agent terminé.
+            wf_eng = Workflow(**common, checkpoint_store=self.checkpoint_store)
+            eng_result: MissionResult = await wf_eng.run(
+                title=title, description=description, mission_id=mission_id
+            )
             unified = UnifiedMissionResult(
                 mission_id=str(eng_result.mission_id),
                 title=eng_result.title,

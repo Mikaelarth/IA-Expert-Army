@@ -11,7 +11,15 @@ faille design) — dans ce cas, le Developer seul ne peut pas corriger car
 sa proposition d'architecture amont est figée. Pattern méta-leçon
 Sprint PP (BusinessWorkflow) appliqué ici symétriquement.
 
+v0.8.0 — câblage CheckpointStore (F1) + ProgressEvent emission (F2).
+
 Phase 3+ : ce module sera remplacé par un graphe LangGraph stateful.
+
+# audit: ignore FILE_TOO_LONG -- 506 lignes acceptées : workflow nominal +
+# repair loop + propagation score + summary writer + helpers — cohérence
+# fonctionnelle d'un seul pipeline guilde Engineering. Split par phase
+# (run/repair/persist) ferait perdre la lisibilité linéaire qui fait
+# justement la valeur de ce fichier.
 """
 
 from __future__ import annotations
@@ -22,12 +30,14 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel
 
 from src.core.budget import BudgetController, BudgetExceeded
+from src.core.checkpoint import CheckpointStore
 from src.core.config import Settings, get_settings
 from src.core.killswitch import Killswitch, KillswitchEngaged
 from src.core.logging import get_logger
 from src.learning.skills_library import SkillsLibrary
 from src.memory.file_memory import FileMemory, MemoryRecord
 from src.memory.vector_memory import VectorMemory
+from src.orchestrator._checkpoint_helper import run_with_checkpoint
 from src.orchestrator.agents import (
     BackendDeveloper,
     ChiefOrchestrator,
@@ -37,6 +47,7 @@ from src.orchestrator.agents import (
 )
 from src.orchestrator.agents.security_auditor import has_downgrade_findings
 from src.orchestrator.base_agent import AgentInput, AgentOutput
+from src.orchestrator.progress import ProgressCallback, emit, make_event
 
 log = get_logger("workflow")
 
@@ -73,6 +84,7 @@ class Workflow:
         skills_library: SkillsLibrary | None = None,
         budget: BudgetController | None = None,
         killswitch: Killswitch | None = None,
+        checkpoint_store: CheckpointStore | None = None,
     ) -> None:
         self.memory = memory
         self.vector_memory = vector_memory
@@ -80,18 +92,37 @@ class Workflow:
         self.settings = settings or get_settings()
         self.budget = budget
         self.killswitch = killswitch
+        self.checkpoint_store = checkpoint_store
         common = {"vector_memory": vector_memory, "skills_library": skills_library}
         self.orchestrator = ChiefOrchestrator(memory, self.settings, **common)
         self.architect = SoftwareArchitect(memory, self.settings, **common)
         self.developer = BackendDeveloper(memory, self.settings, **common)
         self.reviewer = CodeReviewer(memory, self.settings, **common)
 
-    async def run(self, title: str, description: str) -> MissionResult:
-        mission_id = uuid4()
+    async def run(
+        self,
+        title: str,
+        description: str,
+        *,
+        mission_id: UUID | None = None,
+        on_progress: ProgressCallback | None = None,
+    ) -> MissionResult:
+        # v0.8.0 — mission_id peut être fourni pour reprendre une mission
+        # interrompue. Si None, on en génère un nouveau (cas nominal).
+        mission_id = mission_id or uuid4()
         started = datetime.now(UTC)
         outputs: list[AgentOutput] = []
 
         log.info("workflow.start", mission=str(mission_id), title=title)
+        emit(
+            on_progress,
+            make_event(
+                "mission_started",
+                f"Mission engineering démarrée : {title}",
+                mission_id=str(mission_id),
+                title=title,
+            ),
+        )
 
         # Garde-fous Phase 6 — vérifications avant tout appel LLM
         if self.killswitch is not None:
@@ -110,11 +141,17 @@ class Workflow:
                 return self._fail(mission_id, title, started, outputs, "budget.exceeded", str(exc))
 
         # Step 1 — Orchestrator décompose
-        orch_out = await self.orchestrator.run(
+        orch_out = await run_with_checkpoint(
+            self.orchestrator,
             AgentInput(
                 mission_id=mission_id,
                 task=f"Mission : {title}\n\n{description}\n\nProduis la décomposition au format YAML attendu.",
-            )
+            ),
+            step_index=0,
+            agent_name="chief_orchestrator",
+            checkpoint_store=self.checkpoint_store,
+            mission_id=mission_id,
+            on_progress=on_progress,
         )
         outputs.append(orch_out)
         if not orch_out.success:
@@ -126,12 +163,18 @@ class Workflow:
         first_task = self._first_subtask(decomposition) or description
 
         # Step 2 — Architect conçoit
-        arch_out = await self.architect.run(
+        arch_out = await run_with_checkpoint(
+            self.architect,
             AgentInput(
                 mission_id=mission_id,
                 task=first_task,
                 context={"mission": description, "decomposition_yaml": orch_out.raw_text},
-            )
+            ),
+            step_index=1,
+            agent_name="software_architect",
+            checkpoint_store=self.checkpoint_store,
+            mission_id=mission_id,
+            on_progress=on_progress,
         )
         outputs.append(arch_out)
         if not arch_out.success:
@@ -140,12 +183,18 @@ class Workflow:
             )
 
         # Step 3 — Developer code
-        dev_out = await self.developer.run(
+        dev_out = await run_with_checkpoint(
+            self.developer,
             AgentInput(
                 mission_id=mission_id,
                 task=first_task,
                 context={"architecture_proposal_yaml": arch_out.raw_text},
-            )
+            ),
+            step_index=2,
+            agent_name="backend_developer",
+            checkpoint_store=self.checkpoint_store,
+            mission_id=mission_id,
+            on_progress=on_progress,
         )
         outputs.append(dev_out)
         if not dev_out.success:
@@ -154,7 +203,8 @@ class Workflow:
             )
 
         # Step 4 — Reviewer juge
-        review_out = await self.reviewer.run(
+        review_out = await run_with_checkpoint(
+            self.reviewer,
             AgentInput(
                 mission_id=mission_id,
                 task=first_task,
@@ -162,7 +212,12 @@ class Workflow:
                     "architecture_proposal_yaml": arch_out.raw_text,
                     "developer_output_md": dev_out.raw_text,
                 },
-            )
+            ),
+            step_index=3,
+            agent_name="code_reviewer",
+            checkpoint_store=self.checkpoint_store,
+            mission_id=mission_id,
+            on_progress=on_progress,
         )
         outputs.append(review_out)
         if not review_out.success:
@@ -313,6 +368,29 @@ class Workflow:
             cost_usd=round(total_cost, 6),
             duration_s=round(total_duration, 2),
         )
+
+        # v0.8.0 F1 — mission terminée (succès OU verdict définitif type
+        # REJECTED) : on nettoie les checkpoints, plus besoin de les garder.
+        # Si la mission a échoué via _fail() en cours de chemin, les checkpoints
+        # sont conservés pour permettre le resume après fix manuel.
+        if self.checkpoint_store is not None:
+            self.checkpoint_store.clear(str(mission_id))
+
+        # v0.8.0 F2 — émission finale
+        emit(
+            on_progress,
+            make_event(
+                "mission_completed",
+                f"Mission terminée — verdict {verdict} (score {quality_score})",
+                mission_id=str(mission_id),
+                verdict=verdict,
+                quality_score=quality_score,
+                total_cost_usd=total_cost,
+                total_duration_seconds=total_duration,
+                files_count=len(files),
+            ),
+        )
+
         return result
 
     def _propagate_score_to_episodes(self, mission_id: UUID, result: MissionResult) -> None:

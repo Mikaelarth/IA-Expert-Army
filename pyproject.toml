@@ -1,6 +1,6 @@
 [project]
 name = "ia-expert-army"
-version = "0.7.0"
+version = "0.8.0"
 description = "Une armée d'agents IA experts spécialisés, autonome, à mémoire partagée et apprentissage continu."
 authors = [{ name = "MikaelArth", email = "esarth.org@gmail.com" }]
 readme = "README.md"

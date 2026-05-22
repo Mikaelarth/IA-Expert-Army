@@ -121,7 +121,10 @@ class BaseAgent:
                 timeout_s=self.settings.ollama_timeout_seconds,
             )
 
-        self.system_prompt = self._load_system_prompt()
+        # v0.8.0 F4 — si hot_reload_prompts=True (opt-in via Settings),
+        # le prompt est re-lu disque à chaque appel via `_get_system_prompt()`.
+        # Sinon, il est chargé une fois ici et caché dans self._system_prompt_cache.
+        self._system_prompt_cache = self._load_system_prompt()
 
     def _load_system_prompt(self) -> str:
         if not self.prompt_path.exists():
@@ -129,6 +132,28 @@ class BaseAgent:
         text = self.prompt_path.read_text(encoding="utf-8")
         record = MemoryRecord.from_markdown(text)
         return record.body
+
+    @property
+    def system_prompt(self) -> str:
+        """Prompt système courant. Re-lit le disque si hot_reload activé.
+
+        v0.8.0 F4 — opt-in via Settings.hot_reload_prompts. Quand True,
+        permet de modifier prompts/**/*.md sans redémarrer Streamlit/CLI.
+        Overhead négligeable (~10 ms par appel LLM de 30s+).
+        """
+        if self.settings.hot_reload_prompts:
+            try:
+                return self._load_system_prompt()
+            except (OSError, FileNotFoundError) as exc:
+                # Si le fichier est en cours d'édition (write atomique en 2 temps),
+                # on retombe sur le cache pour ne pas crasher la mission.
+                self._log.warning(
+                    "prompt.hot_reload.fallback_to_cache",
+                    error=str(exc),
+                    path=str(self.prompt_path),
+                )
+                return self._system_prompt_cache
+        return self._system_prompt_cache
 
     def build_user_message(
         self,
