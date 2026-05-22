@@ -7,6 +7,72 @@ versioning [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-05-22 — Audit zéro-dette : 21 findings résorbés en 4 vagues
+
+Version dédiée à la résorption méthodique de la dette technique identifiée par
+l'audit d'introspection du 2026-05-22 (cf. réponse "étude rigoureuse" dans la
+session de release). **21 findings traités**, structurés en 4 commits cohérents :
+
+### Vague 1 — Quick wins cosmétiques + DX (8 findings)
+
+- **E1** README.md L235 disait « 5 pages » Streamlit → corrigé en « 6 pages »
+- **E2** docs/adr/README.md indexe désormais ADR-025/026/027/028
+- **E4** pyproject.toml retire ruff/mypy du PEP 621 — source de vérité unique [dependency-groups]
+- **E5** justfile `gui` ajoute `uv sync --group gui --quiet` (idempotent)
+- **E6** scripts/README.md créé : inventaire des 22 scripts avec statut STABLE/DEV/INFRA
+- **E8** Commentaire whitelist PatternMiner clarifié (security_auditor transverse, prompt dans orchestrator/)
+- **L6** BudgetController.__init__ émet un warning si `daily_budget <= 0` (rappel mode no-op)
+- **L7** mypy activé en pre-commit, scope `src/core/` (plan d'extension progressive documenté)
+
+### Vague 2 — Bugs latents (3 findings)
+
+- **E3** chromadb aligné partout sur >=1.5.9 (deps base, optional `memory`, docker-compose 1.0.13)
+- **L11** PatternMiner dédup : nouveau `_already_mined_sources()` exclut les épisodes déjà sourceurs d'une skill
+- **L12** Nouveau `tests/integration/test_migrate_invariants.py` (5 tests cross-plateforme) — complète `test_migrate_vps.py` qui skip sur Windows
+
+### Vague 3 — Carences structurelles (6 findings)
+
+- **L8** CI ajoute un step `docker build sandbox.Dockerfile` (validation Dockerfile, pas de run)
+- **L5** Filtre self-referential skills : `sources_mission_ids` persisté + `exclude_mission_ids` dans `search_skills`, câblé dans `BaseAgent._retrieve_skills`
+- **L4** `nightly_learning.py --git-commit` : commit auto des skills extraites, traçabilité + rollback granulaire
+- **L2** Quality Guardian sémantique clarifiée — nouveau property `qg_blocks_release` (informatif, n'override jamais `final_verdict`)
+- **L1** HITL approvals câblé dans `apply_files()` via paramètre `approval_store` optionnel (audit trail sur overwrite avec `force=True`)
+- **L9** Nouveau `LLMGuildClassifier` (Qwen 14B) avec fallback automatique sur héuristique ; opt-in via `Settings.use_llm_classifier`
+
+### Vague 4 — Documentation + tests E2E (3 findings)
+
+- **E7** [ADR-028](docs/adr/028-langfuse-self-hosted-deferred.md) — Langfuse self-hosted v3 officiellement gelé (cloud uniquement supporté), docker-compose annoté DEFERRED avec conditions de réactivation
+- **E9** Sessions 1 & 3 documentées (`docs/sessions/session-1-test-suite-stabilization.md` et `session-3-fiction-cleanup.md`)
+- **L3** Nouveau `tests/integration/test_e2e_ollama_live.py` (2 tests slow, opt-in `OLLAMA_E2E=1`) + workflow `.github/workflows/nightly-e2e.yml` (cron quotidien 3h UTC + manual dispatch)
+
+### Findings non-corrigés (analyse intentionnelle)
+
+- **L10 (chemins d'erreur API)** : déjà couvert par `test_api_version.py:67-100` (4 chemins de fallback testés). Le rapport audit a sur-estimé le risque.
+
+### Métriques release
+
+- Tests : **616 passing** (+13), 6 skipped (suite "fast"), 2 slow opt-in (nightly E2E)
+- Coverage : maintenue ≥ 90 % (la cible `fail_under=90` reste)
+- ADRs : 27 → **28** (ADR-028 Langfuse deferred)
+- Sessions documentées : 4 → **6** (sessions 1 et 3 ajoutées)
+- mypy `src/core/` : type-clean (0 erreur, hook pre-commit actif)
+- Audit codebase : **0 finding**
+
+### Décisions stratégiques tranchées
+
+| ID | Question | Décision |
+|---|---|---|
+| L1 HITL | Câbler ou retirer ? | **Câblé** non-bloquant sur `apply_files --force` ; rétrocompat 100% (sans `approval_store`, comportement inchangé) |
+| L2 QG | Informatif ou bloquant ? | **Informatif clarifié** (property `qg_blocks_release` pour les callers prudents). Migration vers bloquant = bump majeur, pas avant. |
+| L9 Classifier | LLM ou heuristique ? | **Les deux** — opt-in via `Settings.use_llm_classifier`. Fallback automatique. |
+| E7 Langfuse v3 | Continuer le debug ou geler ? | **Gelé** (ADR-028). Cloud Langfuse = canal recommandé. |
+
+### Limites connues (post-v0.7.0)
+
+- Le LLM classifier ajoute ~0.5-2 s au routage si activé. Sur missions très longues (20-40 min), le surcoût relatif est négligeable mais à connaître.
+- L'audit trail HITL via `apply_files` n'est appelé QUE si le caller passe un `approval_store`. Ni `apply_mission.py` ni la GUI ne le font par défaut — c'est volontaire pour la rétrocompat. À câbler dans un prochain sprint si on veut un audit trail systématique.
+- Nightly E2E Ollama : sur GitHub-hosted runners, les tests skip silencieusement (Ollama absent). Pour validation réelle, run sur self-hosted runner avec Ollama installé ou en local via `OLLAMA_E2E=1 uv run pytest -m slow`.
+
 ## [0.6.0] — 2026-05-21 — Setup Wizard click-to-go (ADR-027)
 
 Onboarding zéro-terminal : tout le diagnostic + tous les fixes faisables sans

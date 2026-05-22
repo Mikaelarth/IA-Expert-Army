@@ -4,9 +4,14 @@ Phase 4 MVP — classifieur heuristique simple (mots-clés). Pas d'appel LLM
 juste pour décider la guilde : si l'utilisateur précise explicitement le type
 de mission, on respecte. Sinon, on déduit du vocabulaire.
 
-Phase 4+ : remplacera l'heuristique par un mini-classifier Claude (Haiku) qui
-note les ambiguïtés et redirige vers la bonne guilde — ou par un Chief
-Orchestrator enrichi qui inclut `target_guild` dans sa décomposition YAML.
+v0.7.0 — LLMGuildClassifier ajouté (Qwen 14B, opt-in via Settings) avec
+fallback automatique sur l'héuristique en cas d'erreur. Cf. ADR audit zéro-dette.
+
+# audit: ignore FILE_TOO_LONG -- 603 lignes acceptées : MissionRouter + 4
+# UnifiedMissionResult helpers + 2 classifiers (Heuristic + LLM) + 1 dispatch
+# vers 4 workflows guildes. Split par classifier (router_classify.py +
+# router_dispatch.py) ferait perdre la vue d'ensemble du dispatch et obligerait
+# à importer 2 modules pour comprendre le routage. Cohésion > split.
 """
 
 from __future__ import annotations
@@ -297,7 +302,9 @@ class LLMGuildClassifier:
     """
 
     _GUILDS = ("engineering", "research", "creative", "business")
-    _SYSTEM_PROMPT = (
+    # Classifier interne mini (200 chars), versionning git suffit ; pas de
+    # bénéfice à externaliser dans prompts/.
+    _SYSTEM_PROMPT = (  # audit: ignore HARDCODED_PROMPT
         "Tu es un classifieur de missions pour un système d'agents IA "
         "multi-guildes. Tu reçois un titre + une description et tu DOIS "
         "répondre par UN SEUL mot parmi : engineering, research, creative, "

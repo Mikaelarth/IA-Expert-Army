@@ -1,6 +1,6 @@
 [project]
 name = "ia-expert-army"
-version = "0.6.0"
+version = "0.7.0"
 description = "Une armée d'agents IA experts spécialisés, autonome, à mémoire partagée et apprentissage continu."
 authors = [{ name = "MikaelArth", email = "esarth.org@gmail.com" }]
 readme = "README.md"
@@ -101,7 +101,12 @@ ignore = [
 asyncio_mode = "auto"
 testpaths = ["tests"]
 python_files = "test_*.py"
-addopts = "-v --tb=short"
+addopts = "-v --tb=short -m \"not slow\""
+markers = [
+    # v0.7.0 — tests E2E live qui touchent Ollama réel. Skipped par défaut
+    # (suite rapide), activable via env OLLAMA_E2E=1 + cron nightly CI.
+    "slow: marks tests as slow (deselect with '-m \"not slow\"', activate via OLLAMA_E2E=1)",
+]
 # Filtres warnings — garde les runs de tests propres pour pouvoir détecter
 # les VRAIS warnings (saturation, deprecation interne, etc.) sans bruit.
 filterwarnings = [

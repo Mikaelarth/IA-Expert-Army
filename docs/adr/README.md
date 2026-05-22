@@ -52,3 +52,4 @@ Format minimal :
 - [ADR-025 — Bascule du backend LLM : Anthropic Claude → Ollama local](025-bascule-anthropic-to-ollama.md)
 - [ADR-026 — Interface GUI : Streamlit multipages](026-gui-streamlit.md)
 - [ADR-027 — Setup Wizard GUI click-to-go (onboarding zéro-terminal)](027-setup-wizard-gui.md)
+- [ADR-028 — Langfuse self-hosted v3 différé (cloud uniquement)](028-langfuse-self-hosted-deferred.md)

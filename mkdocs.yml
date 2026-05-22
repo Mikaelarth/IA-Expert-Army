@@ -163,9 +163,12 @@ nav:
     - "025 — Bascule Anthropic → Ollama local": adr/025-bascule-anthropic-to-ollama.md
     - "026 — Interface GUI Streamlit": adr/026-gui-streamlit.md
     - "027 — Setup Wizard GUI click-to-go": adr/027-setup-wizard-gui.md
+    - "028 — Langfuse self-hosted v3 deferred": adr/028-langfuse-self-hosted-deferred.md
 
   - Sessions:
+    - "Session 1 — Stabilisation tests post-Ollama": sessions/session-1-test-suite-stabilization.md
     - "Session 2 — Première mission Ollama (slugify)": sessions/session-2-mission-slugify.md
+    - "Session 3 — Nettoyage fictions architecturales": sessions/session-3-fiction-cleanup.md
     - "Session 4 — Prompt code_reviewer v0.2.0": sessions/session-4-prompt-improvement.md
     - "Session 5 — Reviewer v0.3.0 + probe + HITL": sessions/session-5-reviewer-v0-3-0-probe-hitl.md
     - "Session 6 — Recovery + sandbox + Langfuse": sessions/session-6-recovery-sandbox-langfuse.md
