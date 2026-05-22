@@ -154,7 +154,8 @@ def _patch_engineering(monkeypatch: pytest.MonkeyPatch, fake_result) -> None:
             self.captured = kwargs
 
         # v0.8.0 F1 — accepte mission_id kwarg pour le resume support
-        async def run(self, title: str, description: str, *, mission_id=None):
+        # v0.9.4 — accepte on_progress kwarg pour le streaming F2
+        async def run(self, title: str, description: str, *, mission_id=None, on_progress=None):
             return fake_result
 
     monkeypatch.setattr("src.orchestrator.router.Workflow", FakeWf)
@@ -218,6 +219,92 @@ def test_router_dispatches_to_research(
     result = asyncio.run(router.run("Compare frameworks Python", "Synthétise les options 2026"))
     assert result.guild == "research"
     assert "TL;DR" in result.raw_result["synthesis_markdown"]
+
+
+# ===== Régression v0.9.4 — on_progress accepté + émet pour toutes les guildes =====
+
+
+def test_router_run_accepts_on_progress_kwarg_engineering(
+    monkeypatch: pytest.MonkeyPatch, memory: FileMemory, settings: Settings
+) -> None:
+    """Régression cible : avant v0.9.4, MissionRouter.run() ne déclarait PAS
+    `on_progress` dans sa signature, alors que `mission_runner.run_mission_streaming()`
+    l'appelait avec ce kwarg → TypeError au runtime. Les tests mockés du
+    streaming ne l'avaient pas détecté (le mock acceptait le kwarg, le vrai
+    code non).
+
+    Ce test garantit que router.run(on_progress=...) ne crash pas ET émet
+    bien les events sur le callback fourni.
+    """
+    from src.orchestrator.progress import ProgressEvent
+    from src.orchestrator.workflow import MissionResult
+
+    fake = MissionResult(
+        mission_id=uuid4(),
+        title="t",
+        success=True,
+        final_verdict="APPROVED",
+        quality_score=0.9,
+        total_cost_usd=0.1,
+        total_duration_seconds=1.0,
+        files_produced=[],
+        review_summary="ok",
+        episodes_count=4,
+    )
+    _patch_engineering(monkeypatch, fake)
+    router = MissionRouter(memory=memory, settings=settings)
+
+    captured: list[ProgressEvent] = []
+
+    # Ne doit PAS lever TypeError
+    result = asyncio.run(
+        router.run(
+            "Endpoint /health",
+            "Crée endpoint FastAPI",
+            on_progress=captured.append,
+        )
+    )
+    assert result.guild == "engineering"
+    # mission_routed doit être émis dans tous les cas
+    assert any(e.event_type == "mission_routed" for e in captured)
+
+
+def test_router_run_emits_mission_lifecycle_for_non_engineering_guilds(
+    monkeypatch: pytest.MonkeyPatch, memory: FileMemory, settings: Settings
+) -> None:
+    """v0.9.4 — Les guildes Research/Creative/Business émettent au minimum
+    mission_started + mission_completed depuis le router (le workflow interne
+    n'a pas le streaming agent-par-agent). Garde l'UX GUI cohérente."""
+    from src.guilds.research.workflow import ResearchMissionResult
+    from src.orchestrator.progress import ProgressEvent
+
+    fake = ResearchMissionResult(
+        mission_id=uuid4(),
+        title="t",
+        success=True,
+        final_verdict="APPROVED",
+        quality_score=0.9,
+        total_cost_usd=0.0,
+        total_duration_seconds=1.0,
+        synthesis_markdown="# Result",
+        review_summary="ok",
+        episodes_count=4,
+    )
+    _patch_research(monkeypatch, fake)
+    router = MissionRouter(memory=memory, settings=settings)
+
+    captured: list[ProgressEvent] = []
+    asyncio.run(
+        router.run(
+            "Compare frameworks",
+            "Synthétise les options",
+            on_progress=captured.append,
+        )
+    )
+    types_seen = [e.event_type for e in captured]
+    assert "mission_routed" in types_seen
+    assert "mission_started" in types_seen
+    assert "mission_completed" in types_seen
 
 
 # ===== LLM Classifier (v0.7.0) =====
