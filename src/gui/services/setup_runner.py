@@ -254,13 +254,30 @@ def detect_ollama_daemon() -> ComponentStatus:
             detail=f"daemon joignable sur {url}",
         )
     except urllib.error.URLError as exc:
+        # v0.9.3 — En container, le bouton "Démarrer le daemon" ne peut pas
+        # marcher (binaire ollama absent de l'image). On guide l'opérateur
+        # vers le PC host. Pas de fix_action ; install_url=None.
+        reason = exc.reason if hasattr(exc, "reason") else exc
+        if is_running_in_container():
+            return ComponentStatus(
+                key="ollama_daemon",
+                label="Ollama daemon",
+                status=Status.STOPPED,
+                detail=(
+                    f"Daemon injoignable depuis le container ({reason}). "
+                    "Vérifier sur le PC host que `ollama serve` tourne et que "
+                    f"l'URL `{url}` est joignable (host.docker.internal "
+                    "résout vers le host sur Docker Desktop ; en Linux, le "
+                    "compose configure `extra_hosts: host-gateway`)."
+                ),
+                # Pas de fix_action : le container ne peut PAS démarrer ollama
+            )
         return ComponentStatus(
             key="ollama_daemon",
             label="Ollama daemon",
             status=Status.STOPPED,
             detail=(
-                f"Daemon injoignable ({exc.reason if hasattr(exc, 'reason') else exc}) — "
-                "lance `ollama serve` ou clique sur Démarrer."
+                f"Daemon injoignable ({reason}) — lance `ollama serve` ou clique sur Démarrer."
             ),
             fix_action="start_ollama",
         )
@@ -320,6 +337,23 @@ def detect_docker() -> ComponentStatus:
     """Détecte Docker daemon (rapide, 1 seul appel ping)."""
     s = get_settings()
     label = "Docker daemon"
+    # v0.9.3 — En container sans socket /var/run/docker.sock monté, le sandbox
+    # ne peut PAS fonctionner (le binaire docker n'est pas dans l'image, et
+    # même installé il aurait besoin du socket pour piloter le daemon host).
+    # SKIPPED systématique pour ne pas afficher un MISSING + "Télécharger
+    # Docker Desktop" trompeur depuis un poste distant qui consulte la GUI.
+    if is_running_in_container() and not Path("/var/run/docker.sock").exists():
+        return ComponentStatus(
+            key="docker",
+            label=label,
+            status=Status.SKIPPED,
+            detail=(
+                "Mode container sans socket Docker monté — sandbox non disponible. "
+                "Pour activer : monter `/var/run/docker.sock` côté compose "
+                "(cf. docs/deploy-lan.md §4)."
+            ),
+            is_required=False,
+        )
     if not s.enable_sandbox:
         return ComponentStatus(
             key="docker",
@@ -376,6 +410,16 @@ def detect_sandbox_image() -> ComponentStatus:
     """Vérifie présence de `iaa-sandbox:latest`."""
     s = get_settings()
     label = "Image sandbox (`iaa-sandbox:latest`)"
+    # v0.9.3 — Cohérent avec detect_docker : en container sans socket Docker
+    # monté, on ne peut pas inspecter les images du host. SKIPPED.
+    if is_running_in_container() and not Path("/var/run/docker.sock").exists():
+        return ComponentStatus(
+            key="sandbox_image",
+            label=label,
+            status=Status.SKIPPED,
+            detail="Mode container sans socket Docker monté — image non vérifiable.",
+            is_required=False,
+        )
     if not s.enable_sandbox:
         return ComponentStatus(
             key="sandbox_image",

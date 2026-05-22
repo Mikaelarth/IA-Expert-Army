@@ -41,25 +41,35 @@ services:
       # Pour localhost only, remplacer par "127.0.0.1:8501:8501".
       - "0.0.0.0:8501:8501"
     environment:
-      # Ollama sur le host : host.docker.internal résolu via add_hosts ci-dessous.
-      # Si Ollama tourne en container, mettre l'URL du service Ollama compose.
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
-      OLLAMA_API_KEY: ${OLLAMA_API_KEY:-ollama}
-      MODEL_STRATEGIC: ${MODEL_STRATEGIC:-qwen2.5:32b}
-      MODEL_OPERATIONAL: ${MODEL_OPERATIONAL:-qwen2.5-coder:32b}
-      MODEL_BULK: ${MODEL_BULK:-qwen2.5:14b}
-      DAILY_BUDGET_USD: ${DAILY_BUDGET_USD:-0.0}
-      # Sandbox désactivé par défaut dans le container app (l'API Docker
-      # n'est pas exposée au container app pour des raisons de sécurité).
-      # Pour activer le sandbox depuis l'app conteneurisée, monter
-      # /var/run/docker.sock (cf. docs/deploy-lan.md §Sandbox).
-      ENABLE_SANDBOX: ${ENABLE_SANDBOX:-false}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      LOG_FORMAT: ${LOG_FORMAT:-json}
-      # A/B testing prompts opt-in
-      AB_TESTING_AGENTS: ${AB_TESTING_AGENTS:-}
-      # Hot-reload prompts opt-in (intéressant en dev LAN, pas en prod)
-      HOT_RELOAD_PROMPTS: ${HOT_RELOAD_PROMPTS:-false}
+      # v0.9.3 — Variables container-aware avec préfixe IAA_CONTAINER_*
+      # pour ne PAS hériter du .env du host (où OLLAMA_BASE_URL=localhost…
+      # serait toxique car localhost dans le container ≠ host).
+      #
+      # Override container-only :
+      #   IAA_CONTAINER_OLLAMA_URL=http://192.168.1.50:11434/v1  # Ollama remote
+      #   IAA_CONTAINER_ENABLE_SANDBOX=true                       # si socket monté
+      #
+      # Défauts choisis pour LAN+host Ollama : host.docker.internal résolu
+      # via add_hosts ci-dessous (Linux) ou natif (Mac/Windows Docker Desktop).
+      OLLAMA_BASE_URL: ${IAA_CONTAINER_OLLAMA_URL:-http://host.docker.internal:11434/v1}
+      OLLAMA_API_KEY: ollama
+      MODEL_STRATEGIC: ${IAA_CONTAINER_MODEL_STRATEGIC:-qwen2.5:32b}
+      MODEL_OPERATIONAL: ${IAA_CONTAINER_MODEL_OPERATIONAL:-qwen2.5-coder:32b}
+      MODEL_BULK: ${IAA_CONTAINER_MODEL_BULK:-qwen2.5:14b}
+      DAILY_BUDGET_USD: ${IAA_CONTAINER_DAILY_BUDGET_USD:-0.0}
+      # Sandbox FORCÉ à false en container par défaut : l'API Docker n'est
+      # pas exposée au container (sécurité). Override possible via
+      # IAA_CONTAINER_ENABLE_SANDBOX=true APRÈS avoir monté /var/run/docker.sock
+      # (cf. docs/deploy-lan.md §4).
+      ENABLE_SANDBOX: ${IAA_CONTAINER_ENABLE_SANDBOX:-false}
+      LOG_LEVEL: ${IAA_CONTAINER_LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${IAA_CONTAINER_LOG_FORMAT:-json}
+      # A/B testing prompts opt-in (par défaut désactivé en mode déployé)
+      AB_TESTING_AGENTS: ${IAA_CONTAINER_AB_TESTING_AGENTS:-}
+      # Hot-reload prompts opt-in (utile dev LAN, off en prod)
+      HOT_RELOAD_PROMPTS: ${IAA_CONTAINER_HOT_RELOAD_PROMPTS:-false}
+      # Sentinelle explicite pour que la page Setup adapte ses messages
+      IAA_DEPLOYMENT_MODE: container
     extra_hosts:
       # Sur Linux, force la résolution de `host.docker.internal` vers le host.
       # Sur Mac/Windows Docker Desktop, c'est natif et cette ligne est ignorée.

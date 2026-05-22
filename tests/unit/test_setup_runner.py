@@ -1,5 +1,10 @@
 """Tests unitaires pour `src/gui/services/setup_runner.py` (ADR-027).
 
+# audit: ignore FILE_TOO_LONG -- 516 lignes acceptées : 25 tests qui couvrent
+# 10 détections + 5 actions + helpers + contextes container/host (v0.9.3).
+# Split par fonction testée ferait perdre la vue d'ensemble du contrat
+# setup_runner — cohésion fonctionnelle > taille.
+
 On ne touche ni au daemon Ollama réel ni à Docker — toutes les détections
 "réseau" sont mockées via monkeypatch des helpers internes
 (`urllib.request.urlopen`, `shutil.which`, etc.).
@@ -106,6 +111,84 @@ def test_detect_ollama_installed_skipped_in_container(
     assert result.status == Status.SKIPPED
     assert "container" in result.detail.lower() or "host" in result.detail.lower()
     assert result.install_url is None
+
+
+def test_detect_ollama_daemon_no_fix_action_in_container(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """v0.9.3 — En container, le bouton 'Démarrer le daemon' ne peut PAS
+    marcher (binaire ollama absent). Le STOPPED doit donc être informatif
+    sans fix_action='start_ollama'."""
+    import urllib.error
+
+    monkeypatch.setenv("IAA_DEPLOYMENT_MODE", "container")
+
+    def fake_urlopen(req, timeout):
+        raise urllib.error.URLError("Connection refused")
+
+    monkeypatch.setattr(setup_runner.urllib.request, "urlopen", fake_urlopen)
+    result = setup_runner.detect_ollama_daemon()
+    assert result.status == Status.STOPPED
+    assert result.fix_action is None, "En container, le bouton Démarrer ne doit pas être proposé"
+    assert "host" in result.detail.lower() or "container" in result.detail.lower()
+
+
+def test_detect_docker_skipped_in_container_without_socket(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """v0.9.3 — En container sans /var/run/docker.sock monté, on retourne
+    SKIPPED même si ENABLE_SANDBOX=true (le sandbox ne peut PAS marcher
+    sans socket). Évite le MISSING + 'Télécharger Docker Desktop' trompeur."""
+    monkeypatch.setenv("IAA_DEPLOYMENT_MODE", "container")
+    # Simule que /var/run/docker.sock n'existe pas (cas standard sur Win/Mac)
+    original_exists = setup_runner.Path.exists
+
+    def mock_exists(self) -> bool:
+        if str(self) == "/var/run/docker.sock":
+            return False
+        return original_exists(self)
+
+    monkeypatch.setattr(setup_runner.Path, "exists", mock_exists)
+    # On force enable_sandbox=True pour vérifier que le bypass container marche
+    from src.core import config
+
+    s = config.get_settings()
+    original = s.enable_sandbox
+    object.__setattr__(s, "enable_sandbox", True)
+    try:
+        result = setup_runner.detect_docker()
+        assert result.status == Status.SKIPPED
+        assert "container" in result.detail.lower()
+        assert "socket" in result.detail.lower()
+        assert result.install_url is None  # pas de bouton Télécharger
+    finally:
+        object.__setattr__(s, "enable_sandbox", original)
+
+
+def test_detect_sandbox_image_skipped_in_container_without_socket(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """v0.9.3 — Cohérent avec detect_docker."""
+    monkeypatch.setenv("IAA_DEPLOYMENT_MODE", "container")
+    original_exists = setup_runner.Path.exists
+
+    def mock_exists(self) -> bool:
+        if str(self) == "/var/run/docker.sock":
+            return False
+        return original_exists(self)
+
+    monkeypatch.setattr(setup_runner.Path, "exists", mock_exists)
+    from src.core import config
+
+    s = config.get_settings()
+    original = s.enable_sandbox
+    object.__setattr__(s, "enable_sandbox", True)
+    try:
+        result = setup_runner.detect_sandbox_image()
+        assert result.status == Status.SKIPPED
+        assert "container" in result.detail.lower()
+    finally:
+        object.__setattr__(s, "enable_sandbox", original)
 
 
 # ---------------------------------------------------------------------------
