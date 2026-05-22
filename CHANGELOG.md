@@ -7,6 +7,122 @@ versioning [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-05-22 — Quotidien sans frustration : 4 features UX
+
+Version dédiée à l'expérience utilisateur quotidienne (cadrage utilisateur :
+"outil perso ultra-poli"). Adresse les 4 frictions principales relevées sur
+l'usage Qwen 32B local :
+
+### F1 — Resume/Recovery par checkpoint ⭐ (feature pivot)
+
+**Adresse le pain point principal : "si Ollama crashe ou la machine reboot
+au milieu d'une mission, je perds 30 min."**
+
+- Nouveau `src/core/checkpoint.py` — `CheckpointStore` JSON par mission_id
+  dans `data/checkpoints/<uuid>/<NN>_<agent>.json`. Tolérant aux
+  corruptions (fichiers illisibles skippés sans crash).
+- Helper `src/orchestrator/_checkpoint_helper.py::run_with_checkpoint()` :
+  wrap transparent autour d'`agent.run()` — si checkpoint existe pour
+  (mission, step), désérialise et retourne sans appel LLM ; sinon appel
+  normal + save si success.
+- `Workflow` Engineering câblé sur les 4 agents nominaux. `mission_id`
+  optionnel à `Workflow.run()` permet de reprendre. Cleanup auto en fin
+  de mission réussie (sinon checkpoints conservés pour resume après fix).
+- `MissionRouter` propage `checkpoint_store` au workflow Engineering.
+- `scripts/run_mission.py --resume <UUID|last>` : reprend depuis le
+  dernier agent terminé. "last" = mission la plus récente checkpointée.
+- 16 tests (12 unit CheckpointStore + 4 intégration workflow). Le test
+  `test_workflow_resume_skips_already_completed_agents` démontre
+  concrètement que les agents en cache ne sont PAS rappelés.
+
+### F2 — Streaming logs live dans la GUI
+
+**Plus de spinner aveugle 20-40 min — voir en direct quel agent travaille,
+combien de tokens, qui démarre/termine/est restauré du cache.**
+
+- Nouveau `src/orchestrator/progress.py` — `ProgressEvent` dataclass +
+  `emit()` best-effort (exceptions du callback avalées via
+  `contextlib.suppress`, le streaming ne casse JAMAIS la mission).
+- 8 types d'events : `mission_started`, `mission_routed`, `agent_started`,
+  `agent_resumed`, `agent_completed`, `agent_failed`, `repair_loop_started`,
+  `mission_completed`. Données associées : agent_name, tokens, cost,
+  duration, verdict, saturated.
+- Helper checkpoint émet `agent_resumed` vs `agent_started` selon le
+  chemin pris (cache vs LLM réel).
+- `Workflow` Engineering émet `mission_started` et `mission_completed`
+  avec verdict + score + cost.
+- `mission_runner.run_mission_streaming(req)` retourne `Iterator[StreamItem]`
+  via pattern producer/consumer (threading.Thread + queue.Queue(maxsize=64)).
+  Tolérant aux crashes worker (yield un CRASH outcome).
+- Page GUI 🚀 Mission : `st.spinner` → `st.status` expanded avec
+  formatteur d'icônes (🚀 🤖 ♻️ ✅ ❌ 🏁).
+- 7 tests (3 emit, 2 workflow émission, 2 streaming flow + crash).
+
+### F3 — Templates de missions réutilisables
+
+**Plus de re-rédaction à chaque mission : 5 templates Jinja2 paramétrables,
+1 clic depuis la GUI.**
+
+- Nouveau `src/gui/services/templates_browser.py` — service stateless
+  (`MissionTemplate`, `TemplateParam`, `list_templates`, `get_template`,
+  `render_template`). StrictUndefined Jinja2 : paramètre oublié lève
+  `ValueError` (pas de placeholder silencieux dans la mission). Tolérant
+  aux templates malformés (skip silencieux).
+- Format : `templates/missions/<id>.md` avec frontmatter YAML
+  (id, name, description, guild, tags, params) + corps Jinja2.
+- **5 templates pré-livrés** dans `templates/missions/` :
+  - `fastapi-crud-endpoint` : endpoint REST 5 routes + tests
+  - `refactor-module` : refactoring guidé avec tests verts préservés
+  - `audit-owasp-module` : audit sécurité défensif OWASP Top 10
+  - `stdlib-utility-function` : fonction utilitaire pure + tests
+  - `landing-page-saas` : copy landing structuré (hero + CTA)
+- GUI : nouveau `st.expander "📋 Démarrer depuis un template"` au-dessus
+  du formulaire. Sélection → formulaire paramètres → "✨ Générer" →
+  description rendue pré-remplit le formulaire principal via
+  `st.session_state`.
+- 11 tests (list/get/render + StrictUndefined + filtres Jinja + 5 templates
+  pré-livrés tous validés en chargement).
+
+### F4 (bonus) — Hot-reload des prompts système
+
+**Adresse "j'itère un prompt, je dois redémarrer Streamlit à chaque test".**
+
+- `Settings.hot_reload_prompts: bool = False` (opt-in, défaut OFF pour
+  rétrocompat et perf production).
+- `BaseAgent.system_prompt` devient une `@property` : si Setting=True,
+  re-lit le disque à chaque accès (avant chaque appel LLM, ~10 ms
+  négligeable vs 30s d'inférence). Fallback gracieux sur cache si fichier
+  inaccessible (write atomique 2-temps).
+- 4 tests (default caché, hot-reload picks up changes, fallback file
+  missing, default Setting=False).
+
+### Métriques release
+
+- Tests : **654 passing** (+15 vs v0.7.0), 6 skipped, 2 deselected slow
+- Coverage : maintenue ≥ 90 %
+- Audit codebase : 0 finding
+- mkdocs build --strict : OK
+- 4 commits cohérents (F1, F2, F3, F4 bonus)
+
+### Compatibilité
+
+100% rétrocompat. Toutes les nouvelles features sont opt-in :
+- `Workflow(checkpoint_store=None)` → comportement v0.7.0
+- `Workflow.run(on_progress=None)` → pas d'émission d'events
+- `run_mission_sync()` inchangé, `run_mission_streaming()` est nouveau
+- `Settings.hot_reload_prompts=False` par défaut
+
+### Limites connues
+
+- Resume/Recovery : Engineering uniquement (Research/Creative/Business
+  ignorent silencieusement le `mission_id`). Étendable si besoin émerge.
+- Streaming : pas de tokens en cours de génération (uniquement événements
+  agent_started/completed). Pour voir "tokens à 30%", il faudrait un mode
+  streaming OpenAI SDK — différé.
+- Hot-reload : si modifié pendant mission en cours, agents amont/aval
+  peuvent voir des versions différentes du prompt. Acceptable en dev,
+  désactivé par défaut en prod.
+
 ## [0.7.0] — 2026-05-22 — Audit zéro-dette : 21 findings résorbés en 4 vagues
 
 Version dédiée à la résorption méthodique de la dette technique identifiée par

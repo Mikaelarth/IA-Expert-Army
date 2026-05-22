@@ -4,10 +4,10 @@
 > mémoire partagée vivante, évolution par expérience, autonomie sécurisée.
 
 [![CI](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml/badge.svg)](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.7.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.8.0-blue)](CHANGELOG.md)
 [![GUI](https://img.shields.io/badge/GUI-Streamlit-FF4B4B)](docs/adr/026-gui-streamlit.md)
 [![Setup Wizard](https://img.shields.io/badge/setup-click--to--go-blueviolet)](docs/adr/027-setup-wizard-gui.md)
-[![Tests](https://img.shields.io/badge/tests-616%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-654%20passing-brightgreen)](tests/)
 [![Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen)](docs/adr/020-coverage-ci-automation.md)
 [![Audit](https://img.shields.io/badge/audit-0%20findings-brightgreen)](docs/adr/022-codebase-audit-rules.md)
 [![Backend](https://img.shields.io/badge/LLM-Ollama%20local-purple)](docs/adr/025-bascule-anthropic-to-ollama.md)
@@ -16,7 +16,7 @@
 [![ADRs](https://img.shields.io/badge/ADRs-28-blueviolet)](docs/adr/)
 [![Skills](https://img.shields.io/badge/skills-16%20auto--générées-orange)](skills/)
 
-**Auteur :** MikaelArth (Mike Arthur) · **Démarré :** 2026-05-10 · **v0.7.0** : 2026-05-22
+**Auteur :** MikaelArth (Mike Arthur) · **Démarré :** 2026-05-10 · **v0.8.0** : 2026-05-22
 
 ---
 
@@ -211,7 +211,7 @@ IA-Expert-Army/
 
 ---
 
-## État du projet (v0.7.0)
+## État du projet (v0.8.0)
 
 | Capacité | Statut | Détails |
 |---|---|---|
@@ -239,7 +239,11 @@ IA-Expert-Army/
 | **Skills dédup + auto-commit** | ✅ v0.7.0 | PatternMiner exclut les épisodes déjà sourceurs ; `nightly_learning --git-commit` trace + permet rollback |
 | Sandbox image validée en CI | ✅ v0.7.0 | `docker build` sans run dans `.github/workflows/ci.yml` |
 | Nightly E2E Ollama réel | ✅ v0.7.0 (opt-in) | `OLLAMA_E2E=1 uv run pytest -m slow` + workflow cron quotidien |
-| Tests régression | ✅ | **616 verts** (suite "fast") + 2 slow nightly E2E |
+| **Resume/Recovery par checkpoint** | ✅ v0.8.0 | Mission tuée à 75% (crash, reboot) → `--resume <UUID\|last>` reprend depuis le dernier agent terminé. Engineering only. |
+| **Streaming logs live GUI** | ✅ v0.8.0 | Page 🚀 Mission affiche en direct `agent_started`/`completed`/`resumed` via `st.status` (plus de spinner aveugle). |
+| **Templates de missions** | ✅ v0.8.0 | 5 templates Jinja2 pré-livrés (FastAPI CRUD, refactor, OWASP, slugify, landing) — 1 clic dans la GUI. |
+| **Hot-reload prompts** | ✅ v0.8.0 (opt-in) | `HOT_RELOAD_PROMPTS=true` → modifier `prompts/**/*.md` pris en compte sans restart. |
+| Tests régression | ✅ | **654 verts** (suite "fast") + 2 slow nightly E2E |
 | ADRs documentés | ✅ | **28 ADRs** structurants |
 
 **Coût total API consommé** : ~$19 sur les 16 missions Claude pré-bascule (score moyen 0.89). **Depuis Ollama (v0.4.0)** : $0. Le système est opérationnel pour de l'usage perso quotidien via GUI.
