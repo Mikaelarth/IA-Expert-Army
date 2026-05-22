@@ -95,3 +95,16 @@ jobs:
       # Whitelist : `# audit: ignore <RULE>` à la ligne du finding.
       - name: Audit codebase (anti-patterns)
         run: uv run python scripts/audit_codebase.py --strict
+
+      # v0.7.0 — Build du Dockerfile sandbox sans run (catch les erreurs de
+      # syntaxe Dockerfile, deps APT manquantes, dépendances Python pinnées
+      # sur des versions retirées de pypi, etc.). On ne lance PAS le container
+      # (les vrais tests sandbox restent locaux pour ne pas embarquer Docker-in-
+      # Docker sur GitHub-hosted runners). Ce build prend ~30-60s, économise
+      # des heures de debug en cas de régression Dockerfile silencieuse.
+      - name: Build sandbox image (validation Dockerfile, pas de run)
+        run: |
+          docker build \
+            --tag iaa-sandbox:ci-validation \
+            --file infra/docker/sandbox.Dockerfile \
+            infra/docker

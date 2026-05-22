@@ -101,6 +101,17 @@ class Settings(BaseSettings):
         False,
         description="Active le SecurityAuditor après CodeReviewer pour les missions Engineering",
     )
+    # LLM Classifier (v0.7.0) — désambiguïse les missions ambiguës via Qwen 14B
+    # bulk. Fallback automatique sur l'héuristique mots-clés en cas d'erreur.
+    # Coût : ~0.5-2 s par routage en plus. Opt-in pour rétrocompat.
+    use_llm_classifier: bool = Field(
+        False,
+        description=(
+            "Active le classifier LLM (Qwen 14B) pour le routage de guilde. "
+            "Fallback automatique sur l'héuristique mots-clés si Ollama down. "
+            "Recommandé pour les missions ambiguës que l'héuristique tranche mal."
+        ),
+    )
 
     # --- Logging ---
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"

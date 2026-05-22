@@ -157,26 +157,38 @@ class SkillsLibrary:
         query: str | None = None,
         n_results: int = 2,
         max_distance: float = 1.0,
+        exclude_mission_ids: set[str] | None = None,
     ) -> list[Skill]:
         """Cherche les skills les plus pertinentes pour un agent.
 
         - Si une VectorMemory est branchée et qu'une `query` est fournie : recherche
           sémantique (skills triées par pertinence).
         - Sinon : fallback sur les N plus récentes (list_skills).
+
+        v0.7.0 — `exclude_mission_ids` : skills dont les `sources_mission_ids`
+        intersectent ce set sont exclues. Permet à un agent en train de jouer
+        la mission M de ne pas se voir suggérer une skill qu'il aurait
+        lui-même produite à partir d'épisodes de M (défensif contre une
+        future bascule mining online ou mining concurrent au workflow).
         """
         if self.vector_memory is None or not query or self.vector_memory.count() == 0:
-            return self.list_skills(agent, limit=n_results)
+            return self._filter_excluded(
+                self.list_skills(agent, limit=n_results * 2 if exclude_mission_ids else n_results),
+                exclude_mission_ids,
+            )[:n_results]
 
         try:
             matches = self.vector_memory.search(
                 query=query,
-                n_results=n_results,
+                n_results=n_results * 2 if exclude_mission_ids else n_results,
                 where={"agent": agent},
                 max_distance=max_distance,
             )
         except Exception as exc:
             _log.warning("skills.semantic_search.failed", error=str(exc))
-            return self.list_skills(agent, limit=n_results)
+            return self._filter_excluded(
+                self.list_skills(agent, limit=n_results), exclude_mission_ids
+            )[:n_results]
 
         skills: list[Skill] = []
         for match in matches:
@@ -186,11 +198,27 @@ class SkillsLibrary:
             skill = self.get_skill_by_id(agent, str(skill_id))
             if skill is not None:
                 skills.append(skill)
+        skills = self._filter_excluded(skills, exclude_mission_ids)
         # Si la recherche sémantique ne retourne rien (skills non encore indexées),
         # fallback sur la récence pour ne pas pénaliser.
         if not skills:
-            return self.list_skills(agent, limit=n_results)
-        return skills
+            return self._filter_excluded(
+                self.list_skills(agent, limit=n_results), exclude_mission_ids
+            )[:n_results]
+        return skills[:n_results]
+
+    @staticmethod
+    def _filter_excluded(skills: list[Skill], exclude_mission_ids: set[str] | None) -> list[Skill]:
+        """Exclut les skills dont les `sources_mission_ids` recoupent le set fourni."""
+        if not exclude_mission_ids:
+            return skills
+        filtered: list[Skill] = []
+        for skill in skills:
+            src_missions = {str(m) for m in (skill.metadata.get("sources_mission_ids") or []) if m}
+            if src_missions & exclude_mission_ids:
+                continue
+            filtered.append(skill)
+        return filtered
 
     def reindex_existing(self) -> int:
         """Backfill : indexe dans la VectorMemory toutes les skills déjà sur disque.

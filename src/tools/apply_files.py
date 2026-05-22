@@ -54,11 +54,19 @@ def apply_files(
     project_root: Path,
     allowed_dirs: tuple[str, ...] = DEFAULT_ALLOWED_DIRS,
     force: bool = False,
+    approval_store: object | None = None,  # ApprovalStore | None — duck-typed
 ) -> list[ApplyResult]:
     """Écrit les fichiers sur disque selon la politique de sécurité.
 
     Retourne un résultat par fichier (succès ou raison du rejet).
     N'arrête JAMAIS à la première erreur — tous les fichiers sont évalués indépendamment.
+
+    v0.7.0 — HITL audit trail (L1) :
+    Si `approval_store` est fourni ET `force=True`, chaque overwrite d'un
+    fichier existant déclenche un `request_approval` (event_type=
+    "file_overwrite"). Par défaut non-bloquant : la trace est posée mais
+    l'overwrite proceed. Configurable via `data/approvals/policy.yml`
+    (auto_approve sur paths_regex pour éviter de polluer la queue).
     """
     results: list[ApplyResult] = []
     project_root = project_root.resolve()
@@ -132,6 +140,39 @@ def apply_files(
                 )
             )
             continue
+
+        # v0.7.0 L1 — HITL audit trail : si force=True et fichier existant et
+        # approval_store fourni, on pose une demande d'approbation
+        # (non-bloquante par défaut, traçabilité). La policy peut auto-approve
+        # ou refuser (raises ApprovalRequired qu'on catche pour SKIP).
+        if force and candidate.exists() and approval_store is not None:
+            try:
+                from src.core.approvals import ApprovalRequired, request_approval
+
+                request_approval(
+                    store=approval_store,  # type: ignore[arg-type]
+                    event_type="file_overwrite",
+                    context={
+                        "path": raw_path,
+                        "absolute_path": str(candidate),
+                        "size_before": candidate.stat().st_size,
+                        "size_after": len(content.encode("utf-8")),
+                    },
+                    requested_by="apply_files",
+                    blocking=False,
+                )
+            except ApprovalRequired:
+                results.append(
+                    ApplyResult(
+                        path=raw_path,
+                        absolute_path=str(candidate),
+                        action=ApplyAction.SKIPPED_EXISTS,
+                        reason="Overwrite refusé par la policy approvals (ApprovalRequired)",
+                    )
+                )
+                continue
+            except Exception:  # noqa: S110 — best-effort audit trail, ne doit jamais bloquer l'apply
+                pass
 
         # OK on écrit
         candidate.parent.mkdir(parents=True, exist_ok=True)

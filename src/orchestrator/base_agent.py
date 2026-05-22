@@ -172,13 +172,24 @@ class BaseAgent:
         return "\n\n".join(parts)
 
     def _retrieve_skills(self, agent_input: AgentInput | None = None) -> list[Skill]:
-        """Charge les N skills les plus pertinentes (sémantique si possible, sinon récentes)."""
+        """Charge les N skills les plus pertinentes (sémantique si possible, sinon récentes).
+
+        v0.7.0 — exclut les skills produites à partir d'épisodes de la mission
+        courante (`exclude_mission_ids={agent_input.mission_id}`) pour parer le
+        risque de boucle auto-référentielle si un mining online était déployé.
+        """
         if self.skills_library is None or self.skills_top_k <= 0:
             return []
         query = agent_input.task if agent_input is not None else None
+        exclude: set[str] | None = None
+        if agent_input is not None and agent_input.mission_id:
+            exclude = {str(agent_input.mission_id)}
         try:
             return self.skills_library.search_skills(
-                self.name, query=query, n_results=self.skills_top_k
+                self.name,
+                query=query,
+                n_results=self.skills_top_k,
+                exclude_mission_ids=exclude,
             )
         except Exception as exc:
             self._log.warning("skills.load.failed", error=str(exc))

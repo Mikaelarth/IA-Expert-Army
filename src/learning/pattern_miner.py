@@ -377,6 +377,17 @@ class PatternMiner:
             "summary": summary,
             "tags": yaml_data.get("tags", []),
             "sources": [ep[0].stem for ep in episodes],
+            # v0.7.0 L5 — sources_mission_ids permet à BaseAgent de filtrer
+            # une skill dont la mission d'origine est la mission courante
+            # (défense contre boucle auto-référentielle hypothétique post-
+            # bascule mining online).
+            "sources_mission_ids": sorted(
+                {
+                    str(ep[1].metadata.get("mission_id"))
+                    for ep in episodes
+                    if ep[1].metadata.get("mission_id")
+                }
+            ),
             "sources_avg_score": round(
                 sum(
                     float(ep[1].metadata.get("quality_score", 0))
