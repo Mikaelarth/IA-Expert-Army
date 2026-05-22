@@ -112,6 +112,19 @@ class Settings(BaseSettings):
             "Recommandé pour les missions ambiguës que l'héuristique tranche mal."
         ),
     )
+    # Hot-reload prompts (v0.8.0 F4) — quand True, BaseAgent re-lit son prompt
+    # disque AVANT chaque appel LLM. Permet de modifier prompts/**/*.md sans
+    # redémarrer Streamlit/CLI. Overhead négligeable (~10ms vs 30s+ d'appel LLM).
+    # Désactivé par défaut pour rétrocompat stricte et perf en production.
+    hot_reload_prompts: bool = Field(
+        False,
+        description=(
+            "Active la relecture du prompt système à chaque appel agent. "
+            "Pratique en développement pour itérer sur prompts/**/*.md sans "
+            "redémarrer. Surcoût négligeable (~10ms par appel). À désactiver "
+            "en production pour cohérence stricte entre agents d'une même mission."
+        ),
+    )
 
     # --- Logging ---
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
