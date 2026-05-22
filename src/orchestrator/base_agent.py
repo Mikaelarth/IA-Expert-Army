@@ -67,6 +67,11 @@ class AgentOutput(BaseModel):
     # 359bfa08) : sortie tronquée → YAML cassé → verdict default REJECTED.
     saturated: bool = False
     stop_reason: str | None = None
+    # v0.9.0 A2 — si l'A/B testing prompts est activé pour cet agent, on
+    # tracke quelle variante a été utilisée. None = canonique ou A/B désactivé.
+    # Le Workflow exploitera ce field en fin de mission pour persister les
+    # outcomes via PromptAB.track_outcome().
+    prompt_variant_label: str | None = None
 
 
 class BaseAgent:
@@ -86,6 +91,7 @@ class BaseAgent:
         rag_max_distance: float = 0.7,
         skills_library: SkillsLibrary | None = None,
         skills_top_k: int = 2,
+        prompt_ab: Any | None = None,  # PromptAB — duck-typed pour éviter cycle import
     ) -> None:
         self.name = name
         self.prompt_path = prompt_path
@@ -98,6 +104,10 @@ class BaseAgent:
         self.skills_top_k = skills_top_k
         self.settings = settings or get_settings()
         self.max_tokens = max_tokens
+        # v0.9.0 A2 — A/B testing des variantes de prompts. Si fourni ET
+        # `self.name` est dans `settings.ab_testing_agents_set`, on pick
+        # une variante par mission_id (déterministe). Sinon canonique.
+        self.prompt_ab = prompt_ab
         self._log = get_logger(f"agent.{name}")
 
         if client is not None:
@@ -243,6 +253,38 @@ class BaseAgent:
             return True
         return max_tokens > 0 and tokens_out >= int(max_tokens * self._SATURATION_TOKEN_RATIO)
 
+    def _resolve_system_prompt(self, agent_input: AgentInput) -> tuple[str, str | None]:
+        """Retourne (prompt_text, variant_label) à utiliser pour cet appel.
+
+        v0.9.0 A2 — si `self.prompt_ab` est fourni ET l'agent est listé dans
+        `settings.ab_testing_agents_set`, on pick une variante par mission_id
+        (déterministe, resume-safe). Sinon, on retourne le système prompt
+        canonique (avec hot-reload si activé).
+
+        Tolérant : si la résolution A/B plante (fichier manquant, etc.), on
+        fallback sur le canonique sans crasher la mission.
+        """
+        if self.prompt_ab is None:
+            return self.system_prompt, None
+        try:
+            variant = self.prompt_ab.pick_variant(
+                self.prompt_path,
+                mission_id=str(agent_input.mission_id),
+                enabled_agents=self.settings.ab_testing_agents_set,
+            )
+            if variant.is_canonical:
+                return self.system_prompt, None
+            text = variant.path.read_text(encoding="utf-8")
+            body = MemoryRecord.from_markdown(text).body
+            return body, variant.label
+        except Exception as exc:
+            self._log.warning(
+                "prompt_ab.resolve.fallback",
+                agent=self.name,
+                error=str(exc),
+            )
+            return self.system_prompt, None
+
     def _retrieve_precedents(self, agent_input: AgentInput) -> list[EpisodeMatch]:
         """Cherche dans la mémoire vectorielle les épisodes passés pertinents."""
         if self.vector_memory is None or self.vector_memory.count() == 0:
@@ -289,6 +331,12 @@ class BaseAgent:
         started = time.perf_counter()
         started_at = datetime.now(UTC)
 
+        # v0.9.0 A2 — résolution A/B de la variante de prompt à utiliser.
+        # Si A/B activé pour cet agent : variante pickée par mission_id ;
+        # son body remplace self.system_prompt. Le label est attaché à l'output
+        # pour tracking ultérieur par le Workflow.
+        system_prompt_text, variant_label = self._resolve_system_prompt(agent_input)
+
         try:
             # Chat completions OpenAI-compatible : le system devient un message
             # avec role="system" en tête (Ollama suit la même convention).
@@ -296,7 +344,7 @@ class BaseAgent:
                 model=self.model,
                 max_tokens=self.max_tokens,
                 messages=[
-                    {"role": "system", "content": self.system_prompt},
+                    {"role": "system", "content": system_prompt_text},
                     {"role": "user", "content": user_message},
                 ],
             )
@@ -322,6 +370,7 @@ class BaseAgent:
                 success=True,
                 saturated=saturated,
                 stop_reason=stop_reason,
+                prompt_variant_label=variant_label,
             )
             self._log.info(
                 "agent.run.ok",

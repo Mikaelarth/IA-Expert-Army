@@ -32,6 +32,7 @@ from src.guilds.business.workflow import BusinessMissionResult, BusinessWorkflow
 from src.guilds.creative.workflow import CreativeMissionResult, CreativeWorkflow
 from src.guilds.research.workflow import ResearchMissionResult, ResearchWorkflow
 from src.learning.missions_rag import MissionsRAG
+from src.learning.prompt_ab import PromptAB
 from src.learning.skills_library import SkillsLibrary
 from src.memory.file_memory import FileMemory
 from src.memory.vector_memory import VectorMemory
@@ -431,6 +432,7 @@ class MissionRouter:
         classifier: _GuildClassifier | None = None,
         checkpoint_store: CheckpointStore | None = None,
         missions_rag: MissionsRAG | None = None,
+        prompt_ab: PromptAB | None = None,
     ) -> None:
         self.memory = memory
         self.settings = settings or get_settings()
@@ -447,6 +449,8 @@ class MissionRouter:
         # v0.9.0 A1 — RAG sur missions passées. Propagé au workflow
         # Engineering uniquement (les autres guildes l'ignorent pour l'instant).
         self.missions_rag = missions_rag
+        # v0.9.0 A2 — A/B testing prompts. Propagé au workflow Engineering.
+        self.prompt_ab = prompt_ab
         # v0.7.0 — classifier LLM opt-in via Settings.use_llm_classifier.
         # Si l'utilisateur a passé un classifier explicite, on respecte son
         # choix. Sinon : LLM si activé, héuristique sinon.
@@ -555,6 +559,7 @@ class MissionRouter:
                 **common,
                 checkpoint_store=self.checkpoint_store,
                 missions_rag=self.missions_rag,
+                prompt_ab=self.prompt_ab,
             )
             eng_result: MissionResult = await wf_eng.run(
                 title=title, description=description, mission_id=mission_id

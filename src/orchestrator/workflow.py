@@ -35,6 +35,7 @@ from src.core.config import Settings, get_settings
 from src.core.killswitch import Killswitch, KillswitchEngaged
 from src.core.logging import get_logger
 from src.learning.missions_rag import MissionsRAG
+from src.learning.prompt_ab import PromptAB
 from src.learning.skills_library import SkillsLibrary
 from src.memory.file_memory import FileMemory, MemoryRecord
 from src.memory.vector_memory import VectorMemory
@@ -87,6 +88,7 @@ class Workflow:
         killswitch: Killswitch | None = None,
         checkpoint_store: CheckpointStore | None = None,
         missions_rag: MissionsRAG | None = None,
+        prompt_ab: PromptAB | None = None,
     ) -> None:
         self.memory = memory
         self.vector_memory = vector_memory
@@ -99,7 +101,15 @@ class Workflow:
         # mission courante en fin de run, (2) injecte les missions similaires
         # dans le contexte de l'orchestrator au début du run.
         self.missions_rag = missions_rag
-        common = {"vector_memory": vector_memory, "skills_library": skills_library}
+        # v0.9.0 A2 — A/B testing prompts. Si fourni, les 4 agents core
+        # peuvent utiliser une variante (selon Settings.ab_testing_agents_set).
+        # Le tracking par mission est fait en fin de run.
+        self.prompt_ab = prompt_ab
+        common = {
+            "vector_memory": vector_memory,
+            "skills_library": skills_library,
+            "prompt_ab": prompt_ab,
+        }
         self.orchestrator = ChiefOrchestrator(memory, self.settings, **common)
         self.architect = SoftwareArchitect(memory, self.settings, **common)
         self.developer = BackendDeveloper(memory, self.settings, **common)
@@ -569,3 +579,34 @@ class Workflow:
                     mission=str(mission_id),
                     error=str(exc),
                 )
+
+        # v0.9.0 A2 — Tracking A/B des variantes utilisées. Pour chaque output
+        # d'un agent listé dans Settings.ab_testing_agents_set, on enregistre
+        # le résultat final dans data/ab_tests/<role>/<label>/. label="" si
+        # canonique a été utilisé, sinon nom de la variante.
+        if self.prompt_ab is not None:
+            ab_agents = self.settings.ab_testing_agents_set
+            tracked_agents: set[str] = set()
+            for o in reversed(outputs):
+                # Dans le repair loop, on prend le DERNIER output de chaque
+                # agent (donc on parcourt à l'envers et on skip si déjà tracké).
+                if o.agent_name in tracked_agents or o.agent_name not in ab_agents:
+                    continue
+                try:
+                    self.prompt_ab.track_outcome(
+                        role=o.agent_name,
+                        label=o.prompt_variant_label or "",
+                        mission_id=str(mission_id),
+                        final_verdict=result.final_verdict,
+                        quality_score=result.quality_score,
+                        cost_usd=o.cost_usd,
+                        duration_seconds=o.duration_seconds,
+                    )
+                    tracked_agents.add(o.agent_name)
+                except Exception as exc:
+                    log.warning(
+                        "workflow.ab.track_failed",
+                        mission=str(mission_id),
+                        agent=o.agent_name,
+                        error=str(exc),
+                    )

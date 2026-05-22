@@ -25,6 +25,7 @@ class ChiefOrchestrator(BaseAgent):
         client: AsyncOpenAI | None = None,
         vector_memory: VectorMemory | None = None,
         skills_library: SkillsLibrary | None = None,
+        prompt_ab: Any | None = None,
     ) -> None:
         s = settings or get_settings()
         super().__init__(
@@ -40,6 +41,7 @@ class ChiefOrchestrator(BaseAgent):
             max_tokens=2048,
             vector_memory=vector_memory,
             skills_library=skills_library,
+            prompt_ab=prompt_ab,
         )
 
     def parse_output(self, raw: str, agent_input: AgentInput) -> dict[str, Any] | None:

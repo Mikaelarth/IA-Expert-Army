@@ -125,6 +125,24 @@ class Settings(BaseSettings):
             "en production pour cohérence stricte entre agents d'une même mission."
         ),
     )
+    # A/B testing prompts (v0.9.0 A2, ADR-029) — liste d'agents pour lesquels
+    # PromptAB pick une variante aléatoire (déterministe par mission_id) parmi
+    # les fichiers `<role>_<label>.md` trouvés dans le même dossier.
+    # Format env var : "code_reviewer,software_architect" (séparé virgules).
+    # Vide (défaut) = A/B désactivé partout, comportement v0.8.0 inchangé.
+    ab_testing_agents: str = Field(
+        "",
+        description=(
+            "Liste d'agents (séparés par virgules) pour lesquels l'A/B testing "
+            "des variantes de prompts est activé. Ex: 'code_reviewer,software_architect'. "
+            "Vide = A/B désactivé (canonique partout). Cf. ADR-029."
+        ),
+    )
+
+    @property
+    def ab_testing_agents_set(self) -> set[str]:
+        """Parse `ab_testing_agents` (CSV) en set pour matching rapide."""
+        return {a.strip() for a in self.ab_testing_agents.split(",") if a.strip()}
 
     # --- Logging ---
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
