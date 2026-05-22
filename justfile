@@ -100,6 +100,38 @@ gui:
     uv sync --group gui --quiet
     uv run python scripts/run_gui.py
 
+# Lance la GUI exposée sur le LAN (binding 0.0.0.0).
+# ⚠ Ne PAS utiliser sur internet sans reverse proxy + auth (cf. docs/deploy-lan.md).
+gui-lan:
+    uv sync --group gui --quiet
+    STREAMLIT_BIND_HOST=0.0.0.0 uv run python scripts/run_gui.py
+
+# === Déploiement Docker (v0.9.1) ===
+
+# Build l'image iaa-app:latest (~3 min la 1ère fois)
+docker-app-build:
+    docker compose --profile app build
+
+# Lance l'app conteneurisée en mode LAN (port 8501 sur toutes les interfaces)
+docker-app-up:
+    docker compose --profile app up -d
+    @echo ""
+    @echo "✅ App lancée. Accès :"
+    @echo "  - Localhost : http://localhost:8501"
+    @echo "  - LAN       : http://<ip-host>:8501 (cf. docs/deploy-lan.md §1.3)"
+
+# Tail les logs du container app (Ctrl+C pour quitter)
+docker-app-logs:
+    docker compose --profile app logs -f app
+
+# Arrête l'app conteneurisée (sans supprimer les volumes data/)
+docker-app-down:
+    docker compose --profile app down
+
+# Statut des containers de l'app
+docker-app-status:
+    docker compose --profile app ps
+
 # === Missions ===
 
 # Lance une mission interactive (prompt pour titre + description)

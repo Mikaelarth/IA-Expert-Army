@@ -12,6 +12,73 @@ name: ia-expert-army
 
 services:
 
+  # --- App : GUI Streamlit complète (v0.9.1, profile app) ---
+  # Image autonome pour tester depuis un autre PC du LAN, ou pour préparer
+  # un déploiement VPS futur. Cf. docs/deploy-lan.md pour le protocole.
+  #
+  # Lancement : docker compose --profile app up -d
+  # Stop      : docker compose --profile app down
+  #
+  # Volumes persistants (par défaut sous ./docker-volumes/app/) :
+  # - data/    : missions archivées + Chroma + checkpoints + ab_tests
+  # - skills/  : skills auto-générées (lecture/écriture)
+  # - prompts/ : prompts agents (lecture seule en prod, RW en dev pour A/B)
+  # - templates/: templates de missions (lecture seule)
+  #
+  # Sécurité : 8501 est bound sur LAN ; ce setup N'EST PAS sûr en exposition
+  # internet. Pour VPS, ajouter Caddy/Nginx avec basic auth devant.
+  app:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: infra/docker/app.Dockerfile
+    image: iaa-app:latest
+    container_name: iaa-app
+    restart: unless-stopped
+    ports:
+      # Format : "<host_ip>:<host_port>:<container_port>"
+      # 0.0.0.0 = bind sur toutes les interfaces du host (LAN accessible).
+      # Pour localhost only, remplacer par "127.0.0.1:8501:8501".
+      - "0.0.0.0:8501:8501"
+    environment:
+      # Ollama sur le host : host.docker.internal résolu via add_hosts ci-dessous.
+      # Si Ollama tourne en container, mettre l'URL du service Ollama compose.
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY:-ollama}
+      MODEL_STRATEGIC: ${MODEL_STRATEGIC:-qwen2.5:32b}
+      MODEL_OPERATIONAL: ${MODEL_OPERATIONAL:-qwen2.5-coder:32b}
+      MODEL_BULK: ${MODEL_BULK:-qwen2.5:14b}
+      DAILY_BUDGET_USD: ${DAILY_BUDGET_USD:-0.0}
+      # Sandbox désactivé par défaut dans le container app (l'API Docker
+      # n'est pas exposée au container app pour des raisons de sécurité).
+      # Pour activer le sandbox depuis l'app conteneurisée, monter
+      # /var/run/docker.sock (cf. docs/deploy-lan.md §Sandbox).
+      ENABLE_SANDBOX: ${ENABLE_SANDBOX:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      # A/B testing prompts opt-in
+      AB_TESTING_AGENTS: ${AB_TESTING_AGENTS:-}
+      # Hot-reload prompts opt-in (intéressant en dev LAN, pas en prod)
+      HOT_RELOAD_PROMPTS: ${HOT_RELOAD_PROMPTS:-false}
+    extra_hosts:
+      # Sur Linux, force la résolution de `host.docker.internal` vers le host.
+      # Sur Mac/Windows Docker Desktop, c'est natif et cette ligne est ignorée.
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Données runtime — persistées entre restarts du container
+      - ./docker-volumes/app/data:/app/data
+      # Skills, prompts, templates — partagés avec le host (modifs prises en compte
+      # au prochain rerun, ou en hot-reload si HOT_RELOAD_PROMPTS=true)
+      - ./skills:/app/skills
+      - ./prompts:/app/prompts:ro
+      - ./templates:/app/templates:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
   # --- Redis : bus de messages inter-agents (Phase 3+) ---
   redis:
     image: redis:7-alpine

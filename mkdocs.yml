@@ -129,6 +129,7 @@ nav:
   - Opérations:
     - Mode autonome 24/7: operations.md
     - Déploiement VPS: deploy.md
+    - Déploiement LAN/Docker: deploy-lan.md
     - Runbook incidents: runbook.md
 
   - Architecture:
