@@ -4,19 +4,19 @@
 > mémoire partagée vivante, évolution par expérience, autonomie sécurisée.
 
 [![CI](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml/badge.svg)](https://github.com/MikaelArth/IA-Expert-Army/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.8.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.9.0-blue)](CHANGELOG.md)
 [![GUI](https://img.shields.io/badge/GUI-Streamlit-FF4B4B)](docs/adr/026-gui-streamlit.md)
 [![Setup Wizard](https://img.shields.io/badge/setup-click--to--go-blueviolet)](docs/adr/027-setup-wizard-gui.md)
-[![Tests](https://img.shields.io/badge/tests-654%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-712%20passing-brightgreen)](tests/)
 [![Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen)](docs/adr/020-coverage-ci-automation.md)
 [![Audit](https://img.shields.io/badge/audit-0%20findings-brightgreen)](docs/adr/022-codebase-audit-rules.md)
 [![Backend](https://img.shields.io/badge/LLM-Ollama%20local-purple)](docs/adr/025-bascule-anthropic-to-ollama.md)
 [![Python](https://img.shields.io/badge/python-3.12+-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![ADRs](https://img.shields.io/badge/ADRs-28-blueviolet)](docs/adr/)
+[![ADRs](https://img.shields.io/badge/ADRs-29-blueviolet)](docs/adr/)
 [![Skills](https://img.shields.io/badge/skills-16%20auto--générées-orange)](skills/)
 
-**Auteur :** MikaelArth (Mike Arthur) · **Démarré :** 2026-05-10 · **v0.8.0** : 2026-05-22
+**Auteur :** MikaelArth (Mike Arthur) · **Démarré :** 2026-05-10 · **v0.9.0** : 2026-05-22
 
 ---
 
@@ -28,7 +28,7 @@
 | **Tourner en autonome 24/7 sur VPS** | [docs/operations.md](docs/operations.md) |
 | **Comprendre l'architecture en 4 couches** | [docs/architecture.md](docs/architecture.md) |
 
-Et pour les décisions structurantes : [28 ADRs](docs/adr/) · pour les incidents : [docs/runbook.md](docs/runbook.md) · pour l'historique des sessions de qualité v0.4.0 → v0.7.0 : [docs/sessions/](docs/sessions/).
+Et pour les décisions structurantes : [29 ADRs](docs/adr/) · pour les incidents : [docs/runbook.md](docs/runbook.md) · pour l'historique des sessions de qualité v0.4.0 → v0.9.0 : [docs/sessions/](docs/sessions/).
 
 ---
 
@@ -211,7 +211,7 @@ IA-Expert-Army/
 
 ---
 
-## État du projet (v0.8.0)
+## État du projet (v0.9.0)
 
 | Capacité | Statut | Détails |
 |---|---|---|
@@ -243,8 +243,11 @@ IA-Expert-Army/
 | **Streaming logs live GUI** | ✅ v0.8.0 | Page 🚀 Mission affiche en direct `agent_started`/`completed`/`resumed` via `st.status` (plus de spinner aveugle). |
 | **Templates de missions** | ✅ v0.8.0 | 5 templates Jinja2 pré-livrés (FastAPI CRUD, refactor, OWASP, slugify, landing) — 1 clic dans la GUI. |
 | **Hot-reload prompts** | ✅ v0.8.0 (opt-in) | `HOT_RELOAD_PROMPTS=true` → modifier `prompts/**/*.md` pris en compte sans restart. |
-| Tests régression | ✅ | **654 verts** (suite "fast") + 2 slow nightly E2E |
-| ADRs documentés | ✅ | **28 ADRs** structurants |
+| **RAG sur missions passées** | ✅ v0.9.0 | Avant chaque mission Engineering, top-3 missions APPROVED similaires injectées dans le contexte de l'orchestrator. Collection Chroma `agent_missions` dédiée. |
+| **Explainability (3 outils)** | ✅ v0.9.0 | Page 🔍 : "Pourquoi cette guilde ?" (scoring détaillé), "Métriques agents" (drift detection), "Pourquoi ce verdict ?" (replay Reviewer). |
+| **A/B testing prompts (MVP)** | ✅ v0.9.0 (opt-in) | Page ⚗️ : variantes `<role>_<label>.md`, sélection déterministe par mission_id, stats agrégées, promotion manuelle. Cf. [ADR-029](docs/adr/029-prompt-ab-testing-mvp.md). |
+| Tests régression | ✅ | **712 verts** (suite "fast") + 2 slow nightly E2E |
+| ADRs documentés | ✅ | **29 ADRs** structurants |
 
 **Coût total API consommé** : ~$19 sur les 16 missions Claude pré-bascule (score moyen 0.89). **Depuis Ollama (v0.4.0)** : $0. Le système est opérationnel pour de l'usage perso quotidien via GUI.
 

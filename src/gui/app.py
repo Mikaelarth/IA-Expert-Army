@@ -113,7 +113,7 @@ def _render_accueil() -> None:
 def main() -> None:
     with st.sidebar:
         st.markdown("### 🤖 IA-Expert-Army")
-        st.caption("v0.8.0 · Ollama local")
+        st.caption("v0.9.0 · Ollama local")
         st.divider()
         st.markdown(
             "**Navigation** ↑\n\n"

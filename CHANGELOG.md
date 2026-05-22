@@ -7,6 +7,110 @@ versioning [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-05-22 — Intelligence visible et capitalisée : 3 features
+
+Version dédiée à passer de "outil quotidien poli" à "outil qui capitalise et
+explique". Trois features structurantes :
+
+### A1 — RAG sur missions passées
+
+**Capitalise sur l'historique : avant chaque mission Engineering, on
+injecte les missions similaires APPROVED dans le contexte de l'orchestrator.**
+
+- Nouveau `src/learning/missions_rag.py` — `MissionsRAG` :
+  * Collection Chroma dédiée `agent_missions` (séparée de `agent_episodes`
+    et `agent_skills` pour distances cohérentes intra-collection).
+  * `index_mission()` : politique APPROVED-only (pas de pollution par
+    NEEDS_CHANGES/REJECTED).
+  * `find_similar(title, description, n=3)` : top-N avec filtres optionnels
+    (guild, min_quality_score, exclude_mission_id pour éviter self-ref).
+  * `render_for_prompt(matches)` : compact ~200 tokens pour 3 matches.
+- Workflow Engineering : injection RAG en début de `run()` + indexation
+  auto en fin de mission. Best-effort (exception silencieuse).
+- 19 tests (5 index + 6 find_similar + 3 render + 3 helpers + 2 intégration
+  workflow).
+
+### C1 — Explainability (ouvrir la boîte noire)
+
+**3 outils GUI pour comprendre POURQUOI : pourquoi cette guilde,
+pourquoi ce score, quel agent dérive.**
+
+- Nouveau `src/gui/services/explainability.py` :
+  * `explain_guild_classification(title, description)` → re-joue le scoring
+    héuristique en collectant les KeywordMatch détaillés (in_title,
+    is_strong_verb, weight).
+  * `compute_agent_metrics(memory)` → agrège par agent (n_episodes,
+    success_rate, saturation_rate, avg_quality_score, avg_duration, cost).
+  * `explain_mission_verdict(memory, mission_id)` → recharge summary +
+    épisode du code_reviewer (raw YAML) + qg_verdict si présent.
+- Nouvelle page `6_🔍_Explainability.py` avec 3 onglets :
+  * 🧭 "Pourquoi cette guilde ?" : scores par guilde + mots-clés matchés
+    (avec icônes 🎯 titre / 📄 description / ⚡ strong verb bonus).
+  * 📊 "Métriques agents" : tableau triable + alertes auto si dérive
+    (success_rate < 70%, saturation > 20%, avg_quality < 0.80).
+  * ⚖️ "Pourquoi ce verdict ?" : input mission_id → verdict + score +
+    résumé Reviewer + YAML brut épisode.
+- 16 tests (7 classification + 5 metrics + 3 verdict + 1 smoke page).
+
+### A2 — A/B testing des prompts (MVP, ADR-029)
+
+**Évolution de l'ADR-007 (Proposed depuis Phase 0) en version MVP
+suggest-only : variantes manuelles + comparaison objective + promotion
+manuelle.**
+
+- Nouveau `src/learning/prompt_ab.py` — `PromptAB` :
+  * Convention : `prompts/<dossier>/<role>_<label>.md` à côté de `<role>.md`.
+  * `discover_variants()` exclut `<role>_archived_*.md`.
+  * `pick_variant(prompt_path, mission_id, enabled_agents)` : sélection
+    déterministe SHA-256(mission_id) % n_variants → resume-safe.
+  * `track_outcome()` : JSON dans `data/ab_tests/<role>/<label>/<mid>.json`.
+  * `compute_stats()` + `compare()` avec recommandation si n ≥ 10 ET
+    Δ approval_rate ≥ 10pp.
+  * `promote_variant()` : renomme canonical → archived, variante → canonical.
+- `BaseAgent` : nouveau param `prompt_ab`, helper `_resolve_system_prompt()`
+  qui pick une variante et attache `prompt_variant_label` à `AgentOutput`.
+- `Workflow` Engineering : passe `prompt_ab` aux 4 agents core, track en
+  fin de mission pour chaque agent dans `ab_testing_agents_set`.
+- Settings : `ab_testing_agents` (CSV opt-in, défaut vide).
+- Nouvelle page `7_⚗️_A_B_Testing.py` : vue d'ensemble + analyse par rôle
+  + bouton "✅ Promouvoir comme canonique" (action manuelle, pas
+  d'auto-promote).
+- [ADR-029](docs/adr/029-prompt-ab-testing-mvp.md) documente le MVP +
+  alternatives + conditions de promotion vers auto-promote v2.
+- 23 tests (3 discovery + 5 selection + 2 tracking + 2 stats + 5 compare
+  + 2 promote + 1 VariantStats edge + 2 BaseAgent intégration + 1 smoke
+  GUI page).
+
+### Métriques release
+
+- Tests : **712 passing** (+58 vs v0.8.0), 6 skipped, 2 deselected slow
+- Coverage : maintenue ≥ 90 %
+- ADRs : 28 → **29** (ADR-029 A/B testing MVP)
+- Pages GUI : 7 → **9** (Setup, Mission, Historique, Skills, Health, Probes,
+  Explainability, A/B Testing — l'ancienne page Setup reste page 0)
+- Services GUI : 5 → **7** (memory_browser, mission_runner, health_runner,
+  setup_runner, templates_browser, explainability, +missions_rag/prompt_ab
+  côté src/learning)
+- Audit codebase : 0 finding
+- mkdocs build --strict : OK
+
+### Compatibilité
+
+100% rétrocompat. Toutes les nouvelles features sont opt-in :
+- RAG missions : actif dès qu'on passe un `missions_rag` au workflow (la
+  GUI le fait par défaut, mais le service est inerte si Chroma vide).
+- Explainability : pages GUI séparées, n'affecte aucune logique métier.
+- A/B testing : désactivé si `AB_TESTING_AGENTS` vide (défaut).
+
+### Limites connues
+
+- RAG : Engineering uniquement (les 3 autres guildes ignorent silencieusement).
+  Étendable si besoin émerge.
+- A/B testing : pas d'auto-génération de variantes (manuel), pas d'auto-promote
+  (manuel). v2 si MVP démontre sa valeur. Cf. ADR-029 §conditions de promotion.
+- Explainability : `compute_agent_metrics` parse tous les épisodes à chaque
+  appel (cache 30 s côté GUI). Pour >10k épisodes, prévoir une indexation.
+
 ## [0.8.0] — 2026-05-22 — Quotidien sans frustration : 4 features UX
 
 Version dédiée à l'expérience utilisateur quotidienne (cadrage utilisateur :
