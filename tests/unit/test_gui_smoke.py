@@ -41,6 +41,26 @@ def _ensure_minimal_data_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     """
 
 
+def test_page_explainability_renders() -> None:
+    """La page Explainability (v0.9.0 C1) se charge avec ses 3 onglets."""
+    page = _ROOT / "src" / "gui" / "pages" / "6_🔍_Explainability.py"
+    at = streamlit_testing.AppTest.from_file(str(page))
+    at.run(timeout=20)
+    assert not at.exception, f"Page Explainability a planté : {at.exception}"
+    # 3 tabs présents
+    assert len(at.tabs) >= 3, f"Attendu ≥3 tabs, trouvé {len(at.tabs)}"
+
+
+def test_page_ab_testing_renders() -> None:
+    """La page A/B Testing (v0.9.0 A2) se charge même sans variantes définies."""
+    page = _ROOT / "src" / "gui" / "pages" / "7_⚗️_A_B_Testing.py"
+    at = streamlit_testing.AppTest.from_file(str(page))
+    at.run(timeout=20)
+    assert not at.exception, f"Page A/B a planté : {at.exception}"
+    # Au moins le compteur "Rôles avec variantes" présent
+    assert len(at.metric) >= 1
+
+
 def test_page_setup_renders() -> None:
     """La page Setup (ADR-027) se charge même sans Ollama/Docker.
 

@@ -53,3 +53,4 @@ Format minimal :
 - [ADR-026 — Interface GUI : Streamlit multipages](026-gui-streamlit.md)
 - [ADR-027 — Setup Wizard GUI click-to-go (onboarding zéro-terminal)](027-setup-wizard-gui.md)
 - [ADR-028 — Langfuse self-hosted v3 différé (cloud uniquement)](028-langfuse-self-hosted-deferred.md)
+- [ADR-029 — A/B testing des prompts (MVP, suggest-only)](029-prompt-ab-testing-mvp.md)

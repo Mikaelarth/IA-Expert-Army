@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from openai import AsyncOpenAI
 
@@ -37,6 +38,7 @@ class BackendDeveloper(BaseAgent):
         client: AsyncOpenAI | None = None,
         vector_memory: VectorMemory | None = None,
         skills_library: SkillsLibrary | None = None,
+        prompt_ab: Any | None = None,
     ) -> None:
         s = settings or get_settings()
         super().__init__(
@@ -49,6 +51,7 @@ class BackendDeveloper(BaseAgent):
             max_tokens=self.DEFAULT_MAX_TOKENS,
             vector_memory=vector_memory,
             skills_library=skills_library,
+            prompt_ab=prompt_ab,
         )
 
     def parse_output(self, raw: str, agent_input: AgentInput) -> list[dict[str, str]]:

@@ -164,6 +164,7 @@ nav:
     - "026 — Interface GUI Streamlit": adr/026-gui-streamlit.md
     - "027 — Setup Wizard GUI click-to-go": adr/027-setup-wizard-gui.md
     - "028 — Langfuse self-hosted v3 deferred": adr/028-langfuse-self-hosted-deferred.md
+    - "029 — A/B testing prompts MVP": adr/029-prompt-ab-testing-mvp.md
 
   - Sessions:
     - "Session 1 — Stabilisation tests post-Ollama": sessions/session-1-test-suite-stabilization.md
