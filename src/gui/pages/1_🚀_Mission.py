@@ -26,6 +26,10 @@ from src.gui.services.mission_runner import (  # noqa: E402
     available_guilds,
     run_mission_streaming,
 )
+from src.gui.services.templates_browser import (  # noqa: E402
+    list_templates,
+    render_template,
+)
 from src.orchestrator.progress import ProgressEvent  # noqa: E402
 from src.tools.apply_files import ApplyAction  # noqa: E402
 
@@ -83,28 +87,110 @@ st.caption(
     "(ou force avec `force_guild`). Latence typique : 20-40 min sur Qwen2.5 32B local."
 )
 
+# ============================================================================
+# v0.8.0 F3 — Picker de templates (au-dessus du formulaire, optionnel)
+# ============================================================================
+
+with st.expander("📋 Démarrer depuis un template (optionnel)", expanded=False):
+    available = list_templates()
+    if not available:
+        st.info(
+            "Aucun template dans `templates/missions/`. Cf. `templates/README.md` pour le format."
+        )
+    else:
+        tpl_options = ["(aucun — composition manuelle ci-dessous)"] + [
+            f"{t.name} — {t.description}" for t in available
+        ]
+        tpl_choice = st.selectbox(
+            "Template",
+            options=tpl_options,
+            key="_template_choice",
+            help="Choisir un template pré-paramétré pour démarrer plus vite.",
+        )
+
+        if tpl_choice != tpl_options[0]:
+            idx = tpl_options.index(tpl_choice) - 1
+            tpl = available[idx]
+            st.caption(
+                f"**{tpl.name}** · Guilde suggérée : `{tpl.guild or 'auto'}` · "
+                f"Tags : {', '.join(tpl.tags) if tpl.tags else '—'}"
+            )
+
+            with st.form(f"template_params_{tpl.id}", clear_on_submit=False):
+                st.markdown("**Paramètres du template** :")
+                param_values: dict[str, str] = {}
+                for p in tpl.params:
+                    val = st.text_input(
+                        p.label + (" *" if p.required else ""),
+                        value=p.example,
+                        key=f"_tpl_{tpl.id}_{p.name}",
+                        help=f"Variable Jinja : `{{{{ {p.name} }}}}`",
+                    )
+                    param_values[p.name] = val
+
+                generate = st.form_submit_button(
+                    "✨ Générer la description depuis ce template",
+                    type="primary",
+                    use_container_width=True,
+                )
+
+            if generate:
+                missing = [
+                    p.label
+                    for p in tpl.params
+                    if p.required and not param_values.get(p.name, "").strip()
+                ]
+                if missing:
+                    st.error(f"Paramètres requis manquants : {', '.join(missing)}")
+                else:
+                    try:
+                        rendered = render_template(tpl, param_values)
+                        # Pré-remplir le formulaire principal via session_state
+                        st.session_state["_mission_title_from_tpl"] = tpl.name
+                        st.session_state["_mission_desc_from_tpl"] = rendered
+                        st.session_state["_mission_guild_from_tpl"] = tpl.guild or ""
+                        st.success(
+                            f"✅ Description générée ({len(rendered)} chars). "
+                            "Elle est pré-remplie ci-dessous — ajuste si nécessaire puis lance."
+                        )
+                    except ValueError as exc:
+                        st.error(f"Erreur de rendu Jinja : {exc}")
+
+
+# Récupération des valeurs pré-remplies par le template (si applicable)
+_prefilled_title = st.session_state.get("_mission_title_from_tpl", "")
+_prefilled_desc = st.session_state.get("_mission_desc_from_tpl", "")
+_prefilled_guild = st.session_state.get("_mission_guild_from_tpl", "")
+
 
 with st.form("mission_form", clear_on_submit=False):
     title = st.text_input(
         "Titre court",
+        value=_prefilled_title,
         placeholder="Ex : Crée un calculateur de scoring SEO",
         help="Une ligne descriptive. Utilisée par le router pour classifier la guilde.",
     )
     description = st.text_area(
         "Description détaillée",
+        value=_prefilled_desc,
         placeholder=(
             "Décris précisément le livrable, les contraintes (stdlib only, "
             "max_tokens, etc.), les fichiers cibles et les tests attendus. "
             "Plus c'est précis, mieux les agents convergent."
         ),
-        height=200,
+        height=300 if _prefilled_desc else 200,
     )
 
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
+        guild_options = ["(auto — détection mots-clés)", *available_guilds()]
+        default_guild_idx = (
+            guild_options.index(_prefilled_guild) if _prefilled_guild in guild_options else 0
+        )
         force_guild = st.selectbox(
             "Guilde (forcée)",
-            options=["(auto — détection mots-clés)", *available_guilds()],
+            options=guild_options,
+            index=default_guild_idx,
             help="Auto laisse le HeuristicGuildClassifier décider. Force pour bypasser.",
         )
     with col2:
