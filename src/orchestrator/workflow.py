@@ -34,6 +34,7 @@ from src.core.checkpoint import CheckpointStore
 from src.core.config import Settings, get_settings
 from src.core.killswitch import Killswitch, KillswitchEngaged
 from src.core.logging import get_logger
+from src.learning.missions_rag import MissionsRAG
 from src.learning.skills_library import SkillsLibrary
 from src.memory.file_memory import FileMemory, MemoryRecord
 from src.memory.vector_memory import VectorMemory
@@ -85,6 +86,7 @@ class Workflow:
         budget: BudgetController | None = None,
         killswitch: Killswitch | None = None,
         checkpoint_store: CheckpointStore | None = None,
+        missions_rag: MissionsRAG | None = None,
     ) -> None:
         self.memory = memory
         self.vector_memory = vector_memory
@@ -93,6 +95,10 @@ class Workflow:
         self.budget = budget
         self.killswitch = killswitch
         self.checkpoint_store = checkpoint_store
+        # v0.9.0 A1 — RAG sur missions passées. Si fourni : (1) indexe la
+        # mission courante en fin de run, (2) injecte les missions similaires
+        # dans le contexte de l'orchestrator au début du run.
+        self.missions_rag = missions_rag
         common = {"vector_memory": vector_memory, "skills_library": skills_library}
         self.orchestrator = ChiefOrchestrator(memory, self.settings, **common)
         self.architect = SoftwareArchitect(memory, self.settings, **common)
@@ -140,12 +146,42 @@ class Workflow:
                 log.warning("workflow.budget.refused", mission=str(mission_id), error=str(exc))
                 return self._fail(mission_id, title, started, outputs, "budget.exceeded", str(exc))
 
+        # v0.9.0 A1 — RAG sur missions passées. On cherche jusqu'à 3 missions
+        # similaires APPROVED et on injecte un résumé compact dans le contexte
+        # de l'orchestrator (pas dans le system prompt, pour ne pas polluer
+        # toutes les invocations futures). Best-effort : si le RAG échoue,
+        # la mission continue sans contexte enrichi.
+        rag_context = ""
+        if self.missions_rag is not None:
+            try:
+                similar = self.missions_rag.find_similar(
+                    title=title,
+                    description=description,
+                    n_results=3,
+                    guild="engineering",
+                    exclude_mission_id=str(mission_id),
+                )
+                if similar:
+                    rag_context = self.missions_rag.render_for_prompt(similar)
+                    log.info(
+                        "workflow.rag.injected",
+                        mission=str(mission_id),
+                        matches=len(similar),
+                        top_relevance=round(similar[0].relevance, 2),
+                    )
+            except Exception as exc:
+                log.warning("workflow.rag.failed", error=str(exc))
+
+        orch_task = f"Mission : {title}\n\n{description}\n\nProduis la décomposition au format YAML attendu."
+        if rag_context:
+            orch_task = f"{rag_context}\n\n---\n\n{orch_task}"
+
         # Step 1 — Orchestrator décompose
         orch_out = await run_with_checkpoint(
             self.orchestrator,
             AgentInput(
                 mission_id=mission_id,
-                task=f"Mission : {title}\n\n{description}\n\nProduis la décomposition au format YAML attendu.",
+                task=orch_task,
             ),
             step_index=0,
             agent_name="chief_orchestrator",
@@ -508,7 +544,28 @@ class Workflow:
                 "total_cost_usd": round(result.total_cost_usd, 6),
                 "total_duration_seconds": round(result.total_duration_seconds, 3),
                 "files_produced_count": len(result.files_produced),
+                # v0.9.0 A1 — fields exploités par le RAG missions
+                "guild": "engineering",
+                "review_summary": result.review_summary,
             },
             body="\n".join(body_lines),
         )
         self.memory.write_mission_summary(mission_id, record)
+
+        # v0.9.0 A1 — Indexation auto dans le RAG. Filtré côté MissionsRAG
+        # (APPROVED uniquement). Best-effort : un échec n'interrompt pas la
+        # mission (le summary disque reste source de vérité).
+        if self.missions_rag is not None:
+            try:
+                self.missions_rag.index_mission(
+                    mission_id=str(mission_id),
+                    title=title,
+                    description=description,
+                    summary_record=record,
+                )
+            except Exception as exc:
+                log.warning(
+                    "workflow.rag.index_failed",
+                    mission=str(mission_id),
+                    error=str(exc),
+                )

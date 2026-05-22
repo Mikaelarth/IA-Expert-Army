@@ -26,6 +26,7 @@ from src.core.budget import BudgetController
 from src.core.checkpoint import CheckpointStore
 from src.core.config import get_settings
 from src.core.killswitch import Killswitch
+from src.learning.missions_rag import MISSIONS_COLLECTION, MissionsRAG
 from src.learning.skills_library import SkillsLibrary
 from src.memory.file_memory import FileMemory
 from src.memory.vector_memory import VectorMemory
@@ -78,6 +79,12 @@ def build_router() -> MissionRouter:
     killswitch = Killswitch(project_root / "data" / ".killswitch_engaged")
     # v0.8.0 F1 — checkpoint store partagé entre CLI et GUI : data/checkpoints/
     checkpoint_store = CheckpointStore(project_root / "data" / "checkpoints")
+    # v0.9.0 A1 — RAG sur missions passées (collection Chroma dédiée)
+    vector_memory_missions = VectorMemory(
+        persist_dir=settings.chroma_persist_dir,
+        collection_name=MISSIONS_COLLECTION,
+    )
+    missions_rag = MissionsRAG(vector_memory_missions)
     return MissionRouter(
         memory=memory,
         settings=settings,
@@ -86,6 +93,7 @@ def build_router() -> MissionRouter:
         budget=budget,
         killswitch=killswitch,
         checkpoint_store=checkpoint_store,
+        missions_rag=missions_rag,
     )
 
 

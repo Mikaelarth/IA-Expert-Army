@@ -153,8 +153,15 @@ def run(
     from uuid import UUID
 
     from src.core.checkpoint import CheckpointStore
+    from src.learning.missions_rag import MISSIONS_COLLECTION, MissionsRAG
 
     checkpoint_store = CheckpointStore(settings.project_root / "data" / "checkpoints")
+    # v0.9.0 A1 — RAG missions partagé CLI/GUI
+    vector_missions = VectorMemory(
+        persist_dir=settings.chroma_persist_dir,
+        collection_name=MISSIONS_COLLECTION,
+    )
+    missions_rag = MissionsRAG(vector_missions)
 
     # Résolution du --resume : "last" → dernière mission, UUID → cette mission
     resume_uuid: UUID | None = None
@@ -188,6 +195,7 @@ def run(
         budget=budget,
         killswitch=killswitch,
         checkpoint_store=checkpoint_store,
+        missions_rag=missions_rag,
     )
 
     if meta:
