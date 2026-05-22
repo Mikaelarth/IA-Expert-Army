@@ -1129,7 +1129,7 @@ gui = [
 requires-dist = [
     { name = "aiosqlite", marker = "extra == 'memory'", specifier = ">=0.20.0" },
     { name = "chromadb", specifier = ">=1.5.9" },
-    { name = "chromadb", marker = "extra == 'memory'", specifier = ">=0.5.20" },
+    { name = "chromadb", marker = "extra == 'memory'", specifier = ">=1.5.9" },
     { name = "docker", specifier = ">=7.1.0" },
     { name = "docker", marker = "extra == 'orchestration'", specifier = ">=7.1.0" },
     { name = "httpx", specifier = ">=0.28.0" },

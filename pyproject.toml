@@ -30,8 +30,13 @@ dependencies = [
 [project.optional-dependencies]
 
 # Phase 2+ : Mémoire intelligente
+# Note v0.7.0 : chromadb aligné sur la version des deps de base (>=1.5.9)
+# pour éviter le clash de majors (1.5 vs 0.5) qui pouvait laisser un `uv sync
+# --extra memory` installer la vieille branche. SQLAlchemy + aiosqlite sont
+# legacy (Phase 2 SQLite memory) — restent pour compatibilité, mais le code
+# nominal utilise FileMemory + Chroma in-process.
 memory = [
-    "chromadb>=0.5.20",
+    "chromadb>=1.5.9",
     "sqlalchemy>=2.0.36",
     "aiosqlite>=0.20.0",
 ]
@@ -100,9 +105,10 @@ addopts = "-v --tb=short"
 # Filtres warnings — garde les runs de tests propres pour pouvoir détecter
 # les VRAIS warnings (saturation, deprecation interne, etc.) sans bruit.
 filterwarnings = [
-    # chromadb 0.5.x utilise asyncio.iscoroutinefunction (deprecated Python 3.16+)
-    # cf. .venv/Lib/site-packages/chromadb/telemetry/opentelemetry/__init__.py:128
-    # → upstream issue, on attend chromadb >= 0.6 qui devrait migrer.
+    # chromadb utilisait asyncio.iscoroutinefunction (deprecated Python 3.16+).
+    # Le filterwarning reste défensif pour les chromadb <1.5.9 que pourrait
+    # installer un extras `memory` ancien. Aligné v0.7.0 sur 1.5.9 partout
+    # mais on garde le filtre comme ceinture de sécurité.
     "ignore:.*asyncio.iscoroutinefunction.*:DeprecationWarning:chromadb",
 ]
 

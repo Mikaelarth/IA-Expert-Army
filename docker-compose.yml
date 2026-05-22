@@ -35,7 +35,7 @@ services:
   # Active via : docker compose --profile vector-http up -d chroma
   chroma:
     profiles: ["vector-http"]
-    image: chromadb/chroma:0.5.20
+    image: chromadb/chroma:1.0.13  # v0.7.0 — aligné sur SDK Python >=1.5.9 (cf. pyproject.toml deps base)
     container_name: iaa-chroma
     restart: unless-stopped
     ports:

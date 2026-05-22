@@ -342,3 +342,50 @@ def test_pattern_miner_excludes_saturated_episodes(
     miner = PatternMiner(memory=memory, skills=skills, settings=settings, min_episodes=1)
     grouped = miner._load_eligible_episodes()
     assert len(grouped["research_lead"]) == 1  # le saturé filtré
+
+
+def test_load_eligible_excludes_already_mined_sources(
+    memory: FileMemory, skills: SkillsLibrary, settings: Settings
+) -> None:
+    """v0.7.0 — un épisode déjà source d'une skill existante doit être
+    exclu pour éviter les skills doublons sur le même matériau.
+    """
+    # Crée 2 épisodes pour code_reviewer
+    _add_episode(memory, "code_reviewer", quality_score=0.95)
+    _add_episode(memory, "code_reviewer", quality_score=0.92)
+    eps = list(memory.list_episodes())
+    assert len(eps) == 2
+
+    # Simule qu'une skill a déjà été extraite à partir du premier épisode
+    skills.write_skill(
+        agent="code_reviewer",
+        title="Skill déjà extraite",
+        body="contenu factice",
+        metadata={
+            "summary": "skill créée précédemment",
+            "tags": ["test"],
+            "sources": [eps[0].stem],  # 1er épisode déjà miné
+            "sources_avg_score": 0.95,
+            "extracted_from": 1,
+        },
+    )
+
+    miner = PatternMiner(memory=memory, skills=skills, settings=settings)
+    grouped = miner._load_eligible_episodes()
+
+    # Seul le 2e épisode doit rester éligible
+    assert len(grouped["code_reviewer"]) == 1
+    assert grouped["code_reviewer"][0][0].stem == eps[1].stem
+
+
+def test_already_mined_sources_handles_missing_agent_dir(
+    memory: FileMemory, skills: SkillsLibrary, settings: Settings
+) -> None:
+    """`_already_mined_sources` ne doit pas lever si un agent n'a aucune
+    skill (répertoire absent ou vide). Retourne un dict avec sets vides.
+    """
+    miner = PatternMiner(memory=memory, skills=skills, settings=settings)
+    mined = miner._already_mined_sources()
+    # Tous les agents whitelist devraient avoir un set vide (ou être absents)
+    for agent in miner.agents:
+        assert mined.get(agent, set()) == set()
