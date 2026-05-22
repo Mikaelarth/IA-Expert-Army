@@ -62,6 +62,53 @@ def test_detect_uv_returns_ok_when_present(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 # ---------------------------------------------------------------------------
+# v0.9.2 — Containerized mode awareness
+# ---------------------------------------------------------------------------
+
+
+def test_is_running_in_container_returns_false_on_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Sur un PC host normal (pas Docker), la détection doit retourner False."""
+    monkeypatch.delenv("IAA_DEPLOYMENT_MODE", raising=False)
+    # Patch les helpers internes pour simuler "pas dans container"
+    monkeypatch.setattr(setup_runner.Path, "exists", lambda self: False)
+    assert setup_runner.is_running_in_container() is False
+
+
+def test_is_running_in_container_respects_env_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """La variable d'env IAA_DEPLOYMENT_MODE=container force True même sur host."""
+    monkeypatch.setenv("IAA_DEPLOYMENT_MODE", "container")
+    assert setup_runner.is_running_in_container() is True
+
+
+def test_detect_uv_skipped_in_container(monkeypatch: pytest.MonkeyPatch) -> None:
+    """En mode container, detect_uv retourne SKIPPED (deps gelées dans l'image)."""
+    monkeypatch.setenv("IAA_DEPLOYMENT_MODE", "container")
+    result = detect_uv()
+    assert result.status == Status.SKIPPED
+    assert "container" in result.detail.lower() or "image" in result.detail.lower()
+    assert result.install_url is None  # pas de bouton "télécharger" trompeur
+
+
+def test_detect_ollama_installed_skipped_in_container(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """En mode container, le binaire ollama n'est pas requis : SKIPPED.
+
+    Régression : avant v0.9.2, ce check retournait MISSING + URL d'install
+    Ollama, ce qui suggérait au poste distant d'installer Ollama sur SA
+    machine (alors qu'il consulte juste la GUI conteneurisée)."""
+    monkeypatch.setenv("IAA_DEPLOYMENT_MODE", "container")
+    result = setup_runner.detect_ollama_installed()
+    assert result.status == Status.SKIPPED
+    assert "container" in result.detail.lower() or "host" in result.detail.lower()
+    assert result.install_url is None
+
+
+# ---------------------------------------------------------------------------
 # Détection Ollama daemon — mock urlopen
 # ---------------------------------------------------------------------------
 
