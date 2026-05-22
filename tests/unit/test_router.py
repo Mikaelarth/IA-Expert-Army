@@ -217,3 +217,86 @@ def test_router_dispatches_to_research(
     result = asyncio.run(router.run("Compare frameworks Python", "Synthétise les options 2026"))
     assert result.guild == "research"
     assert "TL;DR" in result.raw_result["synthesis_markdown"]
+
+
+# ===== LLM Classifier (v0.7.0) =====
+
+
+def test_llm_classifier_returns_valid_guild(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Le classifier LLM valide une réponse `engineering` et la retourne."""
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from src.orchestrator.router import LLMGuildClassifier
+
+    fake_response = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="engineering"))]
+    )
+    fake_client = MagicMock()
+    fake_client.chat.completions.create.return_value = fake_response
+
+    clf = LLMGuildClassifier(settings)
+    clf._client = fake_client  # injection directe pour bypass _get_client
+
+    result = clf.classify("Crée une API FastAPI", "Endpoint /version")
+    assert result == "engineering"
+    fake_client.chat.completions.create.assert_called_once()
+
+
+def test_llm_classifier_falls_back_on_unparseable_response(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Si le LLM répond hors vocabulaire, on fallback sur l'héuristique."""
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from src.orchestrator.router import LLMGuildClassifier
+
+    fake_response = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="catégorie_inventée"))]
+    )
+    fake_client = MagicMock()
+    fake_client.chat.completions.create.return_value = fake_response
+
+    clf = LLMGuildClassifier(settings)
+    clf._client = fake_client
+
+    # L'héuristique sur "Crée endpoint FastAPI" doit tomber sur engineering
+    result = clf.classify("Crée endpoint FastAPI", "GET /health avec router")
+    assert result == "engineering"
+
+
+def test_llm_classifier_falls_back_on_exception(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Si l'appel LLM lève (réseau, timeout, daemon down), on fallback proprement."""
+    from unittest.mock import MagicMock
+
+    from src.orchestrator.router import LLMGuildClassifier
+
+    fake_client = MagicMock()
+    fake_client.chat.completions.create.side_effect = RuntimeError("ollama down")
+
+    clf = LLMGuildClassifier(settings)
+    clf._client = fake_client
+
+    result = clf.classify("Rédige une landing page SaaS", "Cible startups B2B")
+    # L'héuristique doit tomber sur creative (mots "landing page", "rédige")
+    assert result == "creative"
+
+
+def test_router_uses_llm_classifier_when_enabled(
+    memory: FileMemory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Quand Settings.use_llm_classifier=True, le MissionRouter instancie un
+    LLMGuildClassifier au lieu de l'héuristique."""
+    monkeypatch.setenv("USE_LLM_CLASSIFIER", "true")
+    s = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert s.use_llm_classifier is True
+
+    from src.orchestrator.router import LLMGuildClassifier
+
+    router = MissionRouter(memory=memory, settings=s)
+    assert isinstance(router.classifier, LLMGuildClassifier)

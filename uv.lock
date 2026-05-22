@@ -1073,7 +1073,7 @@ wheels = [
 
 [[package]]
 name = "ia-expert-army"
-version = "0.6.0"
+version = "0.7.0"
 source = { editable = "." }
 dependencies = [
     { name = "chromadb" },
@@ -1094,11 +1094,6 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "ipython" },
-    { name = "mypy" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
 ]
 memory = [
     { name = "aiosqlite" },
@@ -1134,7 +1129,7 @@ gui = [
 requires-dist = [
     { name = "aiosqlite", marker = "extra == 'memory'", specifier = ">=0.20.0" },
     { name = "chromadb", specifier = ">=1.5.9" },
-    { name = "chromadb", marker = "extra == 'memory'", specifier = ">=0.5.20" },
+    { name = "chromadb", marker = "extra == 'memory'", specifier = ">=1.5.9" },
     { name = "docker", specifier = ">=7.1.0" },
     { name = "docker", marker = "extra == 'orchestration'", specifier = ">=7.1.0" },
     { name = "httpx", specifier = ">=0.28.0" },
@@ -1144,18 +1139,13 @@ requires-dist = [
     { name = "langfuse", marker = "extra == 'orchestration'", specifier = ">=2.55.0" },
     { name = "langgraph", marker = "extra == 'orchestration'", specifier = ">=0.2.50" },
     { name = "mcp", specifier = ">=1.27.1" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13.0" },
     { name = "openai", specifier = ">=1.50.0" },
     { name = "pydantic", specifier = ">=2.9.0" },
     { name = "pydantic-settings", specifier = ">=2.6.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "redis", extras = ["hiredis"], marker = "extra == 'orchestration'", specifier = ">=5.2.0" },
     { name = "rich", specifier = ">=13.9.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8.0" },
     { name = "sqlalchemy", marker = "extra == 'memory'", specifier = ">=2.0.36" },
     { name = "structlog", specifier = ">=24.4.0" },
     { name = "typer", specifier = ">=0.15.0" },

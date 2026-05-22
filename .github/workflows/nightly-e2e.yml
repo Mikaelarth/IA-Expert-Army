@@ -1,0 +1,65 @@
+name: Nightly E2E Ollama
+
+# Audit zéro-dette L3 — exécute les tests E2E qui touchent un vrai daemon
+# Ollama. Skipped dans la CI standard (mocks only) car GitHub-hosted runners
+# n'ont pas Ollama installé. Ce workflow a deux modes :
+#
+# 1. Cron nightly à 3h UTC (3h-4h UTC = 4h-5h Paris) — `setup_runner` est
+#    notre canal d'install local ; en CI on est ARM-less, donc tests skip
+#    proprement avec le message documenté.
+# 2. Manual dispatch — utile pour valider une modification de l'intégration
+#    Ollama sans attendre la nuit.
+#
+# Comportement attendu (statu quo) : les tests skip car Ollama n'est pas
+# installé sur ubuntu-latest. Le workflow finit vert. Si quelqu'un fait
+# tourner ce CI sur un runner self-hosted avec Ollama, alors les tests
+# s'exécutent réellement et valident le format de réponse.
+
+on:
+  schedule:
+    # 03:00 UTC quotidien
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      runner_type:
+        description: "Runner avec Ollama installé (laisser ubuntu-latest pour skip volontaire)"
+        required: false
+        default: "ubuntu-latest"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e-ollama:
+    runs-on: ${{ github.event.inputs.runner_type || 'ubuntu-latest' }}
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Sync dependencies (all groups)
+        run: uv sync --all-extras --all-groups
+
+      - name: Run E2E Ollama tests (slow, real daemon)
+        env:
+          OLLAMA_E2E: "1"
+          # Si daemon Ollama absent sur le runner → les tests skip
+          # avec le message documenté (pas un échec). C'est le statu quo
+          # attendu sur ubuntu-latest GitHub-hosted.
+          OLLAMA_BASE_URL: ${{ vars.OLLAMA_BASE_URL || 'http://localhost:11434/v1' }}
+        run: |
+          uv run pytest -m slow tests/integration/test_e2e_ollama_live.py \
+            -v --tb=short --no-header

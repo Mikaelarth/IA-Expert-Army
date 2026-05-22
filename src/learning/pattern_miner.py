@@ -68,7 +68,12 @@ class PatternMiner:
         "software_architect",
         "backend_developer",
         "code_reviewer",
-        "security_auditor",  # Sprint AAA — audit OWASP/secrets/pratiques sécu
+        # Transverse Engineering — SecurityAuditor est invoqué APRÈS le
+        # CodeReviewer sur les missions Engineering APPROVED (cf. Sprint AAA).
+        # Son prompt vit sous `prompts/orchestrator/security_auditor.md`
+        # parce qu'il agit comme un auditeur post-guild, pas comme un membre
+        # core du workflow Engineering linéaire.
+        "security_auditor",
         # Guild Research (ajoutée Phase 4)
         "research_lead",
         "tech_watch",
@@ -106,12 +111,37 @@ class PatternMiner:
         # Permet de cibler une guilde précise sans re-miner inutilement les autres.
         self.agents = agents or self.AGENT_WHITELIST
 
+    def _already_mined_sources(self) -> dict[str, set[str]]:
+        """Retourne {agent: set[episode_stem]} déjà utilisés comme source de skill.
+
+        Permet à `mine()` d'éviter de re-extraire une skill à partir des mêmes
+        épisodes — sinon le nightly_learning produirait des skills doublons à
+        chaque passage (cf. audit zéro-dette v0.7.0 L11). On lit les
+        métadonnées `sources` que `_persist_skill()` écrit pour chaque skill.
+        """
+        mined: dict[str, set[str]] = defaultdict(set)
+        for agent in self.agents:
+            try:
+                skills = self.skills.list_skills(agent)
+            except (OSError, FileNotFoundError):
+                continue
+            for skill in skills:
+                for src in skill.metadata.get("sources", []) or []:
+                    if isinstance(src, str):
+                        mined[agent].add(src)
+        return mined
+
     def _load_eligible_episodes(self) -> dict[str, list[tuple[Path, MemoryRecord]]]:
         """Retourne {agent: [(path, record), ...]} filtré sur succès + quality.
 
         Ignore aussi les épisodes saturés (sortie tronquée par max_tokens) car
         leur YAML est probablement incomplet et minerait sur une donnée corrompue.
+
+        Sprint v0.7.0 — exclut également les épisodes déjà utilisés comme source
+        d'une skill existante (cf. `_already_mined_sources()`), pour éviter la
+        production de skills doublons sur le même matériau.
         """
+        already_mined = self._already_mined_sources()
         grouped: dict[str, list[tuple[Path, MemoryRecord]]] = defaultdict(list)
         # Sprint ZZ.2 — cache des verdicts QG par mission_id, pour ne pas relire
         # le mission summary N fois si plusieurs épisodes de la même mission.
@@ -141,6 +171,9 @@ class PatternMiner:
                 continue
             score = meta.get("quality_score")
             if isinstance(score, (int, float)) and score < self.min_quality:
+                continue
+            # Sprint v0.7.0 — dédup : skip si déjà source d'une skill existante.
+            if path.stem in already_mined.get(agent, set()):
                 continue
 
             # Sprint ZZ.2 — filtre QG : si la mission a un qg_verdict NEEDS_REWORK
@@ -344,6 +377,17 @@ class PatternMiner:
             "summary": summary,
             "tags": yaml_data.get("tags", []),
             "sources": [ep[0].stem for ep in episodes],
+            # v0.7.0 L5 — sources_mission_ids permet à BaseAgent de filtrer
+            # une skill dont la mission d'origine est la mission courante
+            # (défense contre boucle auto-référentielle hypothétique post-
+            # bascule mining online).
+            "sources_mission_ids": sorted(
+                {
+                    str(ep[1].metadata.get("mission_id"))
+                    for ep in episodes
+                    if ep[1].metadata.get("mission_id")
+                }
+            ),
             "sources_avg_score": round(
                 sum(
                     float(ep[1].metadata.get("quality_score", 0))

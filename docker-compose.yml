@@ -35,7 +35,7 @@ services:
   # Active via : docker compose --profile vector-http up -d chroma
   chroma:
     profiles: ["vector-http"]
-    image: chromadb/chroma:0.5.20
+    image: chromadb/chroma:1.0.13  # v0.7.0 — aligné sur SDK Python >=1.5.9 (cf. pyproject.toml deps base)
     container_name: iaa-chroma
     restart: unless-stopped
     ports:
@@ -48,16 +48,21 @@ services:
       - ANONYMIZED_TELEMETRY=FALSE
 
   # --- Langfuse : observabilité multi-agents (Phase 3+) ---
-  # Stack complète activable via : docker compose --profile observability up -d
   #
-  # NOTE Phase 3 (mai 2026) : la config Langfuse v3 a évolué — plusieurs env vars
-  # supplémentaires sont attendues par le worker/web (CLICKHOUSE_MIGRATION_URL,
-  # variantes S3 spécifiques, etc.) qui ne sont PAS encore mappées ici. Le stack
-  # démarre les 6 containers mais le worker ne réussit pas les migrations
-  # ClickHouse au premier boot. À reprendre dans une session dédiée
-  # observabilité (suivre la doc langfuse.com/self-hosting v3).
-  # Workaround court terme : utiliser nos logs structlog + Langfuse cloud
-  # (langfuse.com hosted) si besoin de traces visuelles.
+  # ⛔ STATUS v0.7.0 — DEFERRED (cf. ADR-028).
+  # La stack self-hosted v3 ci-dessous N'EST PAS FONCTIONNELLE en l'état :
+  # le worker échoue les migrations ClickHouse au premier boot (env vars
+  # CLICKHOUSE_MIGRATION_URL et variantes S3 manquantes). Les containers
+  # restent ici pour qu'un opérateur avancé puisse les démarrer et finir
+  # la config manuellement, mais le projet ne supporte pas ce mode.
+  #
+  # ✅ Mode supporté : Langfuse cloud (langfuse.com hosted free tier).
+  #    Renseigner LANGFUSE_PUBLIC_KEY + LANGFUSE_SECRET_KEY dans .env.
+  #    src/core/tracing.py basculera automatiquement.
+  #
+  # Conditions de réactivation détaillées dans docs/adr/028-langfuse-self-hosted-deferred.md.
+  #
+  # Lancement (à vos risques) : docker compose --profile observability up -d
   langfuse-postgres:
     profiles: ["observability"]
     image: postgres:16-alpine

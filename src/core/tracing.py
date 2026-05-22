@@ -48,12 +48,19 @@ def _try_import_langfuse() -> tuple[bool, Callable[..., Any] | None]:
     Renvoie (available, observe_decorator). Si Langfuse SDK n'est pas
     installé, on renvoie (False, None) sans crasher l'import du module.
     """
+    # Langfuse v4 a déplacé observe de langfuse.decorators vers langfuse.
+    # On résout dynamiquement pour supporter les deux générations sans
+    # déclencher no-redef de mypy (les deux imports portent le même nom).
+    lf_observe: Callable[..., Any] | None = None
     try:
-        # Langfuse v4 a déplacé observe de langfuse.decorators vers langfuse
         try:
-            from langfuse import observe as lf_observe
-        except ImportError:
-            from langfuse.decorators import observe as lf_observe
+            import langfuse as _lf_v4
+
+            lf_observe = _lf_v4.observe
+        except (ImportError, AttributeError):
+            from langfuse.decorators import observe as _lf_v3_observe
+
+            lf_observe = _lf_v3_observe
         return True, lf_observe
     except ImportError:
         return False, None

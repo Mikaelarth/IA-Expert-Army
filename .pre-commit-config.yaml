@@ -39,14 +39,24 @@ repos:
       # Formattage cohérent
       - id: ruff-format
 
-  # NOTE — mypy n'est PAS dans pre-commit (Sprint UU.5)
-  # Raison : mypy 2.0 sur `strict = true` trouve 85 erreurs sur la base
-  # existante (kwargs `**common: dict[str, object]` dans router.py, decorators
-  # untyped sur @observe en mode NO-OP, etc.). On a :
-  # 1) baissé strict → false + opt-in granulaire (cf. pyproject.toml)
-  # 2) gardé `just typecheck` (justfile) comme check manuel
-  # 3) documenté la dette dans le CHANGELOG [Unreleased]
-  # À réactiver progressivement, module par module, via `--strict src/X.py`.
+  # === mypy progressif (v0.7.0) ===
+  # Plan d'extension : on active mypy en pre-commit module par module, en
+  # commençant par src/core/ (12 fichiers, type-clean au 2026-05-22).
+  # Chaque batch sera ajouté ici après vérification clean via `just typecheck-core`.
+  # Roadmap : core (✅) → memory → learning → tools → sandbox → orchestrator → guilds.
+  # La config pyproject.toml reste `strict = false` global ; les modules
+  # checkés ici doivent rester clean pour ne pas bloquer les commits.
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        name: mypy (src/core only — extension progressive)
+        files: '^src/core/.*\.py$'
+        additional_dependencies:
+          - pydantic>=2.9.0
+          - pydantic-settings>=2.6.0
+          - structlog>=24.4.0
+          - types-pyyaml
 
   # === Hook custom : tests unit doivent passer ===
   - repo: local

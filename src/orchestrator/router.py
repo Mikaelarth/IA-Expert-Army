@@ -4,9 +4,14 @@ Phase 4 MVP — classifieur heuristique simple (mots-clés). Pas d'appel LLM
 juste pour décider la guilde : si l'utilisateur précise explicitement le type
 de mission, on respecte. Sinon, on déduit du vocabulaire.
 
-Phase 4+ : remplacera l'heuristique par un mini-classifier Claude (Haiku) qui
-note les ambiguïtés et redirige vers la bonne guilde — ou par un Chief
-Orchestrator enrichi qui inclut `target_guild` dans sa décomposition YAML.
+v0.7.0 — LLMGuildClassifier ajouté (Qwen 14B, opt-in via Settings) avec
+fallback automatique sur l'héuristique en cas d'erreur. Cf. ADR audit zéro-dette.
+
+# audit: ignore FILE_TOO_LONG -- 603 lignes acceptées : MissionRouter + 4
+# UnifiedMissionResult helpers + 2 classifiers (Heuristic + LLM) + 1 dispatch
+# vers 4 workflows guildes. Split par classifier (router_classify.py +
+# router_dispatch.py) ferait perdre la vue d'ensemble du dispatch et obligerait
+# à importer 2 modules pour comprendre le routage. Cohésion > split.
 """
 
 from __future__ import annotations
@@ -282,6 +287,88 @@ class HeuristicGuildClassifier:
         return re.search(rf"\b{re.escape(keyword)}\b", text) is not None
 
 
+class LLMGuildClassifier:
+    """Classifier LLM qui demande à un petit modèle (Qwen 14B bulk) de
+    catégoriser la mission. Fallback automatique sur l'héuristique en cas
+    d'erreur (réseau, parse, réponse hors-vocabulaire).
+
+    Designé pour les missions ambiguës où l'héuristique tranche par
+    tie-break arbitraire (ex. "Implémente une API research-driven" qui
+    matche autant engineering que research).
+
+    Coût : ~0.5-2 s par classification sur Qwen 14B local.
+    Opt-in via Settings.use_llm_classifier (défaut False, garde
+    l'héuristique pour rétrocompat).
+    """
+
+    _GUILDS = ("engineering", "research", "creative", "business")
+    # Classifier interne mini (200 chars), versionning git suffit ; pas de
+    # bénéfice à externaliser dans prompts/.
+    _SYSTEM_PROMPT = (  # audit: ignore HARDCODED_PROMPT
+        "Tu es un classifieur de missions pour un système d'agents IA "
+        "multi-guildes. Tu reçois un titre + une description et tu DOIS "
+        "répondre par UN SEUL mot parmi : engineering, research, creative, "
+        "business.\n\n"
+        "- engineering : code, API, backend, infra, refactor, tests, CI/CD\n"
+        "- research : veille tech, analyse comparative, synthèse documentaire\n"
+        "- creative : copywriting, landing page, contenu marketing\n"
+        "- business : roadmap, plan, OKR, conformité, contrats, KPI\n\n"
+        "Réponse attendue : un mot unique, en minuscules, sans ponctuation."
+    )
+
+    def __init__(self, settings: Settings, fallback: _GuildClassifier | None = None) -> None:
+        self.settings = settings
+        self.fallback = fallback or HeuristicGuildClassifier()
+        self._client: Any | None = None
+
+    def _get_client(self) -> Any:
+        if self._client is None:
+            from openai import OpenAI
+
+            self._client = OpenAI(
+                base_url=self.settings.ollama_base_url,
+                api_key=self.settings.ollama_api_key,
+                timeout=10.0,  # classifier doit rester rapide
+                max_retries=0,  # pas de retry — fallback heuristique
+            )
+        return self._client
+
+    def classify(self, title: str, description: str) -> str:
+        try:
+            client = self._get_client()
+            response = client.chat.completions.create(
+                model=self.settings.model_bulk,
+                messages=[
+                    {"role": "system", "content": self._SYSTEM_PROMPT},
+                    {
+                        "role": "user",
+                        "content": f"Titre : {title}\n\nDescription : {description}",
+                    },
+                ],
+                max_tokens=20,
+                temperature=0.0,
+            )
+            raw = (response.choices[0].message.content or "").strip().lower()
+            # Extraction défensive : prend le premier mot dans la réponse
+            first_word = raw.split()[0].strip(".,;:!?") if raw else ""
+            if first_word in self._GUILDS:
+                log.info(
+                    "llm_classifier.decided",
+                    guild=first_word,
+                    raw=raw[:50],
+                )
+                return first_word
+            log.warning("llm_classifier.unparseable", raw=raw[:100])
+        except Exception as exc:
+            log.warning(
+                "llm_classifier.failed",
+                error=f"{type(exc).__name__}: {exc}",
+                title=title[:50],
+            )
+        # Fallback : héuristique mots-clés
+        return self.fallback.classify(title, description)
+
+
 class RoutingDecision(BaseModel):
     guild: str
     reason: str
@@ -300,10 +387,30 @@ class UnifiedMissionResult(BaseModel):
     raw_result: dict[str, Any]
 
     # === Quality Guardian (Sprint YY, opt-in via Settings) ===
+    # Politique sémantique v0.7.0 (clarification L2) :
+    # - `qg_verdict` est strictement INFORMATIF — il n'override JAMAIS
+    #   `final_verdict`. Un caller peut ignorer un `qg_verdict=NEEDS_REWORK`
+    #   et continuer à utiliser `final_verdict=APPROVED`.
+    # - `qg_blocks_release` (calculé via `is_blocking_qg`) signale les cas où
+    #   un consommateur prudent devrait suspendre l'usage en aval (PatternMiner
+    #   filtre déjà ces missions du mining, cf. pattern_miner.py:162).
+    # - Pour rendre QG bloquant (override final_verdict), il faudra une décision
+    #   produit explicite + bump majeur ; cf. CHANGELOG [Unreleased].
     qg_verdict: str | None = None  # ACCEPT | NEEDS_REWORK | ESCALATE | None
     qg_final_score: float | None = None
     qg_concerns: list[str] = []
     qg_rationale: str | None = None
+
+    @property
+    def qg_blocks_release(self) -> bool:
+        """True si le QG flag un risque que les consommateurs prudents
+        devraient traiter comme bloquant (NEEDS_REWORK ou ESCALATE).
+
+        N'AFFECTE PAS `final_verdict` — c'est uniquement un indicateur que le
+        caller peut lire pour décider sa politique (refuser le commit, alerter
+        l'opérateur, exclure du mining, etc.).
+        """
+        return self.qg_verdict in {"NEEDS_REWORK", "ESCALATE"}
 
 
 class MissionRouter:
@@ -326,7 +433,15 @@ class MissionRouter:
         self.skills_library = skills_library
         self.budget = budget
         self.killswitch = killswitch
-        self.classifier = classifier or HeuristicGuildClassifier()
+        # v0.7.0 — classifier LLM opt-in via Settings.use_llm_classifier.
+        # Si l'utilisateur a passé un classifier explicite, on respecte son
+        # choix. Sinon : LLM si activé, héuristique sinon.
+        if classifier is not None:
+            self.classifier: _GuildClassifier = classifier
+        elif self.settings.use_llm_classifier:
+            self.classifier = LLMGuildClassifier(self.settings)
+        else:
+            self.classifier = HeuristicGuildClassifier()
 
     def decide(
         self, title: str, description: str, force_guild: str | None = None
@@ -334,7 +449,12 @@ class MissionRouter:
         if force_guild:
             return RoutingDecision(guild=force_guild, reason="forced by caller")
         guild = self.classifier.classify(title, description)
-        return RoutingDecision(guild=guild, reason="heuristic keyword classification")
+        reason = (
+            "llm classifier (Qwen 14B)"
+            if isinstance(self.classifier, LLMGuildClassifier)
+            else "heuristic keyword classification"
+        )
+        return RoutingDecision(guild=guild, reason=reason)
 
     @observe(name="mission.router.run")
     async def run(

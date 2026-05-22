@@ -82,6 +82,54 @@ def test_overwrites_with_force(tmp_path: Path) -> None:
     assert target.read_text(encoding="utf-8") == "NEW\n"
 
 
+def test_force_overwrite_with_approval_store_records_audit_trail(tmp_path: Path) -> None:
+    """v0.7.0 L1 — quand approval_store est fourni, un overwrite avec force=True
+    sur un fichier existant déclenche un request_approval (audit trail).
+    """
+    from src.core.approvals import ApprovalStore
+
+    target = tmp_path / "src" / "foo.py"
+    target.parent.mkdir(parents=True)
+    target.write_text("OLD content", encoding="utf-8")
+
+    store = ApprovalStore(tmp_path / "approvals")
+    results = apply_files(
+        [_file("src/foo.py", "NEW content\n")],
+        tmp_path,
+        force=True,
+        approval_store=store,
+    )
+    assert results[0].action == ApplyAction.WRITTEN
+    assert target.read_text(encoding="utf-8") == "NEW content\n"
+
+    # Une trace doit avoir été créée dans data/approvals/pending ou /decided
+    # (selon que la policy auto-approve ou non — par défaut policy.yml absent
+    # = pending pour tracer la décision humaine attendue).
+    pending = (
+        list((tmp_path / "approvals" / "pending").glob("*.yml"))
+        if (tmp_path / "approvals" / "pending").exists()
+        else []
+    )
+    decided = (
+        list((tmp_path / "approvals" / "decided").glob("*.yml"))
+        if (tmp_path / "approvals" / "decided").exists()
+        else []
+    )
+    assert len(pending) + len(decided) >= 1, "Une approval trail aurait dû être créée"
+
+
+def test_force_overwrite_without_approval_store_no_audit_trail(tmp_path: Path) -> None:
+    """Rétrocompat : sans approval_store, comportement identique à avant
+    (aucun fichier d'approval créé)."""
+    target = tmp_path / "src" / "foo.py"
+    target.parent.mkdir(parents=True)
+    target.write_text("OLD", encoding="utf-8")
+
+    results = apply_files([_file("src/foo.py", "NEW\n")], tmp_path, force=True)
+    assert results[0].action == ApplyAction.WRITTEN
+    assert not (tmp_path / "approvals").exists()
+
+
 def test_empty_content_writes_empty_file(tmp_path: Path) -> None:
     results = apply_files([_file("src/__init__.py", "")], tmp_path)
     assert results[0].action == ApplyAction.WRITTEN

@@ -47,6 +47,15 @@ def mine(
         2, "--min-episodes", "-n", help="Minimum d'épisodes pour produire une skill"
     ),
     dry_run: bool = typer.Option(False, "--dry-run", help="Affiche le plan sans appeler Claude"),
+    git_commit: bool = typer.Option(
+        False,
+        "--git-commit",
+        help=(
+            "Si activé, exécute `git add skills/ && git commit` avec un message "
+            "horodaté après mining. Utile pour traçabilité en mode cron. "
+            "Skip silencieusement hors d'un dépôt git."
+        ),
+    ),
     agents: str = typer.Option(
         None,
         "--agents",
@@ -131,7 +140,89 @@ def mine(
     )
     if counters:
         console.print(f"[dim]Répartition : {dict(counters)}[/dim]")
+
+    # v0.7.0 L4 — commit auto des skills extraites (opt-in via --git-commit).
+    # Permet le rollback granulaire si une skill minée pollue (cf. audit zéro-dette).
+    if git_commit and report.skills_created > 0:
+        _git_commit_skills(settings.project_root, report.skills_created)
+
     raise SystemExit(0 if report.skills_created > 0 else 1)
+
+
+def _git_commit_skills(project_root: Path, n_skills: int) -> None:
+    """Commit `skills/` après un mining réussi.
+
+    Skip silencieusement si :
+    - le répertoire n'est pas un dépôt git (test via `git rev-parse`)
+    - `git` n'est pas dans le PATH
+    - le commit échoue (ex. hooks pre-commit rejettent)
+
+    L'objectif est traçabilité, pas blocage du nightly. Une erreur de commit
+    est loggée mais ne fait pas échouer le script.
+    """
+    import shutil
+    import subprocess
+    from datetime import datetime
+
+    git_exe = shutil.which("git")
+    if git_exe is None:
+        console.print("[yellow]git absent du PATH — skip commit auto[/yellow]")
+        return
+
+    # Vérifier qu'on est dans un dépôt git
+    try:
+        rc = subprocess.run(  # noqa: S603 — chemin résolu via shutil.which
+            [git_exe, "rev-parse", "--git-dir"],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        console.print(f"[yellow]git rev-parse a échoué : {exc} — skip commit auto[/yellow]")
+        return
+    if rc.returncode != 0:
+        console.print("[yellow]Pas dans un dépôt git — skip commit auto[/yellow]")
+        return
+
+    skills_dir = project_root / "skills"
+    if not skills_dir.exists():
+        console.print("[yellow]skills/ absent — rien à commiter[/yellow]")
+        return
+
+    try:
+        subprocess.run(  # noqa: S603 — chemin résolu via shutil.which
+            [git_exe, "add", "skills/"],
+            cwd=project_root,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M")
+        message = f"chore(skills): mining {timestamp} (+{n_skills} skill(s))"
+        result = subprocess.run(  # noqa: S603 — chemin résolu
+            [git_exe, "commit", "-m", message],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            console.print(f"[green]Commit créé : {message}[/green]")
+        elif "nothing to commit" in result.stdout.lower():
+            console.print("[dim]Rien à commiter (skills/ déjà à jour)[/dim]")
+        else:
+            console.print(
+                f"[yellow]git commit a refusé (exit {result.returncode}) : "
+                f"{result.stdout.strip()} / {result.stderr.strip()}[/yellow]"
+            )
+    except subprocess.TimeoutExpired:
+        console.print(
+            "[red]git add/commit a timeout après 30s — état git potentiellement bloqué[/red]"
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        console.print(f"[yellow]git commit a échoué : {exc}[/yellow]")
 
 
 if __name__ == "__main__":

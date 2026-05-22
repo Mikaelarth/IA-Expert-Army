@@ -1,6 +1,6 @@
 [project]
 name = "ia-expert-army"
-version = "0.6.0"
+version = "0.7.0"
 description = "Une armée d'agents IA experts spécialisés, autonome, à mémoire partagée et apprentissage continu."
 authors = [{ name = "MikaelArth", email = "esarth.org@gmail.com" }]
 readme = "README.md"
@@ -30,8 +30,13 @@ dependencies = [
 [project.optional-dependencies]
 
 # Phase 2+ : Mémoire intelligente
+# Note v0.7.0 : chromadb aligné sur la version des deps de base (>=1.5.9)
+# pour éviter le clash de majors (1.5 vs 0.5) qui pouvait laisser un `uv sync
+# --extra memory` installer la vieille branche. SQLAlchemy + aiosqlite sont
+# legacy (Phase 2 SQLite memory) — restent pour compatibilité, mais le code
+# nominal utilise FileMemory + Chroma in-process.
 memory = [
-    "chromadb>=0.5.20",
+    "chromadb>=1.5.9",
     "sqlalchemy>=2.0.36",
     "aiosqlite>=0.20.0",
 ]
@@ -45,13 +50,12 @@ orchestration = [
     "langfuse>=2.55.0",
 ]
 
-# Outils dev
+# Outils dev — source de vérité unique = [dependency-groups].dev (PEP 735).
+# Cette entrée PEP 621 ne contient QUE les outils non-installés par défaut
+# (ipython, pytest-cov surcharge) qui ne tournent pas en CI/pre-commit.
+# Ruff + mypy vivent désormais uniquement en [dependency-groups].dev
+# pour éviter le clash de versions documenté dans v0.4.1.
 dev = [
-    "pytest>=8.3.0",
-    "pytest-asyncio>=0.24.0",
-    "pytest-cov>=6.0.0",
-    "ruff>=0.8.0",
-    "mypy>=1.13.0",
     "ipython>=8.30.0",
 ]
 
@@ -97,13 +101,19 @@ ignore = [
 asyncio_mode = "auto"
 testpaths = ["tests"]
 python_files = "test_*.py"
-addopts = "-v --tb=short"
+addopts = "-v --tb=short -m \"not slow\""
+markers = [
+    # v0.7.0 — tests E2E live qui touchent Ollama réel. Skipped par défaut
+    # (suite rapide), activable via env OLLAMA_E2E=1 + cron nightly CI.
+    "slow: marks tests as slow (deselect with '-m \"not slow\"', activate via OLLAMA_E2E=1)",
+]
 # Filtres warnings — garde les runs de tests propres pour pouvoir détecter
 # les VRAIS warnings (saturation, deprecation interne, etc.) sans bruit.
 filterwarnings = [
-    # chromadb 0.5.x utilise asyncio.iscoroutinefunction (deprecated Python 3.16+)
-    # cf. .venv/Lib/site-packages/chromadb/telemetry/opentelemetry/__init__.py:128
-    # → upstream issue, on attend chromadb >= 0.6 qui devrait migrer.
+    # chromadb utilisait asyncio.iscoroutinefunction (deprecated Python 3.16+).
+    # Le filterwarning reste défensif pour les chromadb <1.5.9 que pourrait
+    # installer un extras `memory` ancien. Aligné v0.7.0 sur 1.5.9 partout
+    # mais on garde le filtre comme ceinture de sécurité.
     "ignore:.*asyncio.iscoroutinefunction.*:DeprecationWarning:chromadb",
 ]
 

@@ -94,8 +94,10 @@ hello:
 # === GUI Streamlit (ADR-026, v0.5.0) ===
 
 # Lance la GUI Streamlit sur http://127.0.0.1:8501
-# Pré-requis : `uv sync --group gui` une fois (installe streamlit)
+# Sync auto du groupe `gui` pour ne pas tomber sur ModuleNotFoundError chez
+# un nouveau dev — idempotent : si streamlit est déjà à jour, sync est rapide.
 gui:
+    uv sync --group gui --quiet
     uv run python scripts/run_gui.py
 
 # === Missions ===
