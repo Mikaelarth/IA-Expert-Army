@@ -153,7 +153,8 @@ def _patch_engineering(monkeypatch: pytest.MonkeyPatch, fake_result) -> None:
         def __init__(self, **kwargs):
             self.captured = kwargs
 
-        async def run(self, title: str, description: str):
+        # v0.8.0 F1 — accepte mission_id kwarg pour le resume support
+        async def run(self, title: str, description: str, *, mission_id=None):
             return fake_result
 
     monkeypatch.setattr("src.orchestrator.router.Workflow", FakeWf)

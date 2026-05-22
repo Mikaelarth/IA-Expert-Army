@@ -22,12 +22,14 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel
 
 from src.core.budget import BudgetController, BudgetExceeded
+from src.core.checkpoint import CheckpointStore
 from src.core.config import Settings, get_settings
 from src.core.killswitch import Killswitch, KillswitchEngaged
 from src.core.logging import get_logger
 from src.learning.skills_library import SkillsLibrary
 from src.memory.file_memory import FileMemory, MemoryRecord
 from src.memory.vector_memory import VectorMemory
+from src.orchestrator._checkpoint_helper import run_with_checkpoint
 from src.orchestrator.agents import (
     BackendDeveloper,
     ChiefOrchestrator,
@@ -73,6 +75,7 @@ class Workflow:
         skills_library: SkillsLibrary | None = None,
         budget: BudgetController | None = None,
         killswitch: Killswitch | None = None,
+        checkpoint_store: CheckpointStore | None = None,
     ) -> None:
         self.memory = memory
         self.vector_memory = vector_memory
@@ -80,14 +83,23 @@ class Workflow:
         self.settings = settings or get_settings()
         self.budget = budget
         self.killswitch = killswitch
+        self.checkpoint_store = checkpoint_store
         common = {"vector_memory": vector_memory, "skills_library": skills_library}
         self.orchestrator = ChiefOrchestrator(memory, self.settings, **common)
         self.architect = SoftwareArchitect(memory, self.settings, **common)
         self.developer = BackendDeveloper(memory, self.settings, **common)
         self.reviewer = CodeReviewer(memory, self.settings, **common)
 
-    async def run(self, title: str, description: str) -> MissionResult:
-        mission_id = uuid4()
+    async def run(
+        self,
+        title: str,
+        description: str,
+        *,
+        mission_id: UUID | None = None,
+    ) -> MissionResult:
+        # v0.8.0 — mission_id peut être fourni pour reprendre une mission
+        # interrompue. Si None, on en génère un nouveau (cas nominal).
+        mission_id = mission_id or uuid4()
         started = datetime.now(UTC)
         outputs: list[AgentOutput] = []
 
@@ -110,11 +122,16 @@ class Workflow:
                 return self._fail(mission_id, title, started, outputs, "budget.exceeded", str(exc))
 
         # Step 1 — Orchestrator décompose
-        orch_out = await self.orchestrator.run(
+        orch_out = await run_with_checkpoint(
+            self.orchestrator,
             AgentInput(
                 mission_id=mission_id,
                 task=f"Mission : {title}\n\n{description}\n\nProduis la décomposition au format YAML attendu.",
-            )
+            ),
+            step_index=0,
+            agent_name="chief_orchestrator",
+            checkpoint_store=self.checkpoint_store,
+            mission_id=mission_id,
         )
         outputs.append(orch_out)
         if not orch_out.success:
@@ -126,12 +143,17 @@ class Workflow:
         first_task = self._first_subtask(decomposition) or description
 
         # Step 2 — Architect conçoit
-        arch_out = await self.architect.run(
+        arch_out = await run_with_checkpoint(
+            self.architect,
             AgentInput(
                 mission_id=mission_id,
                 task=first_task,
                 context={"mission": description, "decomposition_yaml": orch_out.raw_text},
-            )
+            ),
+            step_index=1,
+            agent_name="software_architect",
+            checkpoint_store=self.checkpoint_store,
+            mission_id=mission_id,
         )
         outputs.append(arch_out)
         if not arch_out.success:
@@ -140,12 +162,17 @@ class Workflow:
             )
 
         # Step 3 — Developer code
-        dev_out = await self.developer.run(
+        dev_out = await run_with_checkpoint(
+            self.developer,
             AgentInput(
                 mission_id=mission_id,
                 task=first_task,
                 context={"architecture_proposal_yaml": arch_out.raw_text},
-            )
+            ),
+            step_index=2,
+            agent_name="backend_developer",
+            checkpoint_store=self.checkpoint_store,
+            mission_id=mission_id,
         )
         outputs.append(dev_out)
         if not dev_out.success:
@@ -154,7 +181,8 @@ class Workflow:
             )
 
         # Step 4 — Reviewer juge
-        review_out = await self.reviewer.run(
+        review_out = await run_with_checkpoint(
+            self.reviewer,
             AgentInput(
                 mission_id=mission_id,
                 task=first_task,
@@ -162,7 +190,11 @@ class Workflow:
                     "architecture_proposal_yaml": arch_out.raw_text,
                     "developer_output_md": dev_out.raw_text,
                 },
-            )
+            ),
+            step_index=3,
+            agent_name="code_reviewer",
+            checkpoint_store=self.checkpoint_store,
+            mission_id=mission_id,
         )
         outputs.append(review_out)
         if not review_out.success:
@@ -313,6 +345,14 @@ class Workflow:
             cost_usd=round(total_cost, 6),
             duration_s=round(total_duration, 2),
         )
+
+        # v0.8.0 F1 — mission terminée (succès OU verdict définitif type
+        # REJECTED) : on nettoie les checkpoints, plus besoin de les garder.
+        # Si la mission a échoué via _fail() en cours de chemin, les checkpoints
+        # sont conservés pour permettre le resume après fix manuel.
+        if self.checkpoint_store is not None:
+            self.checkpoint_store.clear(str(mission_id))
+
         return result
 
     def _propagate_score_to_episodes(self, mission_id: UUID, result: MissionResult) -> None:

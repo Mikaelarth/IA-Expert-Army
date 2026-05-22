@@ -103,6 +103,17 @@ def run(
         help="Active le Quality Guardian pour cette mission (+1 appel Opus, ~$0.10-0.20). "
         "Indépendant de la Setting globale ENABLE_QUALITY_GUARDIAN.",
     ),
+    resume: str = typer.Option(
+        None,
+        "--resume",
+        "-r",
+        help=(
+            "Reprend une mission Engineering interrompue depuis le dernier "
+            "checkpoint (v0.8.0 F1). Passe le mission_id (UUID) ou utilise "
+            "`--resume last` pour la plus récente. Les agents déjà terminés "
+            "sont chargés du checkpoint sans appel LLM. Engineering uniquement."
+        ),
+    ),
 ) -> None:
     settings = get_settings()
     setup_logging(level=settings.log_level, fmt=settings.log_format)
@@ -138,6 +149,36 @@ def run(
         daily_budget_usd=settings.daily_budget_usd,
     )
     killswitch = Killswitch(settings.project_root / "data" / ".killswitch")
+    # v0.8.0 F1 — store de checkpoints (resume après crash)
+    from uuid import UUID
+
+    from src.core.checkpoint import CheckpointStore
+
+    checkpoint_store = CheckpointStore(settings.project_root / "data" / "checkpoints")
+
+    # Résolution du --resume : "last" → dernière mission, UUID → cette mission
+    resume_uuid: UUID | None = None
+    if resume:
+        if resume == "last":
+            available = checkpoint_store.list_missions()
+            if not available:
+                console.print(
+                    "[red]Aucune mission interrompue trouvée dans data/checkpoints/.[/red]"
+                )
+                raise SystemExit(2)
+            resume_uuid = UUID(available[-1])
+            console.print(f"[green]→ Reprise de la mission {resume_uuid}[/green]")
+        else:
+            try:
+                resume_uuid = UUID(resume)
+            except ValueError as exc:
+                console.print(f"[red]--resume attend un UUID ou 'last' : {exc}[/red]")
+                raise SystemExit(2) from exc
+            if not checkpoint_store.has_checkpoint(str(resume_uuid)):
+                console.print(
+                    f"[yellow]⚠ Aucun checkpoint pour {resume_uuid} — démarrage à zéro[/yellow]"
+                )
+                resume_uuid = None
 
     router = MissionRouter(
         memory=memory,
@@ -146,6 +187,7 @@ def run(
         skills_library=skills_library,
         budget=budget,
         killswitch=killswitch,
+        checkpoint_store=checkpoint_store,
     )
 
     if meta:
@@ -177,7 +219,9 @@ def run(
         )
     )
 
-    result = asyncio.run(router.run(title=title, description=description, force_guild=guild))
+    result = asyncio.run(
+        router.run(title=title, description=description, force_guild=guild, mission_id=resume_uuid)
+    )
 
     raw = result.raw_result
     files_produced = raw.get("files_produced", [])
