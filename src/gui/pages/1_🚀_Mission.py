@@ -21,11 +21,60 @@ import streamlit as st  # noqa: E402
 
 from src.gui.services.memory_browser import fmt_duration  # noqa: E402
 from src.gui.services.mission_runner import (  # noqa: E402
+    MissionRunOutcome,
     MissionRunRequest,
     available_guilds,
-    run_mission_sync,
+    run_mission_streaming,
 )
+from src.orchestrator.progress import ProgressEvent  # noqa: E402
 from src.tools.apply_files import ApplyAction  # noqa: E402
+
+# v0.8.0 F2 — formatte un ProgressEvent pour st.status (streaming live)
+_EVENT_ICONS = {
+    "mission_started": "🚀",
+    "mission_routed": "🧭",
+    "agent_started": "🤖",
+    "agent_resumed": "♻️",
+    "agent_completed": "✅",
+    "agent_failed": "❌",
+    "repair_loop_started": "🔧",
+    "mission_completed": "🏁",
+}
+
+
+def _render_progress_event(event: ProgressEvent) -> None:
+    """Affiche un event dans le st.status courant. Pas de retour ; on écrit
+    directement dans le scope st.status grâce au context manager actif."""
+    icon = _EVENT_ICONS.get(event.event_type, "•")
+    data = event.data or {}
+
+    # Format adapté selon le type — on garde court pour ne pas saturer l'UI
+    if event.event_type == "agent_completed":
+        agent = data.get("agent_name", "?")
+        tokens = data.get("tokens_out", 0)
+        cost = data.get("cost_usd", 0.0)
+        duration = data.get("duration_seconds", 0.0)
+        sat = " ⚠️ saturé" if data.get("saturated") else ""
+        st.write(
+            f"{icon} **{agent}** terminé en `{duration:.1f}s` ({tokens} tokens, ${cost:.4f}){sat}"
+        )
+    elif event.event_type == "agent_resumed":
+        agent = data.get("agent_name", "?")
+        st.write(f"{icon} **{agent}** restauré depuis checkpoint (skip LLM)")
+    elif event.event_type == "agent_started":
+        agent = data.get("agent_name", "?")
+        st.write(f"{icon} **{agent}** démarre…")
+    elif event.event_type == "agent_failed":
+        agent = data.get("agent_name", "?")
+        st.write(f"{icon} **{agent}** a échoué : `{data.get('error', '?')}`")
+    elif event.event_type == "mission_completed":
+        verdict = data.get("verdict", "?")
+        score = data.get("quality_score")
+        score_str = f"{score:.2f}" if isinstance(score, (int, float)) else "—"
+        st.write(f"{icon} Verdict **{verdict}** (score {score_str})")
+    else:
+        st.write(f"{icon} {event.message}")
+
 
 st.set_page_config(page_title="Mission — IA-Expert-Army", page_icon="🚀", layout="wide")
 st.title("🚀 Lancer une mission")
@@ -103,16 +152,35 @@ if submitted:
         validate_sandbox=validate_sandbox,
     )
 
-    with st.spinner(
-        "Mission en cours — 20-40 min sur Qwen2.5 32B local. "
-        "Tu peux suivre les logs structlog dans le terminal qui a lancé Streamlit."
-    ):
+    # v0.8.0 F2 — Streaming live des events de mission via st.status.
+    # Plus de spinner aveugle : on voit chaque agent démarrer/terminer en direct.
+    with st.status(
+        "🚀 Mission démarrée — 20-40 min sur Qwen 32B local",
+        expanded=True,
+        state="running",
+    ) as status:
+        outcome: MissionRunOutcome | None = None
         try:
-            outcome = run_mission_sync(req)
+            for item in run_mission_streaming(req):
+                if isinstance(item, ProgressEvent):
+                    _render_progress_event(item)
+                else:
+                    outcome = item  # MissionRunOutcome final
         except Exception as exc:
+            status.update(label=f"❌ Crash : {type(exc).__name__}", state="error")
             st.error(f"Mission a planté : `{type(exc).__name__}: {exc}`")
             st.exception(exc)
             st.stop()
+
+        if outcome is None:
+            status.update(label="❌ Aucun résultat reçu", state="error")
+            st.error("Le streaming a terminé sans MissionRunOutcome — état inattendu.")
+            st.stop()
+
+        verdict = outcome.result.final_verdict
+        final_label = f"✅ {verdict}" if verdict == "APPROVED" else f"⚠ {verdict}"
+        final_state = "complete" if verdict == "APPROVED" else "error"
+        status.update(label=final_label, state=final_state)
 
     result = outcome.result
 

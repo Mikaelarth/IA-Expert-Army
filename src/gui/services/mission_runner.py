@@ -3,21 +3,33 @@
 Encapsule la création du MissionRouter (FileMemory + VectorMemory + SkillsLibrary)
 et l'exécution d'une mission avec gestion d'erreurs et options --apply/--validate.
 
-Le lancement reste synchrone (`asyncio.run`) côté caller (button handler
-Streamlit). Pas de streaming live des logs en MVP (cf. ADR-026).
+Deux modes :
+- `run_mission_sync(req)` : exécution synchrone (le `asyncio.run` est interne),
+  retourne directement le `MissionRunOutcome` final. Aucun streaming.
+- `run_mission_streaming(req)` (v0.8.0 F2) : retourne un Iterator qui yield
+  des `ProgressEvent` au fur et à mesure, puis termine par un dernier item
+  spécial `MissionRunOutcome`. Permet à Streamlit d'afficher en direct via
+  `st.status` ce que font les agents.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import threading
+from collections.abc import Iterator
 from dataclasses import dataclass
+from queue import Empty, Queue
+from uuid import UUID
 
 from src.core.budget import BudgetController
+from src.core.checkpoint import CheckpointStore
 from src.core.config import get_settings
 from src.core.killswitch import Killswitch
 from src.learning.skills_library import SkillsLibrary
 from src.memory.file_memory import FileMemory
 from src.memory.vector_memory import VectorMemory
+from src.orchestrator.progress import ProgressEvent
 from src.orchestrator.router import MissionRouter, UnifiedMissionResult
 from src.tools.apply_files import ApplyAction, ApplyResult, apply_files
 
@@ -64,6 +76,8 @@ def build_router() -> MissionRouter:
         daily_budget_usd=settings.daily_budget_usd,
     )
     killswitch = Killswitch(project_root / "data" / ".killswitch_engaged")
+    # v0.8.0 F1 — checkpoint store partagé entre CLI et GUI : data/checkpoints/
+    checkpoint_store = CheckpointStore(project_root / "data" / "checkpoints")
     return MissionRouter(
         memory=memory,
         settings=settings,
@@ -71,14 +85,22 @@ def build_router() -> MissionRouter:
         skills_library=skills_library,
         budget=budget,
         killswitch=killswitch,
+        checkpoint_store=checkpoint_store,
     )
 
 
-def run_mission_sync(req: MissionRunRequest) -> MissionRunOutcome:
+def run_mission_sync(
+    req: MissionRunRequest,
+    *,
+    mission_id: UUID | None = None,
+) -> MissionRunOutcome:
     """Lance une mission et applique optionnellement les fichiers + sandbox.
 
     Synchrone du point de vue du caller (le `asyncio.run` est interne).
     Renvoie un MissionRunOutcome consolidé pour l'affichage.
+
+    `mission_id` (v0.8.0 F1) permet de reprendre une mission Engineering
+    interrompue depuis le dernier checkpoint.
     """
     router = build_router()
     result: UnifiedMissionResult = asyncio.run(
@@ -86,6 +108,7 @@ def run_mission_sync(req: MissionRunRequest) -> MissionRunOutcome:
             title=req.title,
             description=req.description,
             force_guild=req.force_guild,
+            mission_id=mission_id,
         )
     )
 
@@ -109,6 +132,106 @@ def run_mission_sync(req: MissionRunRequest) -> MissionRunOutcome:
         outcome = _run_sandbox(outcome)
 
     return outcome
+
+
+# ============================================================================
+# v0.8.0 F2 — Streaming mode
+# ============================================================================
+
+
+StreamItem = ProgressEvent | MissionRunOutcome
+"""Items émis par run_mission_streaming : soit un ProgressEvent intermédiaire,
+soit le MissionRunOutcome final (dernier item)."""
+
+
+def run_mission_streaming(
+    req: MissionRunRequest,
+    *,
+    mission_id: UUID | None = None,
+    poll_interval_s: float = 0.5,
+) -> Iterator[StreamItem]:
+    """Lance la mission dans un thread worker et yield les ProgressEvents au fil
+    de l'eau, puis le MissionRunOutcome final.
+
+    Pattern producer/consumer : un Thread exécute `asyncio.run(router.run(...))`
+    avec un callback qui pousse les events dans une queue. Le caller (Streamlit)
+    consomme la queue dans son thread principal (compatible avec st.status).
+
+    Le caller DOIT consommer l'itérateur jusqu'au bout — sinon le thread worker
+    reste bloqué sur queue.put() si la queue se remplit. (Limité par maxsize=64
+    pour pas exploser la RAM si streaming ralentit côté GUI.)
+    """
+    events_queue: Queue[StreamItem | None] = Queue(maxsize=64)
+
+    def _emit_event(event: ProgressEvent) -> None:
+        # put() bloque si full ; pour éviter de figer le workflow si la GUI
+        # s'arrête de consommer, on tolère la perte d'un event (suppress).
+        with contextlib.suppress(Exception):
+            events_queue.put(event, timeout=2.0)
+
+    def _worker() -> None:
+        """Exécute la mission dans une nouvelle event loop asyncio (thread)."""
+        try:
+            router = build_router()
+            result: UnifiedMissionResult = asyncio.run(
+                router.run(
+                    title=req.title,
+                    description=req.description,
+                    force_guild=req.force_guild,
+                    mission_id=mission_id,
+                    on_progress=_emit_event,
+                )
+            )
+            outcome = MissionRunOutcome(result=result)
+
+            # Apply + sandbox post-traitement (synchrone après mission)
+            if req.apply_files_on_success and result.final_verdict == "APPROVED":
+                files = _extract_files_from_result(result)
+                if files:
+                    outcome.apply_results = apply_files(
+                        files=files,
+                        project_root=get_settings().project_root,
+                        force=req.force_overwrite,
+                    )
+            if (
+                req.validate_sandbox
+                and req.apply_files_on_success
+                and result.final_verdict == "APPROVED"
+                and outcome.apply_results
+            ):
+                outcome = _run_sandbox(outcome)
+
+            events_queue.put(outcome)
+        except Exception as exc:
+            # Pousse une erreur "fake outcome" pour ne pas figer le caller
+            fake_result = UnifiedMissionResult(
+                mission_id=str(mission_id) if mission_id else "unknown",
+                title=req.title,
+                guild="unknown",
+                success=False,
+                final_verdict="CRASH",
+                quality_score=None,
+                total_cost_usd=0.0,
+                total_duration_seconds=0.0,
+                summary=f"Crash worker thread : {type(exc).__name__}: {exc}",
+                raw_result={},
+            )
+            events_queue.put(MissionRunOutcome(result=fake_result))
+        finally:
+            events_queue.put(None)  # sentinelle de fin
+
+    worker = threading.Thread(target=_worker, daemon=True, name="mission_streaming_worker")
+    worker.start()
+
+    # Consume queue
+    while True:
+        try:
+            item = events_queue.get(timeout=poll_interval_s)
+        except Empty:
+            continue
+        if item is None:
+            break
+        yield item
 
 
 def _extract_files_from_result(result: UnifiedMissionResult) -> list[dict[str, str]]:

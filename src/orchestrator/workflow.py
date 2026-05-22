@@ -11,7 +11,15 @@ faille design) — dans ce cas, le Developer seul ne peut pas corriger car
 sa proposition d'architecture amont est figée. Pattern méta-leçon
 Sprint PP (BusinessWorkflow) appliqué ici symétriquement.
 
+v0.8.0 — câblage CheckpointStore (F1) + ProgressEvent emission (F2).
+
 Phase 3+ : ce module sera remplacé par un graphe LangGraph stateful.
+
+# audit: ignore FILE_TOO_LONG -- 506 lignes acceptées : workflow nominal +
+# repair loop + propagation score + summary writer + helpers — cohérence
+# fonctionnelle d'un seul pipeline guilde Engineering. Split par phase
+# (run/repair/persist) ferait perdre la lisibilité linéaire qui fait
+# justement la valeur de ce fichier.
 """
 
 from __future__ import annotations
@@ -39,6 +47,7 @@ from src.orchestrator.agents import (
 )
 from src.orchestrator.agents.security_auditor import has_downgrade_findings
 from src.orchestrator.base_agent import AgentInput, AgentOutput
+from src.orchestrator.progress import ProgressCallback, emit, make_event
 
 log = get_logger("workflow")
 
@@ -96,6 +105,7 @@ class Workflow:
         description: str,
         *,
         mission_id: UUID | None = None,
+        on_progress: ProgressCallback | None = None,
     ) -> MissionResult:
         # v0.8.0 — mission_id peut être fourni pour reprendre une mission
         # interrompue. Si None, on en génère un nouveau (cas nominal).
@@ -104,6 +114,15 @@ class Workflow:
         outputs: list[AgentOutput] = []
 
         log.info("workflow.start", mission=str(mission_id), title=title)
+        emit(
+            on_progress,
+            make_event(
+                "mission_started",
+                f"Mission engineering démarrée : {title}",
+                mission_id=str(mission_id),
+                title=title,
+            ),
+        )
 
         # Garde-fous Phase 6 — vérifications avant tout appel LLM
         if self.killswitch is not None:
@@ -132,6 +151,7 @@ class Workflow:
             agent_name="chief_orchestrator",
             checkpoint_store=self.checkpoint_store,
             mission_id=mission_id,
+            on_progress=on_progress,
         )
         outputs.append(orch_out)
         if not orch_out.success:
@@ -154,6 +174,7 @@ class Workflow:
             agent_name="software_architect",
             checkpoint_store=self.checkpoint_store,
             mission_id=mission_id,
+            on_progress=on_progress,
         )
         outputs.append(arch_out)
         if not arch_out.success:
@@ -173,6 +194,7 @@ class Workflow:
             agent_name="backend_developer",
             checkpoint_store=self.checkpoint_store,
             mission_id=mission_id,
+            on_progress=on_progress,
         )
         outputs.append(dev_out)
         if not dev_out.success:
@@ -195,6 +217,7 @@ class Workflow:
             agent_name="code_reviewer",
             checkpoint_store=self.checkpoint_store,
             mission_id=mission_id,
+            on_progress=on_progress,
         )
         outputs.append(review_out)
         if not review_out.success:
@@ -352,6 +375,21 @@ class Workflow:
         # sont conservés pour permettre le resume après fix manuel.
         if self.checkpoint_store is not None:
             self.checkpoint_store.clear(str(mission_id))
+
+        # v0.8.0 F2 — émission finale
+        emit(
+            on_progress,
+            make_event(
+                "mission_completed",
+                f"Mission terminée — verdict {verdict} (score {quality_score})",
+                mission_id=str(mission_id),
+                verdict=verdict,
+                quality_score=quality_score,
+                total_cost_usd=total_cost,
+                total_duration_seconds=total_duration,
+                files_count=len(files),
+            ),
+        )
 
         return result
 
