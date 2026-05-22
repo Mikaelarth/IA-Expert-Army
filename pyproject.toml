@@ -45,13 +45,12 @@ orchestration = [
     "langfuse>=2.55.0",
 ]
 
-# Outils dev
+# Outils dev — source de vérité unique = [dependency-groups].dev (PEP 735).
+# Cette entrée PEP 621 ne contient QUE les outils non-installés par défaut
+# (ipython, pytest-cov surcharge) qui ne tournent pas en CI/pre-commit.
+# Ruff + mypy vivent désormais uniquement en [dependency-groups].dev
+# pour éviter le clash de versions documenté dans v0.4.1.
 dev = [
-    "pytest>=8.3.0",
-    "pytest-asyncio>=0.24.0",
-    "pytest-cov>=6.0.0",
-    "ruff>=0.8.0",
-    "mypy>=1.13.0",
     "ipython>=8.30.0",
 ]
 

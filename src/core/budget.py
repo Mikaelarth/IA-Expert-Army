@@ -97,6 +97,22 @@ class BudgetController:
     def __init__(self, state_path: Path, daily_budget_usd: float) -> None:
         self.state_path = Path(state_path)
         self.daily_budget = float(daily_budget_usd)
+        if self.daily_budget <= 0:
+            # Émet un warning visible mais non bloquant — utile pour rappeler
+            # qu'on est en mode Ollama local ($0) sans cap, ou que quelqu'un
+            # a oublié de remettre une valeur > 0 après bascule vers cloud LLM.
+            # On utilise stdlib logging pour ne pas forcer structlog ici (le
+            # module budget est importé tôt, avant que la GUI Streamlit ne
+            # configure structlog).
+            import logging
+
+            logging.getLogger("ia_expert.budget").warning(
+                "BudgetController initialisé avec daily_budget=%.2f USD → "
+                "cap désactivé (mode no-op). Aucune mission ne sera refusée "
+                "pour cause de budget. Remettre `DAILY_BUDGET_USD > 0` dans "
+                ".env si bascule vers un backend LLM payant.",
+                self.daily_budget,
+            )
 
     def _load(self) -> dict[str, Any]:
         if not self.state_path.exists():

@@ -56,7 +56,9 @@ _IGNORE_RE = re.compile(r"#\s*audit:\s*ignore\s+(\w+)", re.IGNORECASE)
 def _is_ignored(line: str, rule: str) -> bool:
     """True si la ligne contient `# audit: ignore <rule>` (insensible à la casse)."""
     match = _IGNORE_RE.search(line)
-    return bool(match) and match.group(1).upper() == rule.upper()
+    if match is None:
+        return False
+    return match.group(1).upper() == rule.upper()
 
 
 # ============================================================================

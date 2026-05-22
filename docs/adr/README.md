@@ -49,3 +49,6 @@ Format minimal :
 - [ADR-022 — Audit codebase : 5 règles d'anti-patterns détectées automatiquement](022-codebase-audit-rules.md)
 - [ADR-023 — Audit anti-patterns intégré en CI + pre-commit](023-audit-ci-pre-commit-integration.md)
 - [ADR-024 — Site mkdocs déployé automatiquement sur GitHub Pages](024-mkdocs-site-deployment.md)
+- [ADR-025 — Bascule du backend LLM : Anthropic Claude → Ollama local](025-bascule-anthropic-to-ollama.md)
+- [ADR-026 — Interface GUI : Streamlit multipages](026-gui-streamlit.md)
+- [ADR-027 — Setup Wizard GUI click-to-go (onboarding zéro-terminal)](027-setup-wizard-gui.md)

@@ -232,7 +232,7 @@ IA-Expert-Army/
 | Smoke tests GUI Streamlit | ✅ v0.5.0+ | 9 tests `AppTest`, chaque page render sans crash |
 | Langfuse | ✅ Cloud opt-in / ⛔ self-hosted v3 incomplet | Cf. [architecture.md](docs/architecture.md) section Observabilité |
 | MCP server `memory_search` (6 tools) | ✅ | Exposable à Claude Desktop / Cursor |
-| **GUI Streamlit** | ✅ v0.5.0 | 5 pages : Mission / Historique / Skills / Health / Probes — `just gui` |
+| **GUI Streamlit** | ✅ v0.5.0+ | 6 pages : Setup / Mission / Historique / Skills / Health / Probes — `just gui` |
 | **Setup Wizard click-to-go** | ✅ v0.6.0 | Page Setup : 10 détections + actions auto (start daemon, pull modèle streaming, build sandbox, créer `.env`) — [ADR-027](docs/adr/027-setup-wizard-gui.md) |
 | Tests régression | ✅ | **592 verts** (91% coverage mesurée) |
 | ADRs documentés | ✅ | **27 ADRs** structurants |

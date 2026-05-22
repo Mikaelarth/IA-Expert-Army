@@ -68,7 +68,12 @@ class PatternMiner:
         "software_architect",
         "backend_developer",
         "code_reviewer",
-        "security_auditor",  # Sprint AAA — audit OWASP/secrets/pratiques sécu
+        # Transverse Engineering — SecurityAuditor est invoqué APRÈS le
+        # CodeReviewer sur les missions Engineering APPROVED (cf. Sprint AAA).
+        # Son prompt vit sous `prompts/orchestrator/security_auditor.md`
+        # parce qu'il agit comme un auditeur post-guild, pas comme un membre
+        # core du workflow Engineering linéaire.
+        "security_auditor",
         # Guild Research (ajoutée Phase 4)
         "research_lead",
         "tech_watch",
