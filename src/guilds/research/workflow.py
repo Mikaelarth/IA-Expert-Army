@@ -22,6 +22,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel
 
 from src.core.budget import BudgetController, BudgetExceeded
+from src.core.checkpoint import CheckpointStore
 from src.core.config import Settings, get_settings
 from src.core.killswitch import Killswitch, KillswitchEngaged
 from src.core.logging import get_logger
@@ -34,7 +35,9 @@ from src.guilds.research.agents import (
 from src.learning.skills_library import SkillsLibrary
 from src.memory.file_memory import FileMemory, MemoryRecord
 from src.memory.vector_memory import VectorMemory
+from src.orchestrator._checkpoint_helper import run_with_checkpoint
 from src.orchestrator.base_agent import AgentInput, AgentOutput
+from src.orchestrator.progress import ProgressCallback, emit, make_event
 
 log = get_logger("research_workflow")
 
@@ -69,6 +72,7 @@ class ResearchWorkflow:
         skills_library: SkillsLibrary | None = None,
         budget: BudgetController | None = None,
         killswitch: Killswitch | None = None,
+        checkpoint_store: CheckpointStore | None = None,
     ) -> None:
         self.memory = memory
         self.vector_memory = vector_memory
@@ -76,6 +80,8 @@ class ResearchWorkflow:
         self.settings = settings or get_settings()
         self.budget = budget
         self.killswitch = killswitch
+        # v0.9.5 — F1 checkpoint resume étendu à Research
+        self.checkpoint_store = checkpoint_store
         common = {"vector_memory": vector_memory, "skills_library": skills_library}
         self.lead = ResearchLead(memory, self.settings, **common)
         self.watch = TechWatch(memory, self.settings, **common)
@@ -87,11 +93,23 @@ class ResearchWorkflow:
         title: str,
         description: str,
         mission_id: UUID | None = None,
+        *,
+        on_progress: ProgressCallback | None = None,
     ) -> ResearchMissionResult:
         mission_id = mission_id or uuid4()
         started = datetime.now(UTC)
         outputs: list[AgentOutput] = []
         log.info("research.workflow.start", mission=str(mission_id), title=title)
+        emit(
+            on_progress,
+            make_event(
+                "mission_started",
+                f"Mission Research démarrée : {title}",
+                mission_id=str(mission_id),
+                title=title,
+                guild="research",
+            ),
+        )
 
         # Garde-fous (au cas où on appelle ce workflow directement)
         if self.killswitch is not None:
@@ -108,12 +126,18 @@ class ResearchWorkflow:
                 return self._fail(mission_id, title, started, outputs, "budget.exceeded", str(exc))
 
         # Step 1 — Lead produit le plan de recherche
-        lead_out = await self.lead.run(
+        lead_out = await run_with_checkpoint(
+            self.lead,
             AgentInput(
                 mission_id=mission_id,
                 task=f"Mission de recherche : {title}\n\n{description}\n\n"
                 "Produis le plan de recherche YAML attendu.",
-            )
+            ),
+            step_index=0,
+            agent_name="research_lead",
+            checkpoint_store=self.checkpoint_store,
+            mission_id=mission_id,
+            on_progress=on_progress,
         )
         outputs.append(lead_out)
         if not lead_out.success:
@@ -122,13 +146,19 @@ class ResearchWorkflow:
             )
 
         # Step 2 — Tech Watch fouille pour chaque sous-question
-        watch_out = await self.watch.run(
+        watch_out = await run_with_checkpoint(
+            self.watch,
             AgentInput(
                 mission_id=mission_id,
                 task=f"Pour chaque sous-question du plan ci-dessous, produis tes findings YAML.\n\n"
                 f"Plan de recherche :\n{lead_out.raw_text}",
                 context={"mission_description": description},
-            )
+            ),
+            step_index=1,
+            agent_name="tech_watch",
+            checkpoint_store=self.checkpoint_store,
+            mission_id=mission_id,
+            on_progress=on_progress,
         )
         outputs.append(watch_out)
         if not watch_out.success:
@@ -137,7 +167,8 @@ class ResearchWorkflow:
             )
 
         # Step 3 — Synthesizer rédige
-        synth_out = await self.synth.run(
+        synth_out = await run_with_checkpoint(
+            self.synth,
             AgentInput(
                 mission_id=mission_id,
                 task="Rédige la synthèse Markdown qui répond à la mission.",
@@ -146,7 +177,12 @@ class ResearchWorkflow:
                     "research_plan_yaml": lead_out.raw_text,
                     "findings_yaml": watch_out.raw_text,
                 },
-            )
+            ),
+            step_index=2,
+            agent_name="document_synthesizer",
+            checkpoint_store=self.checkpoint_store,
+            mission_id=mission_id,
+            on_progress=on_progress,
         )
         outputs.append(synth_out)
         if not synth_out.success:
@@ -155,7 +191,8 @@ class ResearchWorkflow:
             )
 
         # Step 4 — Reviewer juge
-        review_out = await self.reviewer.run(
+        review_out = await run_with_checkpoint(
+            self.reviewer,
             AgentInput(
                 mission_id=mission_id,
                 task="Juge la qualité de la synthèse selon tes critères. Produis ton verdict YAML.",
@@ -165,7 +202,12 @@ class ResearchWorkflow:
                     "findings_yaml": watch_out.raw_text,
                     "synthesis_markdown": synth_out.raw_text,
                 },
-            )
+            ),
+            step_index=3,
+            agent_name="research_reviewer",
+            checkpoint_store=self.checkpoint_store,
+            mission_id=mission_id,
+            on_progress=on_progress,
         )
         outputs.append(review_out)
         if not review_out.success:
@@ -185,9 +227,18 @@ class ResearchWorkflow:
         # pouvoir réagir au feedback du reviewer, sinon oscillation possible.
         if verdict == VERDICT_NEEDS_CHANGES:
             log.info("research.workflow.repair_loop", mission=str(mission_id))
+            emit(
+                on_progress,
+                make_event(
+                    "repair_loop_started",
+                    "Repair loop Research démarré (Lead → Watch → Synth → Reviewer)",
+                    mission_id=str(mission_id),
+                ),
+            )
 
             # Step 1 (repair) — Lead révise éventuellement le plan
-            lead_out2 = await self.lead.run(
+            lead_out2 = await run_with_checkpoint(
+                self.lead,
                 AgentInput(
                     mission_id=mission_id,
                     task=f"Mission de recherche : {title}\n\n{description}\n\n"
@@ -201,13 +252,19 @@ class ResearchWorkflow:
                         "previous_synthesis_md": synth_out.raw_text,
                         "review_feedback_yaml": review_out.raw_text,
                     },
-                )
+                ),
+                step_index=4,
+                agent_name="research_lead",
+                checkpoint_store=self.checkpoint_store,
+                mission_id=mission_id,
+                on_progress=on_progress,
             )
             outputs.append(lead_out2)
             current_lead = lead_out2 if lead_out2.success else lead_out
 
             # Step 2 (repair) — Watch étend/corrige les findings sur le plan mis à jour
-            watch_out2 = await self.watch.run(
+            watch_out2 = await run_with_checkpoint(
+                self.watch,
                 AgentInput(
                     mission_id=mission_id,
                     task="Pour chaque sous-question du plan ci-dessous, "
@@ -219,13 +276,19 @@ class ResearchWorkflow:
                         "previous_findings_yaml": watch_out.raw_text,
                         "review_feedback_yaml": review_out.raw_text,
                     },
-                )
+                ),
+                step_index=5,
+                agent_name="tech_watch",
+                checkpoint_store=self.checkpoint_store,
+                mission_id=mission_id,
+                on_progress=on_progress,
             )
             outputs.append(watch_out2)
             current_watch = watch_out2 if watch_out2.success else watch_out
 
             # Step 3 (repair) — Synth re-rédige avec les inputs amont mis à jour
-            synth_out2 = await self.synth.run(
+            synth_out2 = await run_with_checkpoint(
+                self.synth,
                 AgentInput(
                     mission_id=mission_id,
                     task="Re-rédige la synthèse en intégrant le feedback du Reviewer "
@@ -237,13 +300,19 @@ class ResearchWorkflow:
                         "previous_synthesis_md": synth_out.raw_text,
                         "review_feedback_yaml": review_out.raw_text,
                     },
-                )
+                ),
+                step_index=6,
+                agent_name="document_synthesizer",
+                checkpoint_store=self.checkpoint_store,
+                mission_id=mission_id,
+                on_progress=on_progress,
             )
             outputs.append(synth_out2)
 
             # Step 4 (repair) — Reviewer juge l'ensemble v2
             if synth_out2.success:
-                review_out2 = await self.reviewer.run(
+                review_out2 = await run_with_checkpoint(
+                    self.reviewer,
                     AgentInput(
                         mission_id=mission_id,
                         task="Juge la nouvelle synthèse, le plan révisé et les findings mis à jour.",
@@ -254,7 +323,12 @@ class ResearchWorkflow:
                             "synthesis_markdown": synth_out2.raw_text,
                             "previous_review_yaml": review_out.raw_text,
                         },
-                    )
+                    ),
+                    step_index=7,
+                    agent_name="research_reviewer",
+                    checkpoint_store=self.checkpoint_store,
+                    mission_id=mission_id,
+                    on_progress=on_progress,
                 )
                 outputs.append(review_out2)
                 if review_out2.success:
@@ -301,6 +375,24 @@ class ResearchWorkflow:
             cost_usd=round(total_cost, 6),
             duration_s=round(total_duration, 2),
         )
+
+        # v0.9.5 — Cleanup checkpoints + mission_completed event
+        if self.checkpoint_store is not None:
+            self.checkpoint_store.clear(str(mission_id))
+
+        emit(
+            on_progress,
+            make_event(
+                "mission_completed",
+                f"Mission Research terminée — verdict {verdict} (score {quality_score})",
+                mission_id=str(mission_id),
+                verdict=verdict,
+                quality_score=quality_score,
+                total_cost_usd=total_cost,
+                total_duration_seconds=total_duration,
+            ),
+        )
+
         return result
 
     def _fail(

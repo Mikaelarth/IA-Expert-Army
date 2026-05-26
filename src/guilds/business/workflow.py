@@ -25,6 +25,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel
 
 from src.core.budget import BudgetController, BudgetExceeded
+from src.core.checkpoint import CheckpointStore
 from src.core.config import Settings, get_settings
 from src.core.killswitch import Killswitch, KillswitchEngaged
 from src.core.logging import get_logger
@@ -32,7 +33,9 @@ from src.guilds.business.agents import BusinessAnalyst, LegalReviewer, ProjectMa
 from src.learning.skills_library import SkillsLibrary
 from src.memory.file_memory import FileMemory, MemoryRecord
 from src.memory.vector_memory import VectorMemory
+from src.orchestrator._checkpoint_helper import run_with_checkpoint
 from src.orchestrator.base_agent import AgentInput, AgentOutput
+from src.orchestrator.progress import ProgressCallback, emit, make_event
 
 log = get_logger("business_workflow")
 
@@ -65,6 +68,7 @@ class BusinessWorkflow:
         skills_library: SkillsLibrary | None = None,
         budget: BudgetController | None = None,
         killswitch: Killswitch | None = None,
+        checkpoint_store: CheckpointStore | None = None,
     ) -> None:
         self.memory = memory
         self.vector_memory = vector_memory
@@ -72,6 +76,8 @@ class BusinessWorkflow:
         self.settings = settings or get_settings()
         self.budget = budget
         self.killswitch = killswitch
+        # v0.9.5 — F1 checkpoint resume étendu à Business
+        self.checkpoint_store = checkpoint_store
         common = {"vector_memory": vector_memory, "skills_library": skills_library}
         self.pm = ProjectManager(memory, self.settings, **common)
         self.analyst = BusinessAnalyst(memory, self.settings, **common)
@@ -82,11 +88,23 @@ class BusinessWorkflow:
         title: str,
         description: str,
         mission_id: UUID | None = None,
+        *,
+        on_progress: ProgressCallback | None = None,
     ) -> BusinessMissionResult:
         mission_id = mission_id or uuid4()
         started = datetime.now(UTC)
         outputs: list[AgentOutput] = []
         log.info("business.workflow.start", mission=str(mission_id), title=title)
+        emit(
+            on_progress,
+            make_event(
+                "mission_started",
+                f"Mission Business démarrée : {title}",
+                mission_id=str(mission_id),
+                title=title,
+                guild="business",
+            ),
+        )
 
         # Garde-fous
         if self.killswitch is not None:
@@ -103,19 +121,26 @@ class BusinessWorkflow:
                 return self._fail(mission_id, title, started, outputs, "budget.exceeded", str(exc))
 
         # Step 1 — PM produit le plan
-        pm_out = await self.pm.run(
+        pm_out = await run_with_checkpoint(
+            self.pm,
             AgentInput(
                 mission_id=mission_id,
                 task=f"Mission business : {title}\n\n{description}\n\n"
                 "Produis le plan projet YAML attendu.",
-            )
+            ),
+            step_index=0,
+            agent_name="project_manager",
+            checkpoint_store=self.checkpoint_store,
+            mission_id=mission_id,
+            on_progress=on_progress,
         )
         outputs.append(pm_out)
         if not pm_out.success:
             return self._fail(mission_id, title, started, outputs, "pm.failed", pm_out.error or "")
 
         # Step 2 — Analyst valide la viabilité économique
-        analyst_out = await self.analyst.run(
+        analyst_out = await run_with_checkpoint(
+            self.analyst,
             AgentInput(
                 mission_id=mission_id,
                 task="Analyse business : valide ou réfute la viabilité du projet selon ton schéma YAML.",
@@ -123,7 +148,12 @@ class BusinessWorkflow:
                     "mission_description": description,
                     "project_plan_yaml": pm_out.raw_text,
                 },
-            )
+            ),
+            step_index=1,
+            agent_name="business_analyst",
+            checkpoint_store=self.checkpoint_store,
+            mission_id=mission_id,
+            on_progress=on_progress,
         )
         outputs.append(analyst_out)
         if not analyst_out.success:
@@ -132,7 +162,8 @@ class BusinessWorkflow:
             )
 
         # Step 3 — Legal Reviewer juge la conformité
-        legal_out = await self.legal.run(
+        legal_out = await run_with_checkpoint(
+            self.legal,
             AgentInput(
                 mission_id=mission_id,
                 task="Juge la conformité réglementaire et contractuelle. Produis ton verdict YAML.",
@@ -141,7 +172,12 @@ class BusinessWorkflow:
                     "project_plan_yaml": pm_out.raw_text,
                     "business_analysis_yaml": analyst_out.raw_text,
                 },
-            )
+            ),
+            step_index=2,
+            agent_name="legal_reviewer",
+            checkpoint_store=self.checkpoint_store,
+            mission_id=mission_id,
+            on_progress=on_progress,
         )
         outputs.append(legal_out)
         if not legal_out.success:
@@ -156,9 +192,18 @@ class BusinessWorkflow:
         # rationale (mission water-tracker, ADR-009).
         if verdict == VERDICT_NEEDS_CHANGES:
             log.info("business.workflow.repair_loop", mission=str(mission_id))
+            emit(
+                on_progress,
+                make_event(
+                    "repair_loop_started",
+                    "Repair loop Business démarré (PM → Analyst → Legal)",
+                    mission_id=str(mission_id),
+                ),
+            )
 
             # Step 1 (repair) — PM met à jour le plan en intégrant le feedback Legal
-            pm_out2 = await self.pm.run(
+            pm_out2 = await run_with_checkpoint(
+                self.pm,
                 AgentInput(
                     mission_id=mission_id,
                     task=(
@@ -174,13 +219,19 @@ class BusinessWorkflow:
                         "business_analysis_yaml": analyst_out.raw_text,
                         "legal_feedback_yaml": legal_out.raw_text,
                     },
-                )
+                ),
+                step_index=3,
+                agent_name="project_manager",
+                checkpoint_store=self.checkpoint_store,
+                mission_id=mission_id,
+                on_progress=on_progress,
             )
             outputs.append(pm_out2)
             current_pm = pm_out2 if pm_out2.success else pm_out
 
             # Step 2 (repair) — BA re-analyse sur le plan MIS À JOUR
-            analyst_out2 = await self.analyst.run(
+            analyst_out2 = await run_with_checkpoint(
+                self.analyst,
                 AgentInput(
                     mission_id=mission_id,
                     task="Re-analyse en intégrant les issues conformité signalées par Legal, "
@@ -191,13 +242,19 @@ class BusinessWorkflow:
                         "previous_analysis_yaml": analyst_out.raw_text,
                         "legal_feedback_yaml": legal_out.raw_text,
                     },
-                )
+                ),
+                step_index=4,
+                agent_name="business_analyst",
+                checkpoint_store=self.checkpoint_store,
+                mission_id=mission_id,
+                on_progress=on_progress,
             )
             outputs.append(analyst_out2)
 
             # Step 3 (repair) — Legal re-juge l'ensemble v2
             if analyst_out2.success:
-                legal_out2 = await self.legal.run(
+                legal_out2 = await run_with_checkpoint(
+                    self.legal,
                     AgentInput(
                         mission_id=mission_id,
                         task="Juge le nouveau plan et la nouvelle analyse.",
@@ -207,7 +264,12 @@ class BusinessWorkflow:
                             "business_analysis_yaml": analyst_out2.raw_text,
                             "previous_review_yaml": legal_out.raw_text,
                         },
-                    )
+                    ),
+                    step_index=5,
+                    agent_name="legal_reviewer",
+                    checkpoint_store=self.checkpoint_store,
+                    mission_id=mission_id,
+                    on_progress=on_progress,
                 )
                 outputs.append(legal_out2)
                 if legal_out2.success:
@@ -254,6 +316,24 @@ class BusinessWorkflow:
             cost_usd=round(total_cost, 6),
             duration_s=round(total_duration, 2),
         )
+
+        # v0.9.5 — Cleanup checkpoints + mission_completed event
+        if self.checkpoint_store is not None:
+            self.checkpoint_store.clear(str(mission_id))
+
+        emit(
+            on_progress,
+            make_event(
+                "mission_completed",
+                f"Mission Business terminée — verdict {verdict} (score {quality_score})",
+                mission_id=str(mission_id),
+                verdict=verdict,
+                quality_score=quality_score,
+                total_cost_usd=total_cost,
+                total_duration_seconds=total_duration,
+            ),
+        )
+
         return result
 
     def _fail(
