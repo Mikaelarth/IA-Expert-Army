@@ -166,7 +166,8 @@ def _patch_research(monkeypatch: pytest.MonkeyPatch, fake_result) -> None:
         def __init__(self, **kwargs):
             self.captured = kwargs
 
-        async def run(self, title: str, description: str, mission_id=None):
+        # v0.9.5 — accepte on_progress (étendu à toutes les guildes)
+        async def run(self, title: str, description: str, mission_id=None, *, on_progress=None):
             return fake_result
 
     monkeypatch.setattr("src.orchestrator.router.ResearchWorkflow", FakeWf)
@@ -269,12 +270,13 @@ def test_router_run_accepts_on_progress_kwarg_engineering(
     assert any(e.event_type == "mission_routed" for e in captured)
 
 
-def test_router_run_emits_mission_lifecycle_for_non_engineering_guilds(
+def test_router_run_emits_mission_routed_event(
     monkeypatch: pytest.MonkeyPatch, memory: FileMemory, settings: Settings
 ) -> None:
-    """v0.9.4 — Les guildes Research/Creative/Business émettent au minimum
-    mission_started + mission_completed depuis le router (le workflow interne
-    n'a pas le streaming agent-par-agent). Garde l'UX GUI cohérente."""
+    """v0.9.5 — Le router émet `mission_routed` immédiatement après le decide()
+    pour toutes les guildes. Les events `mission_started`/`mission_completed`
+    sont maintenant émis par chaque workflow lui-même (v0.9.5 a étendu le
+    streaming aux 4 guildes), donc on n'a plus besoin que le router les émette."""
     from src.guilds.research.workflow import ResearchMissionResult
     from src.orchestrator.progress import ProgressEvent
 
@@ -302,9 +304,11 @@ def test_router_run_emits_mission_lifecycle_for_non_engineering_guilds(
         )
     )
     types_seen = [e.event_type for e in captured]
+    # `mission_routed` est toujours émis par le router pour toutes les guildes
     assert "mission_routed" in types_seen
-    assert "mission_started" in types_seen
-    assert "mission_completed" in types_seen
+    # `mission_started`/`mission_completed` viennent du workflow réel — ici on
+    # mocke ResearchWorkflow donc ils ne sont pas émis. Mais c'est testé
+    # séparément dans les tests workflows (cf. test_research_workflow_emits_*).
 
 
 # ===== LLM Classifier (v0.7.0) =====

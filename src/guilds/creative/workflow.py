@@ -23,6 +23,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel
 
 from src.core.budget import BudgetController, BudgetExceeded
+from src.core.checkpoint import CheckpointStore
 from src.core.config import Settings, get_settings
 from src.core.killswitch import Killswitch, KillswitchEngaged
 from src.core.logging import get_logger
@@ -30,7 +31,9 @@ from src.guilds.creative.agents import ContentStrategist, Copywriter, Editor
 from src.learning.skills_library import SkillsLibrary
 from src.memory.file_memory import FileMemory, MemoryRecord
 from src.memory.vector_memory import VectorMemory
+from src.orchestrator._checkpoint_helper import run_with_checkpoint
 from src.orchestrator.base_agent import AgentInput, AgentOutput
+from src.orchestrator.progress import ProgressCallback, emit, make_event
 
 log = get_logger("creative_workflow")
 
@@ -62,6 +65,7 @@ class CreativeWorkflow:
         skills_library: SkillsLibrary | None = None,
         budget: BudgetController | None = None,
         killswitch: Killswitch | None = None,
+        checkpoint_store: CheckpointStore | None = None,
     ) -> None:
         self.memory = memory
         self.vector_memory = vector_memory
@@ -69,6 +73,8 @@ class CreativeWorkflow:
         self.settings = settings or get_settings()
         self.budget = budget
         self.killswitch = killswitch
+        # v0.9.5 — F1 checkpoint resume étendu à Creative (avant : Engineering only)
+        self.checkpoint_store = checkpoint_store
         common = {"vector_memory": vector_memory, "skills_library": skills_library}
         self.strategist = ContentStrategist(memory, self.settings, **common)
         self.copywriter = Copywriter(memory, self.settings, **common)
@@ -79,11 +85,23 @@ class CreativeWorkflow:
         title: str,
         description: str,
         mission_id: UUID | None = None,
+        *,
+        on_progress: ProgressCallback | None = None,
     ) -> CreativeMissionResult:
         mission_id = mission_id or uuid4()
         started = datetime.now(UTC)
         outputs: list[AgentOutput] = []
         log.info("creative.workflow.start", mission=str(mission_id), title=title)
+        emit(
+            on_progress,
+            make_event(
+                "mission_started",
+                f"Mission Creative démarrée : {title}",
+                mission_id=str(mission_id),
+                title=title,
+                guild="creative",
+            ),
+        )
 
         # Garde-fous
         if self.killswitch is not None:
@@ -100,12 +118,18 @@ class CreativeWorkflow:
                 return self._fail(mission_id, title, started, outputs, "budget.exceeded", str(exc))
 
         # Step 1 — Strategist produit le brief
-        strat_out = await self.strategist.run(
+        strat_out = await run_with_checkpoint(
+            self.strategist,
             AgentInput(
                 mission_id=mission_id,
                 task=f"Mission de création : {title}\n\n{description}\n\n"
                 "Produis le brief stratégique YAML attendu.",
-            )
+            ),
+            step_index=0,
+            agent_name="content_strategist",
+            checkpoint_store=self.checkpoint_store,
+            mission_id=mission_id,
+            on_progress=on_progress,
         )
         outputs.append(strat_out)
         if not strat_out.success:
@@ -114,7 +138,8 @@ class CreativeWorkflow:
             )
 
         # Step 2 — Copywriter rédige
-        copy_out = await self.copywriter.run(
+        copy_out = await run_with_checkpoint(
+            self.copywriter,
             AgentInput(
                 mission_id=mission_id,
                 task="Rédige le texte final selon le brief stratégique.",
@@ -122,7 +147,12 @@ class CreativeWorkflow:
                     "mission_description": description,
                     "strategy_brief_yaml": strat_out.raw_text,
                 },
-            )
+            ),
+            step_index=1,
+            agent_name="copywriter",
+            checkpoint_store=self.checkpoint_store,
+            mission_id=mission_id,
+            on_progress=on_progress,
         )
         outputs.append(copy_out)
         if not copy_out.success:
@@ -131,7 +161,8 @@ class CreativeWorkflow:
             )
 
         # Step 3 — Editor juge
-        editor_out = await self.editor.run(
+        editor_out = await run_with_checkpoint(
+            self.editor,
             AgentInput(
                 mission_id=mission_id,
                 task="Juge la qualité éditoriale du texte selon tes critères. Produis ton verdict YAML.",
@@ -140,7 +171,12 @@ class CreativeWorkflow:
                     "strategy_brief_yaml": strat_out.raw_text,
                     "final_text_markdown": copy_out.raw_text,
                 },
-            )
+            ),
+            step_index=2,
+            agent_name="editor",
+            checkpoint_store=self.checkpoint_store,
+            mission_id=mission_id,
+            on_progress=on_progress,
         )
         outputs.append(editor_out)
         if not editor_out.success:
@@ -155,9 +191,18 @@ class CreativeWorkflow:
         # pouvoir être révisé si l'Editor flagge un problème de cadrage.
         if verdict == VERDICT_NEEDS_CHANGES:
             log.info("creative.workflow.repair_loop", mission=str(mission_id))
+            emit(
+                on_progress,
+                make_event(
+                    "repair_loop_started",
+                    "Repair loop Creative démarré (Strategist → Copywriter → Editor)",
+                    mission_id=str(mission_id),
+                ),
+            )
 
             # Step 1 (repair) — Strategist révise éventuellement le brief
-            strat_out2 = await self.strategist.run(
+            strat_out2 = await run_with_checkpoint(
+                self.strategist,
                 AgentInput(
                     mission_id=mission_id,
                     task=f"Mission créative : {title}\n\n{description}\n\n"
@@ -170,13 +215,19 @@ class CreativeWorkflow:
                         "previous_text_markdown": copy_out.raw_text,
                         "editor_feedback_yaml": editor_out.raw_text,
                     },
-                )
+                ),
+                step_index=3,
+                agent_name="content_strategist",
+                checkpoint_store=self.checkpoint_store,
+                mission_id=mission_id,
+                on_progress=on_progress,
             )
             outputs.append(strat_out2)
             current_strat = strat_out2 if strat_out2.success else strat_out
 
             # Step 2 (repair) — Copywriter réécrit sur le brief mis à jour
-            copy_out2 = await self.copywriter.run(
+            copy_out2 = await run_with_checkpoint(
+                self.copywriter,
                 AgentInput(
                     mission_id=mission_id,
                     task="Réécris le texte en intégrant le feedback de l'Editor "
@@ -187,13 +238,19 @@ class CreativeWorkflow:
                         "previous_text_markdown": copy_out.raw_text,
                         "editor_feedback_yaml": editor_out.raw_text,
                     },
-                )
+                ),
+                step_index=4,
+                agent_name="copywriter",
+                checkpoint_store=self.checkpoint_store,
+                mission_id=mission_id,
+                on_progress=on_progress,
             )
             outputs.append(copy_out2)
 
             # Step 3 (repair) — Editor juge l'ensemble v2
             if copy_out2.success:
-                editor_out2 = await self.editor.run(
+                editor_out2 = await run_with_checkpoint(
+                    self.editor,
                     AgentInput(
                         mission_id=mission_id,
                         task="Juge le nouveau texte et le brief révisé.",
@@ -203,7 +260,12 @@ class CreativeWorkflow:
                             "final_text_markdown": copy_out2.raw_text,
                             "previous_review_yaml": editor_out.raw_text,
                         },
-                    )
+                    ),
+                    step_index=5,
+                    agent_name="editor",
+                    checkpoint_store=self.checkpoint_store,
+                    mission_id=mission_id,
+                    on_progress=on_progress,
                 )
                 outputs.append(editor_out2)
                 if editor_out2.success:
@@ -249,6 +311,26 @@ class CreativeWorkflow:
             cost_usd=round(total_cost, 6),
             duration_s=round(total_duration, 2),
         )
+
+        # v0.9.5 — Cleanup checkpoints en fin de mission (succès OU verdict
+        # définitif type REJECTED). Si fail via _fail() en cours de chemin,
+        # les checkpoints sont conservés pour permettre resume après fix.
+        if self.checkpoint_store is not None:
+            self.checkpoint_store.clear(str(mission_id))
+
+        emit(
+            on_progress,
+            make_event(
+                "mission_completed",
+                f"Mission Creative terminée — verdict {verdict} (score {quality_score})",
+                mission_id=str(mission_id),
+                verdict=verdict,
+                quality_score=quality_score,
+                total_cost_usd=total_cost,
+                total_duration_seconds=total_duration,
+            ),
+        )
+
         return result
 
     def _fail(

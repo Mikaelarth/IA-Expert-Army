@@ -488,15 +488,15 @@ class MissionRouter:
 
         v0.8.0 F1 — `mission_id` permet de reprendre une mission interrompue
         (resume). Cf. `scripts/run_mission.py --resume <id>`. Si None, un
-        nouveau mission_id est généré (cas nominal). Le resume ne fonctionne
-        actuellement que pour la guilde Engineering ; les autres guildes
-        ignorent silencieusement le mission_id et en génèrent un nouveau.
+        nouveau mission_id est généré (cas nominal).
 
-        v0.9.4 — `on_progress` est un callback ProgressCallback pour streaming
-        des events (F2). Propagé uniquement au workflow Engineering pour
-        l'instant ; ignoré silencieusement par Research/Creative/Business
-        (étendable ultérieurement). Régression v0.8.0 fixée — le mock E2E
-        avait masqué l'absence de cet argument dans la vraie signature.
+        v0.8.0 F2 — `on_progress` est un callback ProgressCallback pour
+        streaming des events (agent_started/completed/etc.).
+
+        v0.9.5 — `mission_id` ET `on_progress` sont maintenant propagés aux
+        4 guildes (Engineering + Research + Creative + Business). Tous les
+        workflows supportent checkpoint/resume et émission d'events agent
+        par agent. Avant v0.9.5, seul Engineering était câblé.
         """
         from src.orchestrator.progress import emit, make_event
 
@@ -512,6 +512,11 @@ class MissionRouter:
             ),
         )
 
+        # v0.9.5 — Les 4 workflows (Engineering + Research + Creative + Business)
+        # supportent maintenant checkpoint_store + on_progress (avant v0.9.5 :
+        # Engineering uniquement). mission_started + mission_completed sont
+        # émis depuis chaque workflow lui-même → plus besoin de les émettre
+        # ici (sinon doublon).
         common = {
             "memory": self.memory,
             "settings": self.settings,
@@ -519,26 +524,17 @@ class MissionRouter:
             "skills_library": self.skills_library,
             "budget": self.budget,
             "killswitch": self.killswitch,
+            "checkpoint_store": self.checkpoint_store,
         }
-
-        # v0.9.4 — Helper local : émet mission_started/mission_completed pour les
-        # 3 guildes non-Engineering qui n'ont pas le streaming agent-par-agent
-        # interne. L'UX reste cohérente côté GUI (au moins on voit "mission
-        # démarrée → mission terminée").
-        if decision.guild != "engineering":
-            emit(
-                on_progress,
-                make_event(
-                    "mission_started",
-                    f"Mission {decision.guild} démarrée : {title}",
-                    title=title,
-                    guild=decision.guild,
-                ),
-            )
 
         if decision.guild == "research":
             wf = ResearchWorkflow(**common)
-            result: ResearchMissionResult = await wf.run(title=title, description=description)
+            result: ResearchMissionResult = await wf.run(
+                title=title,
+                description=description,
+                mission_id=mission_id,
+                on_progress=on_progress,
+            )
             unified = UnifiedMissionResult(
                 mission_id=str(result.mission_id),
                 title=result.title,
@@ -554,7 +550,10 @@ class MissionRouter:
         elif decision.guild == "creative":
             wf_cre = CreativeWorkflow(**common)
             cre_result: CreativeMissionResult = await wf_cre.run(
-                title=title, description=description
+                title=title,
+                description=description,
+                mission_id=mission_id,
+                on_progress=on_progress,
             )
             unified = UnifiedMissionResult(
                 mission_id=str(cre_result.mission_id),
@@ -571,7 +570,10 @@ class MissionRouter:
         elif decision.guild == "business":
             wf_biz = BusinessWorkflow(**common)
             biz_result: BusinessMissionResult = await wf_biz.run(
-                title=title, description=description
+                title=title,
+                description=description,
+                mission_id=mission_id,
+                on_progress=on_progress,
             )
             unified = UnifiedMissionResult(
                 mission_id=str(biz_result.mission_id),
@@ -586,12 +588,10 @@ class MissionRouter:
                 raw_result=biz_result.model_dump(mode="json"),
             )
         else:
-            # Default = engineering — la seule guilde qui supporte le resume
-            # via checkpoint_store (v0.8.0 F1), le RAG missions (v0.9.0 A1),
-            # et le streaming agent-par-agent via on_progress (v0.8.0 F2).
+            # Default = engineering — seule guilde avec RAG missions (v0.9.0 A1)
+            # et A/B testing (v0.9.0 A2) en plus du checkpoint+streaming.
             wf_eng = Workflow(
                 **common,
-                checkpoint_store=self.checkpoint_store,
                 missions_rag=self.missions_rag,
                 prompt_ab=self.prompt_ab,
             )
@@ -612,22 +612,6 @@ class MissionRouter:
                 total_duration_seconds=eng_result.total_duration_seconds,
                 summary=eng_result.review_summary,
                 raw_result=eng_result.model_dump(mode="json"),
-            )
-
-        # v0.9.4 — Émission `mission_completed` pour les 3 guildes non-Engineering
-        # (Engineering émet déjà depuis Workflow.run()). Garde l'UX cohérente
-        # côté GUI : on voit mission_started → mission_completed avec verdict.
-        if decision.guild != "engineering":
-            emit(
-                on_progress,
-                make_event(
-                    "mission_completed",
-                    f"Mission {decision.guild} terminée — verdict {unified.final_verdict}",
-                    verdict=unified.final_verdict,
-                    quality_score=unified.quality_score,
-                    total_cost_usd=unified.total_cost_usd,
-                    total_duration_seconds=unified.total_duration_seconds,
-                ),
             )
 
         # Sprint YY — Quality Guardian peer review méta cross-guilde (opt-in)
